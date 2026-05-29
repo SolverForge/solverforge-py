@@ -1,0 +1,11 @@
+/target/
+/.venv/
+/.mypy_cache/
+/.pytest_cache/
+/.ruff_cache/
+/dist/
+/wheelhouse/
+*.egg-info/
+__pycache__/
+*.py[cod]
+python/solverforge/_native*.so

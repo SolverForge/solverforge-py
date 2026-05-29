@@ -1,0 +1,40 @@
+[build-system]
+requires = ["maturin>=1.8,<2"]
+build-backend = "maturin"
+
+[project]
+name = "solverforge"
+version = "0.1.0"
+description = "Python bindings for SolverForge using dynamic Python-authored models."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.14"
+authors = [{ name = "SolverForge" }]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.32,<1",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Rust",
+  "Topic :: Scientific/Engineering",
+]
+
+[tool.maturin]
+module-name = "solverforge._native"
+python-source = "python"
+features = ["extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+pythonpath = ["python"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+packages = ["solverforge"]
