@@ -131,3 +131,8 @@ Run `make help` for focused targets such as `make test-hospital`,
 Rust macro-generated SolverForge models remain the performance ceiling. The
 Python path preserves the Rust solver engine and Rust-owned state while paying
 the honest dynamic callback boundary cost.
+
+## License
+
+SolverForge Python is licensed under the Apache License, Version 2.0. See
+`LICENSE` for the full license text.
