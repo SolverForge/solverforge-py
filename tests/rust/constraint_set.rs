@@ -1,0 +1,32 @@
+use pyo3::Python;
+use solverforge_py::constraints::PyDynamicConstraintSet;
+use solverforge_py::schema::DynamicSchema;
+use solverforge_py::score::DynamicScore;
+use solverforge_py::state::entity_table::DynamicState;
+use solverforge_py::state::PyDynamicSolution;
+use solverforge_scoring::ConstraintSet;
+use std::sync::Arc;
+
+#[test]
+fn dynamic_constraint_set_reports_constraint_count() {
+    Python::attach(|py| {
+        let constraints = pyo3::types::PyList::empty(py).unbind().into_any();
+        let set = PyDynamicConstraintSet::new(constraints);
+        assert_eq!(set.constraint_count(), 0);
+        let solution = PyDynamicSolution {
+            schema: Arc::new(DynamicSchema {
+                solution_type: "Plan".to_string(),
+                score_family: "hard_soft".to_string(),
+                entities: Vec::new(),
+                facts: Vec::new(),
+                constraints: py.None(),
+                scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
+                conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
+            }),
+            state: DynamicState::default(),
+            score: Some(DynamicScore::ZERO),
+            solver_config: solverforge_config::SolverConfig::default(),
+        };
+        assert_eq!(set.evaluate_all(&solution), DynamicScore::ZERO);
+    });
+}
