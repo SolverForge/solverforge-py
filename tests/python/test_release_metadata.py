@@ -1,0 +1,124 @@
+from __future__ import annotations
+
+import re
+import tarfile
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def load_toml(path: Path) -> dict[str, object]:
+    with path.open("rb") as handle:
+        return tomllib.load(handle)
+
+
+def workflow_job(text: str, job_name: str) -> str:
+    matches = list(re.finditer(r"^  [A-Za-z0-9_-]+:\s*$", text, flags=re.MULTILINE))
+    for index, match in enumerate(matches):
+        if match.group(0).strip() != f"{job_name}:":
+            continue
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        return text[match.start() : end]
+    raise AssertionError(f"workflow job {job_name!r} not found")
+
+
+def test_release_version_supersedes_existing_pypi_architecture() -> None:
+    import solverforge
+
+    pyproject = load_toml(ROOT / "pyproject.toml")
+    cargo = load_toml(ROOT / "Cargo.toml")
+
+    project = pyproject["project"]
+    package = cargo["package"]
+
+    assert project["name"] == "solverforge"
+    assert project["version"] == package["version"]
+    assert tuple(int(part) for part in str(project["version"]).split(".")) >= (0, 4, 0)
+    assert project["requires-python"] == ">=3.14"
+    assert solverforge.__version__ == project["version"]
+
+
+def test_core_metadata_is_runtime_only() -> None:
+    pyproject = load_toml(ROOT / "pyproject.toml")
+    project = pyproject["project"]
+
+    assert project["dependencies"] == []
+    optional_dependencies = project["optional-dependencies"]
+    assert "examples" in optional_dependencies
+    assert any("fastapi" in dependency for dependency in optional_dependencies["examples"])
+    assert any("uvicorn" in dependency for dependency in optional_dependencies["examples"])
+
+
+def test_project_urls_cover_release_operations() -> None:
+    pyproject = load_toml(ROOT / "pyproject.toml")
+    urls = pyproject["project"]["urls"]
+
+    assert urls["Homepage"] == "https://solverforge.org"
+    assert urls["Documentation"] == "https://docs.solverforge.org"
+    assert urls["Repository"] == "https://github.com/SolverForge/solverforge-py"
+    assert urls["Bug Tracker"] == "https://github.com/SolverForge/solverforge-py/issues"
+    assert urls["Changelog"] == "https://github.com/SolverForge/solverforge-py/releases"
+
+
+def test_solverforge_rust_dependency_base_is_manifest_owned() -> None:
+    cargo = load_toml(ROOT / "Cargo.toml")
+    solverforge = cargo["package"]["metadata"]["solverforge"]
+    dependencies = cargo["dependencies"]
+
+    assert solverforge["git"] == "https://github.com/SolverForge/solverforge"
+    assert solverforge["base_tag"] == "v0.15.0"
+    assert solverforge["rev"] == "ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77"
+
+    for crate in (
+        "solverforge-bridge",
+        "solverforge-config",
+        "solverforge-console",
+        "solverforge-core",
+        "solverforge-scoring",
+        "solverforge-solver",
+    ):
+        spec = dependencies[crate]
+        assert spec["version"] == f"={solverforge['version']}"
+        assert spec["git"] == solverforge["git"]
+        assert spec["rev"] == solverforge["rev"]
+        assert "path" not in spec
+
+
+def test_release_workflow_validates_only_tagged_pypi_publish() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    testpypi_job = workflow_job(workflow, "publish-testpypi")
+    pypi_job = workflow_job(workflow, "publish-pypi")
+
+    assert "Validate tag version" not in testpypi_job
+    assert "Validate tag version" in pypi_job
+    assert "GITHUB_REF_NAME" in pypi_job
+    assert "pyproject.toml" in pypi_job
+    assert pypi_job.index("Validate tag version") < pypi_job.index("Publish to PyPI")
+
+
+def test_latest_sdist_carries_locked_project_sources_when_present() -> None:
+    dists = sorted((ROOT / "dist").glob("solverforge-*.tar.gz"))
+    if not dists:
+        return
+
+    latest = dists[-1]
+    prefix = latest.name.removesuffix(".tar.gz")
+
+    with tarfile.open(latest, "r:gz") as archive:
+        names = set(archive.getnames())
+
+    direct_layout = {
+        f"{prefix}/Cargo.lock",
+        f"{prefix}/Cargo.toml",
+        f"{prefix}/src/lib.rs",
+        f"{prefix}/python/solverforge/__init__.py",
+    }
+    previous_vendored_layout = {
+        f"{prefix}/solverforge-py/Cargo.lock",
+        f"{prefix}/solverforge-py/Cargo.toml",
+        f"{prefix}/solverforge-py/src/lib.rs",
+        f"{prefix}/python/solverforge/__init__.py",
+    }
+
+    assert direct_layout <= names or previous_vendored_layout <= names

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.14"
+  RUST_VERSION: "1.95.0"
+
+jobs:
+  ci-local:
+    name: local CI gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout solverforge-py
+        uses: actions/checkout@v6
+        with:
+          path: solverforge-py
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+
+      - name: Validate SolverForge release base
+        working-directory: solverforge-py
+        run: make release-base-check
+
+      - name: Run local CI
+        working-directory: solverforge-py
+        run: make ci-local
+
+      - name: Build and verify local distributions
+        working-directory: solverforge-py
+        run: make build-dist dist-check smoke-wheel
