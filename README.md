@@ -1,16 +1,33 @@
 # SolverForge Python
 
-`solverforge-py` is a standalone Python binding package for SolverForge.
-Python users define models with Python classes, decorators, functions, and
-lambdas. They do not write Rust and they do not pass JSON to a fixed backend.
+`solverforge` is the dynamic Python binding package for SolverForge. Python
+users define models with Python classes, decorators, functions, and lambdas.
+They do not write Rust and they do not pass JSON to a fixed backend.
 
 The native extension owns the working solution state in Rust so SolverForge can
 clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
-The package targets Python 3.14 and Rust 1.95.0. Local development is driven by
-the root `Makefile`, which creates `.venv`, installs maturin and developer
-tools, and builds the PyO3 extension against the current checkout.
+The package targets CPython 3.14 and Rust 1.95.0. The PyPI package starts at
+`solverforge` `0.4.0` for this architecture and intentionally supersedes the
+older incompatible `0.2.x` and `0.3.0` artifacts in the same PyPI namespace.
+Those older artifacts exposed `SolverFactory`, `PlanningVariable`, Java service
+requirements, and other APIs that are not part of this package.
+
+## Installation
+
+```sh
+python3.14 -m pip install solverforge
+```
+
+The installable wheel contains the core `solverforge` package and native
+extension. Source-checkout examples, including the hospital FastAPI app and its
+static assets, are maintained in this repository rather than installed into the
+runtime wheel.
+
+Local development is driven by the root `Makefile`, which creates `.venv`,
+installs maturin and developer tools, and builds the PyO3 extension against the
+current checkout.
 
 ```python
 from solverforge import (
@@ -59,7 +76,7 @@ make develop          # release native extension installed into .venv
 make test             # cargo test plus pytest
 make lint             # rustfmt check, ruff, mypy, and clippy
 make ci-local         # local CI simulation
-make pre-release      # ci-local plus release wheel build
+make pre-release      # ci-local plus release sdist/wheel checks
 ```
 
 Run `make help` for focused targets such as `make test-hospital`,
@@ -71,7 +88,7 @@ Run `make help` for focused targets such as `make test-hospital`,
 - No expression-object DSL.
 - No string-parsed constraints.
 - No private upstream SolverForge modules; bindings use the public dynamic bridge
-  seam.
+  contract.
 - No fixed pre-modeled JSON-only backends.
 
 ## Current Support
@@ -115,11 +132,11 @@ Run `make help` for focused targets such as `make test-hospital`,
   shifts, retained jobs, snapshots, analysis, pause/resume/cancel, and a
   30-second hard-feasible terminal solve when installed with the release native
   extension.
-- Top-level `ConstraintFactory.if_exists`, `if_not_exists`, and `flattened`
-  remain explicit unsupported methods until the native callback stream planner
-  has public bridge support for those semantics. Use stream-level
-  `for_each(...).join(...)` and `for_each(...).group_by(...)` for the supported
-  join and grouped-count surfaces.
+- Top-level `ConstraintFactory.join`, `group_by`, `if_exists`, `if_not_exists`,
+  and `flattened` remain explicit unsupported methods until the native callback
+  stream planner has public bridge support for those top-level semantics. Use
+  stream-level `for_each(...).join(...)` and `for_each(...).group_by(...)` for
+  the supported join and grouped-count surfaces.
 
 ## Documentation Map
 

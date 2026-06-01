@@ -24,14 +24,14 @@ Do not fake unsupported behavior. If a feature requires a public upstream seam, 
 
 Work across these sibling repositories:
 
-- `/home/pvd/dev/solverforge/solverforge`
-- `/home/pvd/dev/solverforge/solverforge-py`
+- `../solverforge`
+- `../solverforge-py`
 
 Preserve unrelated dirty work. Before editing either repo, inspect:
 
 ```bash
-git -C /home/pvd/dev/solverforge/solverforge status --short --branch
-git -C /home/pvd/dev/solverforge/solverforge-py status --short --branch
+git -C ../solverforge status --short --branch
+git -C ../solverforge-py status --short --branch
 ```
 
 Do not reset, revert, or overwrite unrelated user changes.
@@ -225,9 +225,9 @@ The Python `ConstraintFactory` must support the planned dynamic callback stream 
 - `reward`
 - `named`
 
-Top-level `if_exists`, `if_not_exists`, and `flattened` remain explicit
-unsupported methods until public bridge support exists for those stream
-semantics.
+Top-level `join`, `group_by`, `if_exists`, `if_not_exists`, and `flattened`
+remain explicit unsupported methods until public bridge support exists for those
+top-level semantics.
 
 If any method cannot be made real against the upstream bridge in this run, leave it explicit and tested as unsupported. Do not silently route it to fake semantics.
 
@@ -265,7 +265,7 @@ Run and make pass:
 cargo test --workspace --all-targets
 ```
 
-from `/home/pvd/dev/solverforge/solverforge`, plus:
+from `../solverforge`, plus:
 
 ```bash
 make rust-test
@@ -275,7 +275,7 @@ make typecheck
 make docs-check
 ```
 
-from `/home/pvd/dev/solverforge/solverforge-py`.
+from `../solverforge-py`.
 
 If the venv does not exist, create it with Python 3.14 and install the dev tools.
 

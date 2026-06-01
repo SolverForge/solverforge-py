@@ -1,8 +1,8 @@
 # SolverForge Python Wireframe
 
 This is the as-built map for the current `solverforge-py` checkout. It describes
-the public Python binding, native Rust bridge, retained lifecycle, and hospital
-example UI/API surface.
+the public Python binding, native Rust bridge, retained lifecycle, PyPI artifact
+shape, and hospital example UI/API surface.
 
 ## Repository Surface
 
@@ -26,8 +26,8 @@ example UI/API surface.
 ## Python Package API
 
 The package exports `Solver`, `SolverManager`, `SolverConfig`,
-`TerminationConfig`, `ConstraintFactory`, score classes, `joiner`, `console`,
-and decorators/fields for model authoring:
+`TerminationConfig`, `ConstraintFactory`, score classes, stable package error
+classes, `joiner`, `console`, and decorators/fields for model authoring:
 
 - `@planning_solution`, `@planning_entity`, `@problem_fact`
 - `planning_id`, `planning_variable`, `planning_list_variable`
@@ -48,8 +48,10 @@ Supported stream shapes:
 
 Weights may be score objects, integer/sequence values, or Python callbacks.
 `joiner.equal(...)` and `joiner.equal_bi(...)` use Python equality rather than
-string representations. Top-level `ConstraintFactory.if_exists`,
-`if_not_exists`, and `flattened` remain explicit unsupported methods.
+string representations. Top-level `ConstraintFactory.join`, `group_by`,
+`if_exists`, `if_not_exists`, and `flattened` remain explicit unsupported
+methods. Stream-level `for_each(...).join(...)` and
+`for_each(...).group_by(...)` are the supported join and grouped-count surfaces.
 
 ## Solver And Runtime Flow
 
@@ -113,6 +115,26 @@ schedule views by location and by employee, streams retained job events over
 SSE, shows score/telemetry state, opens snapshot analysis, and supports pause,
 resume, cancel, and terminal delete controls.
 
+The hospital app is source-checkout example material. It is included in the
+source distribution for reproducible builds and development, but it is not
+installed into the runtime wheel.
+
+## PyPI Artifact Shape
+
+The installable wheel contains only:
+
+- `solverforge/*.py`
+- `solverforge/_native.*`
+- `solverforge/_native.pyi`
+- `solverforge/py.typed`
+- `solverforge-*.dist-info/`
+
+The source distribution also carries the repository tests, examples, and docs.
+SolverForge Rust dependencies are declared from the exact git revision in
+`Cargo.toml` and locked in `Cargo.lock`; release automation verifies that
+manifest/lockfile source of truth instead of inspecting a mutable sibling
+checkout.
+
 ## Makefile And Validation Flow
 
 The root Makefile is the maintainer entry point:
@@ -121,7 +143,9 @@ The root Makefile is the maintainer entry point:
 - `make test`: Rust plus Python tests
 - `make lint`: rustfmt check, ruff, mypy, clippy
 - `make ci-local`: local CI simulation
-- `make pre-release`: CI simulation plus release wheel build
+- `make build-dist`: release source distribution plus local wheel
+- `make dist-check`: metadata and artifact-content checks
+- `make pre-release`: CI simulation plus release artifact checks
 - `make hospital-run` / `make hospital-solve`: browser or terminal hospital demo
 
 Use `make docs-check` after documentation edits so `README.md`, `AGENTS.md`,
