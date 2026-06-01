@@ -18,7 +18,6 @@ from examples.solverforge_hospital import (
 from examples.solverforge_hospital.src.api.dto import plan_to_payload
 from solverforge import Solver, SolverConfig
 
-
 HOSPITAL_EXAMPLE_ROOT = Path(__file__).parents[2] / "examples" / "solverforge_hospital"
 
 
@@ -51,8 +50,7 @@ def test_solverforge_hospital_python_model_solves_full_schedule() -> None:
 
 
 def test_solverforge_hospital_construction_matches_upstream_oracle() -> None:
-    construction_only = SolverConfig.from_toml(
-        """
+    construction_only = SolverConfig.from_toml("""
 random_seed = 1
 
 [termination]
@@ -62,10 +60,10 @@ unimproved_seconds_spent_limit = 5
 [[phases]]
 type = "construction_heuristic"
 construction_heuristic_type = "cheapest_insertion"
+construction_obligation = "assign_when_candidate_exists"
 entity_class = "Shift"
 variable_name = "employee_idx"
-"""
-    )
+""")
 
     plan = Solver.solve(demo_plan(), construction_only)
 
@@ -82,6 +80,19 @@ def test_solverforge_hospital_config_keeps_upstream_termination() -> None:
     assert config["random_seed"] == 1
     assert config["termination"]["seconds_spent_limit"] == 30
     assert config["termination"]["unimproved_seconds_spent_limit"] == 5
+    assert [phase["type"] for phase in config["phases"]] == [
+        "construction_heuristic",
+        "local_search",
+    ]
+    assert config["phases"][1]["acceptor"] == {
+        "type": "late_acceptance",
+        "late_acceptance_size": 400,
+    }
+    assert config["phases"][1]["forager"] == {"type": "accepted_count", "limit": 4}
+    assert [selector["type"] for selector in config["phases"][1]["move_selector"]["selectors"]] == [
+        "nearby_change_move_selector",
+        "nearby_swap_move_selector",
+    ]
 
 
 def test_solverforge_hospital_python_model_uses_canonical_large_payload() -> None:
