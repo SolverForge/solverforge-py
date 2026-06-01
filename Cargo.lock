@@ -642,6 +642,7 @@ dependencies = [
 [[package]]
 name = "solverforge-bridge"
 version = "0.15.1"
+source = "git+https://github.com/SolverForge/solverforge?rev=ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77#ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77"
 dependencies = [
  "solverforge-config",
  "solverforge-core",
@@ -652,6 +653,7 @@ dependencies = [
 [[package]]
 name = "solverforge-config"
 version = "0.15.1"
+source = "git+https://github.com/SolverForge/solverforge?rev=ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77#ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -663,6 +665,7 @@ dependencies = [
 [[package]]
 name = "solverforge-console"
 version = "0.15.1"
+source = "git+https://github.com/SolverForge/solverforge?rev=ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77#ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77"
 dependencies = [
  "num-format",
  "owo-colors",
@@ -673,6 +676,7 @@ dependencies = [
 [[package]]
 name = "solverforge-core"
 version = "0.15.1"
+source = "git+https://github.com/SolverForge/solverforge?rev=ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77#ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77"
 dependencies = [
  "thiserror",
 ]
@@ -680,6 +684,7 @@ dependencies = [
 [[package]]
 name = "solverforge-scoring"
 version = "0.15.1"
+source = "git+https://github.com/SolverForge/solverforge?rev=ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77#ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77"
 dependencies = [
  "solverforge-core",
  "thiserror",
@@ -688,6 +693,7 @@ dependencies = [
 [[package]]
 name = "solverforge-solver"
 version = "0.15.1"
+source = "git+https://github.com/SolverForge/solverforge?rev=ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77#ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77"
 dependencies = [
  "rand",
  "rand_chacha",
@@ -704,7 +710,7 @@ dependencies = [
 
 [[package]]
 name = "solverforge_py"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "indexmap",
  "once_cell",

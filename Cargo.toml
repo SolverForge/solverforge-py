@@ -1,13 +1,24 @@
 [package]
 name = "solverforge_py"
-version = "0.1.0"
+version = "0.4.0"
 edition = "2021"
 license = "Apache-2.0"
 rust-version = "1.95"
+description = "PyO3 dynamic Python bindings for the SolverForge constraint solver"
+readme = "README.md"
+repository = "https://github.com/SolverForge/solverforge-py"
+homepage = "https://solverforge.org"
+documentation = "https://docs.solverforge.org"
 
 [lib]
 name = "solverforge_py"
 crate-type = ["cdylib", "rlib"]
+
+[package.metadata.solverforge]
+version = "0.15.1"
+git = "https://github.com/SolverForge/solverforge"
+base_tag = "v0.15.0"
+rev = "ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77"
 
 [dependencies]
 indexmap = "2.12.1"
@@ -23,12 +34,12 @@ toml = "0.9.8"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
-solverforge-config = { path = "../solverforge/crates/solverforge-config" }
-solverforge-bridge = { path = "../solverforge/crates/solverforge-bridge" }
-solverforge-console = { path = "../solverforge/crates/solverforge-console", features = ["verbose-logging"] }
-solverforge-core = { path = "../solverforge/crates/solverforge-core" }
-solverforge-scoring = { path = "../solverforge/crates/solverforge-scoring" }
-solverforge-solver = { path = "../solverforge/crates/solverforge-solver" }
+solverforge-config = { version = "=0.15.1", git = "https://github.com/SolverForge/solverforge", rev = "ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77" }
+solverforge-bridge = { version = "=0.15.1", git = "https://github.com/SolverForge/solverforge", rev = "ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77" }
+solverforge-console = { version = "=0.15.1", git = "https://github.com/SolverForge/solverforge", rev = "ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77", features = ["verbose-logging"] }
+solverforge-core = { version = "=0.15.1", git = "https://github.com/SolverForge/solverforge", rev = "ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77" }
+solverforge-scoring = { version = "=0.15.1", git = "https://github.com/SolverForge/solverforge", rev = "ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77" }
+solverforge-solver = { version = "=0.15.1", git = "https://github.com/SolverForge/solverforge", rev = "ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77" }
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"

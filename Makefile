@@ -24,18 +24,23 @@ HOST_PYTHON ?= python3.14
 VENV ?= $(CURDIR)/.venv
 PYTHON ?= $(VENV)/bin/python
 PIP ?= $(VENV)/bin/pip
-MATURIN ?= $(PYTHON) -m maturin
+MATURIN ?= $(VENV)/bin/maturin
 PYTEST ?= $(PYTHON) -m pytest
 MYPY ?= $(PYTHON) -m mypy
 RUFF ?= $(PYTHON) -m ruff
 BLACK ?= $(PYTHON) -m black --line-length 100 --target-version py314
+MATURIN_VERSION := 1.13.3
+BLACK_VERSION := 26.5.1
 PRE_COMMIT ?= $(PYTHON) -m pre_commit
+TWINE ?= $(PYTHON) -m twine
 PYTEST_ARGS ?=
 TEST ?=
 APP_HOST ?= 127.0.0.1
 PORT ?= 7860
+DIST_DIR ?= $(CURDIR)/dist
+SOLVERFORGE_RELEASE_VERSION := $(shell $(HOST_PYTHON) scripts/verify_solverforge_release_base.py --print-version 2>/dev/null || printf unknown)
 MYPY_PATHS := python/solverforge examples/solverforge_hospital
-PY_STYLE_PATHS := python tests examples
+PY_STYLE_PATHS := python tests examples scripts
 PY_DEPS_STAMP := $(VENV)/.solverforge-py-deps
 PY_LIBDIR := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')
 PY_LDLIBRARY := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("LDLIBRARY") or "")')
@@ -44,10 +49,10 @@ PY_LINK_DIR := $(CURDIR)/target/libpython-link
 
 # ============== Phony Targets ==============
 .PHONY: banner help doctor venv install-python-deps python-link develop develop-debug build build-wheel \
-        build-release check test test-quick rust-test py-test test-hospital test-one \
+        build-sdist build-dist build-release check test test-quick rust-test py-test test-hospital test-one \
         rust-test-one typecheck ruff lint fmt fmt-check py-format py-format-check clippy pre-commit docs-check \
-        ci-local audit pre-release hospital-run hospital-solve version release-info clean \
-        clean-py clean-venv
+        ci-local audit pre-release release-base-check release-upstream-check dist-check smoke-wheel \
+        hospital-run hospital-solve version release-info clean clean-dist clean-py clean-venv
 
 .DEFAULT_GOAL := help
 
@@ -82,8 +87,8 @@ install-python-deps: $(PY_DEPS_STAMP)
 $(PY_DEPS_STAMP): pyproject.toml Makefile | venv
 	@printf -- "$(PROGRESS) Installing Python runtime and developer tools...\n"
 	@PIP_DISABLE_PIP_VERSION_CHECK=1 "$(PIP)" install \
-		"maturin>=1.8,<2" "fastapi>=0.115,<1" "uvicorn>=0.32,<1" \
-		pytest mypy ruff black pre-commit
+		"maturin==$(MATURIN_VERSION)" "fastapi>=0.115,<1" "uvicorn>=0.32,<1" \
+		pytest mypy ruff "black==$(BLACK_VERSION)" pre-commit twine
 	@touch "$(PY_DEPS_STAMP)"
 	@printf -- "$(GREEN)$(CHECK) Python dependencies installed$(RESET)\n\n"
 
@@ -116,10 +121,20 @@ build-wheel: install-python-deps
 	@$(MATURIN) build --locked -i "$(PYTHON)"
 	@printf -- "$(GREEN)$(CHECK) Wheel build passed$(RESET)\n\n"
 
+build-sdist: release-base-check install-python-deps
+	@printf -- "$(PROGRESS) Building release source distribution...\n"
+	@mkdir -p "$(DIST_DIR)"
+	@$(MATURIN) sdist -o "$(DIST_DIR)"
+	@printf -- "$(GREEN)$(CHECK) Source distribution build passed$(RESET)\n\n"
+
 build-release: install-python-deps
 	@printf -- "$(CYAN)$(BOLD)==== Release Wheel ==================================$(RESET)\n\n"
-	@$(MATURIN) build --release --locked -i "$(PYTHON)"
+	@mkdir -p "$(DIST_DIR)"
+	@$(MATURIN) build --release --locked --strip --compatibility pypi -i "$(PYTHON)" --out "$(DIST_DIR)"
 	@printf -- "$(GREEN)$(CHECK) Release wheel build passed$(RESET)\n\n"
+
+build-dist: clean-dist build-sdist build-release
+	@printf -- "$(GREEN)$(CHECK) Release distributions written to $(DIST_DIR)$(RESET)\n\n"
 
 check: banner
 	@printf -- "$(PROGRESS) Running cargo check...\n"
@@ -197,8 +212,34 @@ docs-check:
 	@test -f README.md
 	@test -f AGENTS.md
 	@test -f WIREFRAME.md
-	@! rg -n "Python 3\\.13|move_count_limit|bounded scalar assignment fallback|currently contains scaffolding|owner-aware, nearby, swap, sublist, reverse, k-opt, and ruin selectors .*not yet" README.md AGENTS.md WIREFRAME.md docs examples/solverforge_hospital/README.md
+	@test -f docs/release.md
+	@! rg -n "move_count_limit|bounded scalar assignment fallback|currently contains scaffolding|owner-aware, nearby, swap, sublist, reverse, k-opt, and ruin selectors .*not yet|/home/pvd/dev/solverforge" README.md AGENTS.md WIREFRAME.md docs examples/solverforge_hospital/README.md
 	@printf -- "$(GREEN)$(CHECK) Documentation surface looks current$(RESET)\n"
+
+release-base-check:
+	@printf -- "$(PROGRESS) Checking SolverForge release dependency base...\n"
+	@$(HOST_PYTHON) scripts/verify_solverforge_release_base.py
+	@printf -- "$(GREEN)$(CHECK) SolverForge dependency base is locked$(RESET)\n"
+
+release-upstream-check: release-base-check
+
+dist-check: install-python-deps
+	@printf -- "$(PROGRESS) Checking release distributions...\n"
+	@test -d "$(DIST_DIR)" || (printf -- "$(RED)$(CROSS) Missing $(DIST_DIR); run make build-dist$(RESET)\n" && exit 1)
+	@$(TWINE) check "$(DIST_DIR)"/*
+	@$(PYTHON) scripts/verify_release_artifacts.py --dist "$(DIST_DIR)"
+	@printf -- "$(GREEN)$(CHECK) Release distributions passed metadata checks$(RESET)\n\n"
+
+smoke-wheel:
+	@printf -- "$(PROGRESS) Smoke testing built wheel in a clean venv...\n"
+	@test -d "$(DIST_DIR)" || (printf -- "$(RED)$(CROSS) Missing $(DIST_DIR); run make build-dist$(RESET)\n" && exit 1)
+	@set -e; \
+		tmpdir="$$(mktemp -d)"; \
+		trap 'rm -rf "$$tmpdir"' EXIT; \
+		"$(HOST_PYTHON)" -m venv "$$tmpdir/venv"; \
+		"$$tmpdir/venv/bin/python" -m pip install --disable-pip-version-check --no-index --find-links "$(DIST_DIR)" "solverforge==$(VERSION)"; \
+		"$$tmpdir/venv/bin/python" -c 'import solverforge; print(solverforge.__version__); from solverforge import Solver, ConstraintFactory, SolverForgeError'
+	@printf -- "$(GREEN)$(CHECK) Wheel smoke test passed$(RESET)\n\n"
 
 # ============== CI Simulation ==============
 ci-local: banner
@@ -225,8 +266,11 @@ audit: ci-local
 
 pre-release: banner
 	@printf -- "$(CYAN)$(BOLD)==== Pre-Release Validation ========================$(RESET)\n\n"
+	@$(MAKE) release-base-check --no-print-directory
 	@$(MAKE) ci-local --no-print-directory
-	@$(MAKE) build-release --no-print-directory
+	@$(MAKE) build-dist --no-print-directory
+	@$(MAKE) dist-check --no-print-directory
+	@$(MAKE) smoke-wheel --no-print-directory
 	@printf -- "\n$(GREEN)$(BOLD)$(CHECK) Ready for release v$(VERSION)$(RESET)\n\n"
 
 # ============== Example App ==============
@@ -245,12 +289,17 @@ version:
 	@printf -- "$(CYAN)Rust toolchain:$(RESET) $(YELLOW)$(BOLD)$(RUST_VERSION)$(RESET)\n"
 
 release-info: version
-	@printf -- "$(GRAY)Release wheels are written under target/wheels/ by make build-release.$(RESET)\n"
+	@printf -- "$(CYAN)SolverForge crates:$(RESET) $(SOLVERFORGE_RELEASE_VERSION)\n"
+	@printf -- "$(GRAY)Release distributions are written under $(DIST_DIR) by make build-dist.$(RESET)\n"
 
 clean: clean-py
 	@printf -- "$(ARROW) Cleaning Cargo artifacts...\n"
 	@cargo clean
 	@printf -- "$(GREEN)$(CHECK) Clean complete$(RESET)\n"
+
+clean-dist:
+	@printf -- "$(ARROW) Cleaning release distributions...\n"
+	@rm -rf "$(DIST_DIR)"
 
 clean-py:
 	@printf -- "$(ARROW) Cleaning Python caches...\n"
@@ -271,6 +320,8 @@ help: banner
 	@printf -- "  $(GREEN)make develop-debug$(RESET)       Install the debug native extension locally\n"
 	@printf -- "  $(GREEN)make build$(RESET)               Run cargo build --locked\n"
 	@printf -- "  $(GREEN)make build-wheel$(RESET)         Build a debug Python wheel\n"
+	@printf -- "  $(GREEN)make build-sdist$(RESET)         Build a release source distribution\n"
+	@printf -- "  $(GREEN)make build-dist$(RESET)          Build release source distribution and local wheel\n"
 	@printf -- "  $(GREEN)make build-release$(RESET)       Build a release Python wheel\n"
 	@printf -- "  $(GREEN)make check$(RESET)               Run cargo check --locked\n\n"
 	@printf -- "$(BOLD)Test$(RESET)\n"
@@ -295,7 +346,10 @@ help: banner
 	@printf -- "  $(GREEN)make ci-local$(RESET)            Simulate the primary local CI gate\n"
 	@printf -- "  $(GREEN)make audit$(RESET)               Alias for ci-local\n\n"
 	@printf -- "$(BOLD)Release$(RESET)\n"
-	@printf -- "  $(GREEN)make pre-release$(RESET)         Run ci-local and build the release wheel\n"
+	@printf -- "  $(GREEN)make release-base-check$(RESET)   Verify pinned SolverForge git dependency base\n"
+	@printf -- "  $(GREEN)make dist-check$(RESET)          Run twine and artifact content checks\n"
+	@printf -- "  $(GREEN)make smoke-wheel$(RESET)         Install the local wheel in a clean venv\n"
+	@printf -- "  $(GREEN)make pre-release$(RESET)         Run ci-local and release artifact checks\n"
 	@printf -- "  $(GREEN)make version$(RESET)             Print package and crate versions\n"
 	@printf -- "  $(GREEN)make release-info$(RESET)        Show release artifact information\n\n"
 	@printf -- "$(BOLD)Examples$(RESET)\n"
@@ -303,6 +357,7 @@ help: banner
 	@printf -- "  $(GREEN)make hospital-solve$(RESET)      Run the hospital model once in the terminal\n\n"
 	@printf -- "$(BOLD)Cleanup$(RESET)\n"
 	@printf -- "  $(GREEN)make clean$(RESET)               Remove Cargo artifacts and Python caches\n"
+	@printf -- "  $(GREEN)make clean-dist$(RESET)          Remove release distributions\n"
 	@printf -- "  $(GREEN)make clean-py$(RESET)            Remove Python caches only\n"
 	@printf -- "  $(GREEN)make clean-venv$(RESET)          Remove the local virtualenv\n\n"
 	@printf -- "$(GRAY)Python 3.14 and Rust $(RUST_VERSION) are required.$(RESET)\n"
