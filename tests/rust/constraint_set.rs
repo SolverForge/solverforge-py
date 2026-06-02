@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 #[test]
 fn dynamic_constraint_set_reports_constraint_count() {
+    crate::initialize_python();
     Python::attach(|py| {
         let constraints = pyo3::types::PyList::empty(py).unbind().into_any();
         let set = PyDynamicConstraintSet::new(constraints);

@@ -10,6 +10,7 @@ use solverforge_py::state::PyDynamicSolution;
 
 #[test]
 fn dynamic_solution_clone_keeps_independent_state() {
+    crate::initialize_python();
     Python::attach(|py| {
         let schema = Arc::new(DynamicSchema {
             solution_type: "Plan".to_string(),
@@ -33,6 +34,7 @@ fn dynamic_solution_clone_keeps_independent_state() {
 
 #[test]
 fn dynamic_solution_implements_upstream_backend_contract() {
+    crate::initialize_python();
     Python::attach(|py| {
         let schema = Arc::new(DynamicSchema {
             solution_type: "Plan".to_string(),

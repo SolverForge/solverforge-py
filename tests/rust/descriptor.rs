@@ -10,6 +10,7 @@ use solverforge_py::state::PyDynamicSolution;
 
 #[test]
 fn dynamic_descriptor_extracts_multiple_logical_classes_from_one_row_type() {
+    crate::initialize_python();
     Python::attach(|py| {
         let schema = Arc::new(DynamicSchema {
             solution_type: "Plan".to_string(),

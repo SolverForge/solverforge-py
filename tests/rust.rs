@@ -10,3 +10,7 @@ mod runtime_slots;
 mod score;
 #[path = "rust/state_clone.rs"]
 mod state_clone;
+
+pub fn initialize_python() {
+    pyo3::Python::initialize();
+}

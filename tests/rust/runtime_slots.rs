@@ -19,6 +19,7 @@ fn default_distance_meter_is_deterministic() {
 
 #[test]
 fn dynamic_runtime_slots_are_built_from_schema_and_drive_state() {
+    crate::initialize_python();
     Python::attach(|py| {
         let schema = Arc::new(DynamicSchema {
             solution_type: "Plan".to_string(),
