@@ -15,7 +15,7 @@ env:
 jobs:
   ci-local:
     name: local CI gate
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.server_url == 'https://github.com' && 'ubuntu-latest' || 'rust' }}
     steps:
       - name: Checkout solverforge-py
         uses: actions/checkout@v6
