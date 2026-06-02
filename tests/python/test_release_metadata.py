@@ -46,8 +46,12 @@ def test_core_metadata_is_runtime_only() -> None:
     assert project["dependencies"] == []
     optional_dependencies = project["optional-dependencies"]
     assert "examples" in optional_dependencies
-    assert any("fastapi" in dependency for dependency in optional_dependencies["examples"])
-    assert any("uvicorn" in dependency for dependency in optional_dependencies["examples"])
+    assert any(
+        "fastapi" in dependency for dependency in optional_dependencies["examples"]
+    )
+    assert any(
+        "uvicorn" in dependency for dependency in optional_dependencies["examples"]
+    )
 
 
 def test_project_urls_cover_release_operations() -> None:
@@ -66,9 +70,10 @@ def test_solverforge_rust_dependency_base_is_manifest_owned() -> None:
     solverforge = cargo["package"]["metadata"]["solverforge"]
     dependencies = cargo["dependencies"]
 
-    assert solverforge["git"] == "https://github.com/SolverForge/solverforge"
-    assert solverforge["base_tag"] == "v0.15.0"
-    assert solverforge["rev"] == "ce75bdc08cc0e0778d5d114a0bbc4cb0beacfa77"
+    assert solverforge["version"] == "0.15.1"
+    assert "git" not in solverforge
+    assert "rev" not in solverforge
+    assert "path" not in solverforge
 
     for crate in (
         "solverforge-bridge",
@@ -80,13 +85,15 @@ def test_solverforge_rust_dependency_base_is_manifest_owned() -> None:
     ):
         spec = dependencies[crate]
         assert spec["version"] == f"={solverforge['version']}"
-        assert spec["git"] == solverforge["git"]
-        assert spec["rev"] == solverforge["rev"]
+        assert "git" not in spec
+        assert "rev" not in spec
         assert "path" not in spec
 
 
 def test_release_workflow_validates_only_tagged_pypi_publish() -> None:
-    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
     testpypi_job = workflow_job(workflow, "publish-testpypi")
     pypi_job = workflow_job(workflow, "publish-pypi")
 

@@ -17,11 +17,8 @@ SOLVERFORGE_CRATES = (
 
 
 class SolverForgeBase:
-    def __init__(self, version: str, git: str, rev: str, base_tag: str | None) -> None:
+    def __init__(self, version: str) -> None:
         self.version = version
-        self.git = git
-        self.rev = rev
-        self.base_tag = base_tag
 
 
 def fail(message: str) -> None:
@@ -43,31 +40,22 @@ def solverforge_base(repo_root: Path) -> SolverForgeBase:
     if not isinstance(solverforge, dict):
         fail("Cargo.toml is missing [package.metadata.solverforge]")
     version = solverforge.get("version")
-    git = solverforge.get("git")
-    rev = solverforge.get("rev")
-    base_tag = solverforge.get("base_tag")
     if not isinstance(version, str) or not version:
         fail("package.metadata.solverforge.version must be set")
-    if not isinstance(git, str) or not git:
-        fail("package.metadata.solverforge.git must be set")
-    if not isinstance(rev, str) or not rev:
-        fail("package.metadata.solverforge.rev must be set")
-    if base_tag is not None and not isinstance(base_tag, str):
-        fail("package.metadata.solverforge.base_tag must be a string")
-    return SolverForgeBase(version=version, git=git, rev=rev, base_tag=base_tag)
+    return SolverForgeBase(version=version)
 
 
 def assert_dependency_matches(spec: object, crate: str, base: SolverForgeBase) -> None:
     if not isinstance(spec, dict):
-        fail(f"{crate} must declare git, rev, and exact version from package metadata")
+        fail(f"{crate} must declare an exact crates.io version from package metadata")
     if "path" in spec:
-        fail(f"{crate} must use the release git revision, not path {spec['path']!r}")
+        fail(f"{crate} must use crates.io, not path {spec['path']!r}")
+    if "git" in spec:
+        fail(f"{crate} must use crates.io, not git {spec['git']!r}")
+    if "rev" in spec:
+        fail(f"{crate} must use crates.io, not rev {spec['rev']!r}")
     if spec.get("version") != f"={base.version}":
         fail(f"{crate} must pin version ={base.version}")
-    if spec.get("git") != base.git:
-        fail(f"{crate} git source must be {base.git}")
-    if spec.get("rev") != base.rev:
-        fail(f"{crate} git rev must be {base.rev}")
 
 
 def assert_manifest_matches(repo_root: Path, base: SolverForgeBase) -> None:
@@ -97,10 +85,8 @@ def assert_lock_matches(repo_root: Path, base: SolverForgeBase) -> None:
                 f"expected {base.version!r}"
             )
         source = package.get("source")
-        if not (isinstance(source, str) and source.startswith(f"git+{base.git}")):
-            fail(f"{crate} must resolve from {base.git}, got source {source!r}")
-        if not source.endswith(f"#{base.rev}"):
-            fail(f"{crate} lockfile source must end with #{base.rev}, got {source!r}")
+        if not (isinstance(source, str) and source.startswith("registry+")):
+            fail(f"{crate} must resolve from crates.io, got source {source!r}")
 
 
 def main() -> int:
@@ -115,8 +101,7 @@ def main() -> int:
         print(base.version)
         return 0
     assert_lock_matches(repo_root, base)
-    base_text = f", descended from {base.base_tag}" if base.base_tag else ""
-    print(f"SolverForge Rust crates pinned to {base.version} at {base.rev}{base_text}")
+    print(f"SolverForge Rust crates pinned to crates.io version {base.version}")
     return 0
 
 

@@ -14,9 +14,9 @@ use solverforge_config::{
 use solverforge_core::domain::{PlanningSolution, SolutionDescriptor};
 use solverforge_scoring::{ConstraintMetadata, ConstraintSet, Director, DirectorScoreState};
 use solverforge_solver::heuristic::r#move::{
-    KOptMove, ListChangeMove, ListMoveUnion, ListReverseMove, ListRuinMove, ListSwapMove,
-    MoveTabuSignature, PillarChangeMove, PillarSwapMove, RuinRecreateMove,
-    ScalarRecreateValueSource, SublistChangeMove, SublistSwapMove, SwapMove,
+    KOptMove, ListChangeMove, ListMoveUnion, ListMultiSwapMove, ListPermuteMove, ListReverseMove,
+    ListRuinMove, ListSwapMove, MoveTabuSignature, PillarChangeMove, PillarSwapMove,
+    RuinRecreateMove, ScalarRecreateValueSource, SublistChangeMove, SublistSwapMove, SwapMove,
 };
 use solverforge_solver::heuristic::selector::move_selector::{
     ArenaMoveCursor, MoveCursor, MoveSelector, MoveStreamContext,
@@ -821,6 +821,7 @@ impl solverforge_solver::Move<PyDynamicSolution> for DynamicScalar {
 }
 
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum DynamicMove {
     Scalar(DynamicScalar),
     List(DynamicList),
@@ -1796,6 +1797,7 @@ fn dynamic_list_index_to_element(solution: &PyDynamicSolution, element_index: us
 }
 
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum DynamicList {
     Change {
         slot: DynamicListVariableSlot<PyDynamicSolution>,
@@ -1804,6 +1806,14 @@ pub enum DynamicList {
     Swap {
         slot: DynamicListVariableSlot<PyDynamicSolution>,
         mov: ListSwapMove<PyDynamicSolution, usize>,
+    },
+    MultiSwap {
+        slot: DynamicListVariableSlot<PyDynamicSolution>,
+        mov: ListMultiSwapMove<PyDynamicSolution, usize>,
+    },
+    Permute {
+        slot: DynamicListVariableSlot<PyDynamicSolution>,
+        mov: ListPermuteMove<PyDynamicSolution, usize>,
     },
     SublistChange {
         slot: DynamicListVariableSlot<PyDynamicSolution>,
@@ -1835,6 +1845,8 @@ impl DynamicList {
         match mov {
             ListMoveUnion::ListChange(mov) => Self::Change { slot, mov },
             ListMoveUnion::ListSwap(mov) => Self::Swap { slot, mov },
+            ListMoveUnion::ListMultiSwap(mov) => Self::MultiSwap { slot, mov },
+            ListMoveUnion::ListPermute(mov) => Self::Permute { slot, mov },
             ListMoveUnion::SublistChange(mov) => Self::SublistChange { slot, mov },
             ListMoveUnion::SublistSwap(mov) => Self::SublistSwap { slot, mov },
             ListMoveUnion::ListReverse(mov) => Self::Reverse { slot, mov },
@@ -1847,6 +1859,8 @@ impl DynamicList {
         match self {
             Self::Change { slot, .. }
             | Self::Swap { slot, .. }
+            | Self::MultiSwap { slot, .. }
+            | Self::Permute { slot, .. }
             | Self::SublistChange { slot, .. }
             | Self::SublistSwap { slot, .. }
             | Self::Reverse { slot, .. }
@@ -1861,6 +1875,8 @@ impl Debug for DynamicList {
         match self {
             Self::Change { mov, .. } => Debug::fmt(mov, f),
             Self::Swap { mov, .. } => Debug::fmt(mov, f),
+            Self::MultiSwap { mov, .. } => Debug::fmt(mov, f),
+            Self::Permute { mov, .. } => Debug::fmt(mov, f),
             Self::SublistChange { mov, .. } => Debug::fmt(mov, f),
             Self::SublistSwap { mov, .. } => Debug::fmt(mov, f),
             Self::Reverse { mov, .. } => Debug::fmt(mov, f),
@@ -1873,11 +1889,13 @@ impl Debug for DynamicList {
 pub enum DynamicListUndo {
     Change(()),
     Swap(()),
+    MultiSwap(()),
+    Permute(Vec<usize>),
     SublistChange(()),
     SublistSwap(()),
     Reverse(()),
     KOpt(Vec<usize>),
-    Ruin(smallvec::SmallVec<[(usize, usize); 8]>),
+    Ruin(smallvec::SmallVec<[(usize, usize, usize); 8]>),
 }
 
 impl Move<PyDynamicSolution> for DynamicList {
@@ -1887,6 +1905,8 @@ impl Move<PyDynamicSolution> for DynamicList {
         with_dynamic_list_slot(self.slot(), || match self {
             Self::Change { mov, .. } => mov.is_doable(score_director),
             Self::Swap { mov, .. } => mov.is_doable(score_director),
+            Self::MultiSwap { mov, .. } => mov.is_doable(score_director),
+            Self::Permute { mov, .. } => mov.is_doable(score_director),
             Self::SublistChange { mov, .. } => mov.is_doable(score_director),
             Self::SublistSwap { mov, .. } => mov.is_doable(score_director),
             Self::Reverse { mov, .. } => mov.is_doable(score_director),
@@ -1905,6 +1925,11 @@ impl Move<PyDynamicSolution> for DynamicList {
                 mov.do_move(score_director);
                 DynamicListUndo::Swap(())
             }
+            Self::MultiSwap { mov, .. } => {
+                mov.do_move(score_director);
+                DynamicListUndo::MultiSwap(())
+            }
+            Self::Permute { mov, .. } => DynamicListUndo::Permute(mov.do_move(score_director)),
             Self::SublistChange { mov, .. } => {
                 mov.do_move(score_director);
                 DynamicListUndo::SublistChange(())
@@ -1930,6 +1955,12 @@ impl Move<PyDynamicSolution> for DynamicList {
             (Self::Swap { mov, .. }, DynamicListUndo::Swap(undo)) => {
                 mov.undo_move(score_director, undo);
             }
+            (Self::MultiSwap { mov, .. }, DynamicListUndo::MultiSwap(undo)) => {
+                mov.undo_move(score_director, undo);
+            }
+            (Self::Permute { mov, .. }, DynamicListUndo::Permute(undo)) => {
+                mov.undo_move(score_director, undo);
+            }
             (Self::SublistChange { mov, .. }, DynamicListUndo::SublistChange(undo)) => {
                 mov.undo_move(score_director, undo);
             }
@@ -1953,6 +1984,8 @@ impl Move<PyDynamicSolution> for DynamicList {
         match self {
             Self::Change { mov, .. } => mov.descriptor_index(),
             Self::Swap { mov, .. } => mov.descriptor_index(),
+            Self::MultiSwap { mov, .. } => mov.descriptor_index(),
+            Self::Permute { mov, .. } => mov.descriptor_index(),
             Self::SublistChange { mov, .. } => mov.descriptor_index(),
             Self::SublistSwap { mov, .. } => mov.descriptor_index(),
             Self::Reverse { mov, .. } => mov.descriptor_index(),
@@ -1965,6 +1998,8 @@ impl Move<PyDynamicSolution> for DynamicList {
         match self {
             Self::Change { mov, .. } => mov.entity_indices(),
             Self::Swap { mov, .. } => mov.entity_indices(),
+            Self::MultiSwap { mov, .. } => mov.entity_indices(),
+            Self::Permute { mov, .. } => mov.entity_indices(),
             Self::SublistChange { mov, .. } => mov.entity_indices(),
             Self::SublistSwap { mov, .. } => mov.entity_indices(),
             Self::Reverse { mov, .. } => mov.entity_indices(),
@@ -1977,6 +2012,8 @@ impl Move<PyDynamicSolution> for DynamicList {
         match self {
             Self::Change { mov, .. } => mov.variable_name(),
             Self::Swap { mov, .. } => mov.variable_name(),
+            Self::MultiSwap { mov, .. } => mov.variable_name(),
+            Self::Permute { mov, .. } => mov.variable_name(),
             Self::SublistChange { mov, .. } => mov.variable_name(),
             Self::SublistSwap { mov, .. } => mov.variable_name(),
             Self::Reverse { mov, .. } => mov.variable_name(),
@@ -1989,6 +2026,8 @@ impl Move<PyDynamicSolution> for DynamicList {
         match self {
             Self::Change { .. } => "dynamic_list_change",
             Self::Swap { .. } => "dynamic_list_swap",
+            Self::MultiSwap { .. } => "dynamic_list_multi_swap",
+            Self::Permute { .. } => "dynamic_list_permute",
             Self::SublistChange { .. } => "dynamic_list_sublist_change",
             Self::SublistSwap { .. } => "dynamic_list_sublist_swap",
             Self::Reverse { .. } => "dynamic_list_reverse",
@@ -2004,6 +2043,8 @@ impl Move<PyDynamicSolution> for DynamicList {
         with_dynamic_list_slot(self.slot(), || match self {
             Self::Change { mov, .. } => mov.tabu_signature(score_director),
             Self::Swap { mov, .. } => mov.tabu_signature(score_director),
+            Self::MultiSwap { mov, .. } => mov.tabu_signature(score_director),
+            Self::Permute { mov, .. } => mov.tabu_signature(score_director),
             Self::SublistChange { mov, .. } => mov.tabu_signature(score_director),
             Self::SublistSwap { mov, .. } => mov.tabu_signature(score_director),
             Self::Reverse { mov, .. } => mov.tabu_signature(score_director),
