@@ -23,15 +23,37 @@ jobs:
           path: solverforge-py
 
       - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+        shell: bash
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          "${HOME}/.local/bin/uv" python install "${PYTHON_VERSION}"
+          host_python="$("${HOME}/.local/bin/uv" python find "${PYTHON_VERSION}")"
+          host_python_dir="$(dirname "${host_python}")"
+          host_python_libdir="$("${host_python}" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')"
+          echo "${host_python_dir}" >> "${GITHUB_PATH}"
+          echo "HOST_PYTHON=${host_python}" >> "${GITHUB_ENV}"
+          echo "PYO3_PYTHON=${host_python}" >> "${GITHUB_ENV}"
+          echo "PYTHON_SYS_EXECUTABLE=${host_python}" >> "${GITHUB_ENV}"
+          echo "LIBRARY_PATH=${host_python_libdir}:${LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=${host_python_libdir}:${LD_LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          "${host_python}" --version
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          components: rustfmt, clippy
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain "${RUST_VERSION}" \
+                --component rustfmt --component clippy
+          if [ -f "${HOME}/.cargo/env" ]; then
+            . "${HOME}/.cargo/env"
+            echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
+          else
+            . /usr/local/cargo/env
+            echo "/usr/local/cargo/bin" >> "${GITHUB_PATH}"
+          fi
+          rustc --version
+          cargo --version
 
       - name: Validate SolverForge release base
         working-directory: solverforge-py
