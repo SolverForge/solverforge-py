@@ -9,13 +9,18 @@ from .decorators import (
     problem_fact,
     scalar_group,
 )
-from .errors import CallbackError, ModelValidationError, NativeBridgeError, SolverForgeError
+from .errors import (
+    CallbackError,
+    ModelValidationError,
+    NativeBridgeError,
+    SolverForgeError,
+)
 from .fields import planning_id, planning_list_variable, planning_variable
 from .manager import JobHandle, SolverManager
 from .score import HardMediumSoftScore, HardSoftDecimalScore, HardSoftScore, SoftScore
 from .solver import Solver
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 __all__ = [
     "CallbackError",

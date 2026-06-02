@@ -9,7 +9,7 @@ clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
 The package targets CPython 3.14 and Rust 1.95.0. The PyPI package starts at
-`solverforge` `0.4.0` for this architecture and intentionally supersedes the
+`solverforge` `0.4.1` for this architecture and intentionally supersedes the
 older incompatible `0.2.x` and `0.3.0` artifacts in the same PyPI namespace.
 Those older artifacts exposed `SolverFactory`, `PlanningVariable`, Java service
 requirements, and other APIs that are not part of this package.
@@ -34,7 +34,7 @@ or an editable local checkout.
 ```sh
 python3.14 -m venv .venv-examples
 . .venv-examples/bin/activate
-python -m pip install "solverforge[examples]==0.4.0"
+python -m pip install "solverforge[examples]==0.4.1"
 python examples/nqueens.py
 python -m examples.solverforge_hospital
 ```

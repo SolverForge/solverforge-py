@@ -1,7 +1,7 @@
 # PyPI Release Plan
 
 This repository publishes the `solverforge` package on PyPI. The first release
-from this architecture is `0.4.0`.
+from this architecture is `0.4.1`.
 
 ## Current Index State
 
@@ -16,9 +16,9 @@ As of 2026-05-31:
 
 ## Course Of Action
 
-1. Publish a final `0.4.0`, not a prerelease. A prerelease would not become the
+1. Publish a final `0.4.1`, not a prerelease. A prerelease would not become the
    default `pip install solverforge` candidate.
-2. Keep `requires-python = ">=3.14"` for the new package. After `0.4.0` is
+2. Keep `requires-python = ">=3.14"` for the new package. After `0.4.1` is
    published and smoke-tested, yank the old `0.2.x` and `0.3.0` files so Python
    3.13 users do not silently install the incompatible old architecture.
 3. Build wheels and the source distribution from this repository, with the
@@ -28,7 +28,7 @@ As of 2026-05-31:
 5. Publish to PyPI from a tagged release through the reviewed `pypi`
    environment.
 6. After PyPI publication, verify `python3.14 -m pip install solverforge`
-   resolves to `0.4.0`.
+   resolves to `0.4.1`.
 
 ## File Responsibilities
 
@@ -83,8 +83,8 @@ local CI, builds the release source distribution and local wheel, runs
 1. Run `make pre-release` locally.
 2. Trigger the release workflow manually with `repository=testpypi`.
 3. Create a clean Python 3.14 environment and install from TestPyPI.
-4. Tag this repository with `v0.4.0` and push the tag.
+4. Tag this repository with `v0.4.1` and push the tag.
 5. Approve the `pypi` environment in GitHub Actions.
 6. Verify PyPI JSON and a clean `pip install solverforge`.
 7. Yank PyPI `0.2.2` through `0.3.0` with the reason:
-   `Superseded by solverforge 0.4.0 dynamic Python binding architecture.`
+   `Superseded by solverforge 0.4.1 dynamic Python binding architecture.`
