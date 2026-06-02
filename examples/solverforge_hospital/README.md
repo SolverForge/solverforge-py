@@ -24,10 +24,13 @@ It demonstrates:
 - the upstream SolverForge Rust console in both terminal-only and FastAPI CLI
   server modes.
 
-Run it from the `solverforge-py` repo root:
+Install the published package and run the source-checkout example:
 
 ```sh
-make hospital-run
+python3.14 -m venv .venv-hospital
+. .venv-hospital/bin/activate
+python -m pip install "solverforge[examples]==0.4.0"
+python -m examples.solverforge_hospital
 ```
 
 Then open `http://127.0.0.1:7860`.
@@ -35,10 +38,11 @@ Then open `http://127.0.0.1:7860`.
 For a terminal-only solve:
 
 ```sh
-make hospital-solve
+python -m examples.solverforge_hospital --solve
 ```
 
-Use `APP_HOST=0.0.0.0 PORT=7861 make hospital-run` to override the bind address.
+Use `python -m examples.solverforge_hospital --host 0.0.0.0 --port 7861` to
+override the bind address.
 
 ## Layout
 

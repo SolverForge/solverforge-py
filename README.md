@@ -25,6 +25,26 @@ extension. Source-checkout examples, including the hospital FastAPI app and its
 static assets, are maintained in this repository rather than installed into the
 runtime wheel.
 
+## Examples
+
+Run source-checkout examples against the published PyPI package. The examples
+import `solverforge` from the installed package and do not require `PYTHONPATH`
+or an editable local checkout.
+
+```sh
+python3.14 -m venv .venv-examples
+. .venv-examples/bin/activate
+python -m pip install "solverforge[examples]==0.4.0"
+python examples/nqueens.py
+python -m examples.solverforge_hospital
+```
+
+Then open `http://127.0.0.1:7860` for the hospital app.
+
+For local package development, use the root `Makefile` targets instead.
+
+## Development
+
 Local development is driven by the root `Makefile`, which creates `.venv`,
 installs maturin and developer tools, and builds the PyO3 extension against the
 current checkout.
