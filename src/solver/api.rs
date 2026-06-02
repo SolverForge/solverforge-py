@@ -53,7 +53,8 @@ pub fn solve(
     let py_solution = solution.bind(py);
     let mut imported = import_solution(py_solution, Arc::clone(&parsed))?;
     let descriptor = solution_descriptor(&parsed);
-    let model = dynamic_runtime_model(&parsed);
+    let model = dynamic_runtime_model(&parsed, &descriptor)
+        .map_err(|err| py_err(format!("failed to resolve dynamic runtime model: {err}")))?;
     let constraints = PyDynamicConstraintSet::new(parsed.constraints.clone_ref(py));
     let solver_config = config_from_python(config)?;
     imported.solver_config = solver_config.clone();

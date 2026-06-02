@@ -15,7 +15,9 @@ impl Solvable for PyDynamicSolution {
         let schema = Arc::clone(&self.schema);
         let config = self.solver_config.clone();
         let descriptor = solution_descriptor(&schema);
-        let model = dynamic_runtime_model(&schema);
+        let model = dynamic_runtime_model(&schema, &descriptor).expect(
+            "dynamic runtime model built from schema should resolve against its descriptor",
+        );
         let constraints = pyo3::Python::attach(|py| {
             PyDynamicConstraintSet::new(schema.constraints.clone_ref(py))
         });

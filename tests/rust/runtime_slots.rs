@@ -6,6 +6,7 @@ use solverforge_py::runtime::distance::PyDistanceMeter;
 use solverforge_py::runtime::dynamic_runtime_model;
 use solverforge_py::runtime::list_slots::list_slots;
 use solverforge_py::runtime::scalar_slots::scalar_slots;
+use solverforge_py::schema::build::solution_descriptor;
 use solverforge_py::schema::{DynamicSchema, EntitySchema, VariableSchema};
 use solverforge_py::state::entity_table::{DynamicEntityRow, DynamicState};
 use solverforge_py::state::PyDynamicSolution;
@@ -83,10 +84,18 @@ fn dynamic_runtime_slots_are_built_from_schema_and_drive_state() {
         assert_eq!(list.list_remove(&mut solution, 0, 0), Some(1));
         assert_eq!(list.assigned_elements(&solution), vec![2, 3]);
 
-        let model = dynamic_runtime_model(&schema);
+        let descriptor = solution_descriptor(&schema);
+        let model = dynamic_runtime_model(&schema, &descriptor)
+            .expect("runtime model should resolve against schema descriptor");
         assert!(model.has_scalar_variables());
         assert!(model.has_list_variables());
         assert_eq!(model.dynamic_scalar_variables().count(), 1);
         assert_eq!(model.dynamic_list_variables().count(), 1);
+        assert!(model
+            .dynamic_scalar_variables()
+            .all(|slot| slot.is_descriptor_resolved()));
+        assert!(model
+            .dynamic_list_variables()
+            .all(|slot| slot.is_descriptor_resolved()));
     });
 }
