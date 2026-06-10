@@ -22,9 +22,9 @@ python3.14 -m pip install solverforge
 
 The installable wheel contains the core `solverforge` package, native extension,
 and embedded shared `solverforge-ui` assets exposed through `solverforge.ui`.
-Source-checkout examples, including the hospital FastAPI app and app-specific
-static files, are maintained in this repository rather than installed into the
-runtime wheel.
+Source-checkout examples, including the hospital and deliveries FastAPI apps and
+their app-specific static files, are maintained in this repository rather than
+installed into the runtime wheel.
 
 ## Examples
 
@@ -38,17 +38,18 @@ python3.14 -m venv .venv-examples
 python -m pip install "solverforge[examples]==0.4.1"
 python examples/nqueens.py
 python -m examples.solverforge_hospital
+python -m examples.solverforge_deliveries
 ```
 
-Then open `http://127.0.0.1:7860` for the hospital app.
+Then open `http://127.0.0.1:7860` for the hospital app or
+`http://127.0.0.1:7861` for the deliveries app.
 
 For local package development, use the root `Makefile` targets instead.
 
-## Development
+## Minimal Model
 
-Local development is driven by the root `Makefile`, which creates `.venv`,
-installs maturin and developer tools, and builds the PyO3 extension against the
-current checkout.
+A minimal model uses Python decorators for domain metadata and plain Python
+callbacks for constraints:
 
 ```python
 from solverforge import (
@@ -92,6 +93,10 @@ solution = Solver.solve(Schedule([Shift(), Shift()], [0, 1]))
 
 ## Development
 
+Local development is driven by the root `Makefile`, which creates `.venv`,
+installs maturin and developer tools, and builds the PyO3 extension against the
+current checkout.
+
 ```sh
 make develop          # release native extension installed into .venv
 make test             # cargo test plus pytest
@@ -101,7 +106,8 @@ make pre-release      # ci-local plus release sdist/wheel checks
 ```
 
 Run `make help` for focused targets such as `make test-hospital`,
-`make test-one TEST=pattern`, `make hospital-run`, and `make hospital-solve`.
+`make test-deliveries`, `make test-one TEST=pattern`, `make hospital-run`,
+`make hospital-solve`, `make deliveries-run`, and `make deliveries-solve`.
 
 ## Boundaries
 
@@ -122,15 +128,25 @@ Run `make help` for focused targets such as `make test-hospital`,
   `step_count_limit`, `unimproved_step_count_limit`, and
   `unimproved_seconds_spent_limit`.
 - Synchronous and retained scalar/list construction solves use upstream
-  SolverForge.
+  SolverForge. Dynamic scalar construction binds first-fit and cheapest
+  insertion phases; dynamic list construction binds list cheapest insertion,
+  list Clarke-Wright, and list k-opt phases where the model supplies the
+  required list or route hooks.
 - `SolverManager` is backed by upstream retained jobs, statuses, events, and
   snapshots, including pause, resume, cancel, delete, and exact snapshot reads.
+- `planning_list_variable(...)` supports `element_owner`, `route_depot`,
+  `route_metric_class`, `route_distance`, and `route_feasible` callbacks for
+  owner-aware list moves and CVRP-style route construction.
+  `shadow_variable_updates(...)` registers post-update listeners whose
+  native-owned fields are refreshed during solve/analyze and exported back to
+  Python objects.
 - Supported score families are `SoftScore`, `HardSoftScore`,
   `HardSoftDecimalScore`, and `HardMediumSoftScore`.
 - Python callback constraints are evaluated from Rust-owned dynamic state.
   Supported stream shapes are unary `for_each(...).filter(...)`, binary
   `for_each(...).join(...).filter(...)`, and grouped-count
-  `for_each(...).group_by(...)`, plus `for_each(...).balance(...)`, with fixed
+  `for_each(...).group_by(...)`, plus `for_each(...).balance(...)` and
+  `for_each_unassigned_element(owner_entity_type, variable_name)`, with fixed
   or callback-computed score weights. `joiner.equal(...)` and
   `joiner.equal_bi(...)` preserve Python equality semantics.
 - Dynamic scalar local search is available through upstream-style dynamic
@@ -153,6 +169,10 @@ Run `make help` for focused targets such as `make test-hospital`,
   shifts, retained jobs, snapshots, analysis, pause/resume/cancel, and a
   30-second hard-feasible terminal solve when installed with the release native
   extension.
+- `examples/solverforge_deliveries` is the Python port of the deliveries use
+  case: route-owning vehicles, delivery facts, CVRP route callbacks, route
+  shadow metrics, unassigned-delivery scoring, retained jobs, route snapshots,
+  analysis, and delivery-insertion recommendations.
 - Top-level `ConstraintFactory.join`, `group_by`, `if_exists`, `if_not_exists`,
   and `flattened` remain explicit unsupported methods until the native callback
   stream planner has public bridge support for those top-level semantics. Use
@@ -161,7 +181,7 @@ Run `make help` for focused targets such as `make test-hospital`,
 
 ## Documentation Map
 
-- `WIREFRAME.md` is the as-built public API, runtime, and hospital UI map.
+- `WIREFRAME.md` is the as-built public API, runtime, and example UI/API map.
 - `AGENTS.md` is the contributor guide and agent scope contract.
 - `docs/upstream-contract.md` records the public SolverForge bridge assumptions.
 - `docs/dynamic-move-parity-plan.md` tracks implemented dynamic selector parity.
