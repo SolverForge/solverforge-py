@@ -39,7 +39,7 @@ APP_HOST ?= 127.0.0.1
 PORT ?= 7860
 DIST_DIR ?= $(CURDIR)/dist
 SOLVERFORGE_RELEASE_VERSION := $(shell $(HOST_PYTHON) scripts/verify_solverforge_release_base.py --print-version 2>/dev/null || printf unknown)
-MYPY_PATHS := python/solverforge examples/solverforge_hospital
+MYPY_PATHS := python/solverforge examples/solverforge_hospital examples/solverforge_deliveries
 PY_STYLE_PATHS := python tests examples scripts
 PY_DEPS_STAMP := $(VENV)/.solverforge-py-deps
 PY_LIBDIR := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')
@@ -49,10 +49,10 @@ PY_LINK_DIR := $(CURDIR)/target/libpython-link
 
 # ============== Phony Targets ==============
 .PHONY: banner help doctor venv install-python-deps python-link develop develop-debug build build-wheel \
-        build-sdist build-dist build-release check test test-quick rust-test py-test test-hospital test-one \
+	        build-sdist build-dist build-release check test test-quick rust-test py-test test-hospital test-deliveries test-one \
         rust-test-one typecheck ruff lint fmt fmt-check py-format py-format-check clippy pre-commit docs-check \
         ci-local audit pre-release release-base-check release-upstream-check dist-check smoke-wheel \
-        hospital-run hospital-solve version release-info clean clean-dist clean-py clean-venv
+	        hospital-run hospital-solve deliveries-run deliveries-solve version release-info clean clean-dist clean-py clean-venv
 
 .DEFAULT_GOAL := help
 
@@ -160,6 +160,10 @@ py-test: develop
 test-hospital: develop
 	@printf -- "$(PROGRESS) Running hospital example tests...\n"
 	@$(PYTEST) tests/python/test_hospital_example.py tests/python/test_hospital_frontend_app.py $(PYTEST_ARGS)
+
+test-deliveries: develop
+	@printf -- "$(PROGRESS) Running deliveries example tests...\n"
+	@$(PYTEST) tests/python/test_deliveries_example.py tests/python/test_deliveries_frontend_app.py $(PYTEST_ARGS)
 
 test-one: develop
 	@test -n "$(TEST)" || (printf -- "$(RED)$(CROSS) Set TEST=pattern$(RESET)\n" && exit 1)
@@ -282,6 +286,14 @@ hospital-solve: develop
 	@printf -- "$(PROGRESS) Running hospital terminal solve...\n"
 	@$(PYTHON) -m examples.solverforge_hospital --solve
 
+deliveries-run: develop
+	@printf -- "$(PROGRESS) Serving deliveries example at http://$(APP_HOST):$(PORT) ...\n"
+	@$(PYTHON) -m examples.solverforge_deliveries --host "$(APP_HOST)" --port "$(PORT)"
+
+deliveries-solve: develop
+	@printf -- "$(PROGRESS) Running deliveries terminal solve...\n"
+	@$(PYTHON) -m examples.solverforge_deliveries --solve
+
 # ============== Utilities ==============
 version:
 	@printf -- "$(CYAN)Python package:$(RESET) $(YELLOW)$(BOLD)$(VERSION)$(RESET)\n"
@@ -355,6 +367,8 @@ help: banner
 	@printf -- "$(BOLD)Examples$(RESET)\n"
 	@printf -- "  $(GREEN)make hospital-run$(RESET)        Serve the hospital app on APP_HOST=$(APP_HOST) PORT=$(PORT)\n"
 	@printf -- "  $(GREEN)make hospital-solve$(RESET)      Run the hospital model once in the terminal\n\n"
+	@printf -- "  $(GREEN)make deliveries-run$(RESET)      Serve the deliveries app on APP_HOST=$(APP_HOST) PORT=$(PORT)\n"
+	@printf -- "  $(GREEN)make deliveries-solve$(RESET)    Run the deliveries model once in the terminal\n\n"
 	@printf -- "$(BOLD)Cleanup$(RESET)\n"
 	@printf -- "  $(GREEN)make clean$(RESET)               Remove Cargo artifacts and Python caches\n"
 	@printf -- "  $(GREEN)make clean-dist$(RESET)          Remove release distributions\n"

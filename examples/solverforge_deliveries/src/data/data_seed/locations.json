@@ -1,0 +1,1472 @@
+{
+  "FIRENZE": {
+    "depots": [
+      {
+        "customerType": "business",
+        "lat": 43.7696,
+        "lng": 11.2558,
+        "name": "Centro Storico Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7745,
+        "lng": 11.2487,
+        "name": "Santa Maria Novella Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.782,
+        "lng": 11.282,
+        "name": "Campo di Marte Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.795,
+        "lng": 11.241,
+        "name": "Rifredi Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.788,
+        "lng": 11.222,
+        "name": "Novoli Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.752,
+        "lng": 11.268,
+        "name": "Gavinana Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7762,
+        "lng": 11.254,
+        "name": "Mercato Centrale Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7688,
+        "lng": 11.262,
+        "name": "Santa Croce Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7665,
+        "lng": 11.247,
+        "name": "Santo Spirito Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.802,
+        "lng": 11.253,
+        "name": "Careggi Depot"
+      }
+    ],
+    "visits": [
+      {
+        "customerType": "restaurant",
+        "lat": 43.7762,
+        "lng": 11.254,
+        "name": "Trattoria Mario"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7698,
+        "lng": 11.2505,
+        "name": "Buca Mario"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7705,
+        "lng": 11.2495,
+        "name": "Il Latini"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.768,
+        "lng": 11.2545,
+        "name": "Osteria dell'Enoteca"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7735,
+        "lng": 11.247,
+        "name": "Trattoria Sostanza"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.769,
+        "lng": 11.257,
+        "name": "All'Antico Vinaio"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7762,
+        "lng": 11.254,
+        "name": "Mercato Centrale"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7702,
+        "lng": 11.267,
+        "name": "Cibreo"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.771,
+        "lng": 11.261,
+        "name": "Ora d'Aria"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.772,
+        "lng": 11.2535,
+        "name": "Buca Lapi"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.768,
+        "lng": 11.255,
+        "name": "Il Palagio"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7695,
+        "lng": 11.262,
+        "name": "Enoteca Pinchiorri"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7745,
+        "lng": 11.265,
+        "name": "La Giostra"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7693,
+        "lng": 11.2563,
+        "name": "Fishing Lab"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7665,
+        "lng": 11.252,
+        "name": "Trattoria Cammillo"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7693,
+        "lng": 11.2563,
+        "name": "Palazzo Vecchio"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7677,
+        "lng": 11.2553,
+        "name": "Uffizi Gallery"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7692,
+        "lng": 11.2556,
+        "name": "Gucci Garden"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.77,
+        "lng": 11.253,
+        "name": "Ferragamo Museum"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.783,
+        "lng": 11.269,
+        "name": "Ospedale Santa Maria"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7765,
+        "lng": 11.2555,
+        "name": "Universita degli Studi"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7706,
+        "lng": 11.2515,
+        "name": "Palazzo Strozzi"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.766,
+        "lng": 11.265,
+        "name": "Biblioteca Nazionale"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.778,
+        "lng": 11.247,
+        "name": "Teatro del Maggio"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7665,
+        "lng": 11.247,
+        "name": "Palazzo Pitti"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7768,
+        "lng": 11.259,
+        "name": "Accademia Gallery"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.791,
+        "lng": 11.252,
+        "name": "Ospedale Meyer"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.792,
+        "lng": 11.218,
+        "name": "Polo Universitario"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.7665,
+        "lng": 11.247,
+        "name": "Santo Spirito"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.768,
+        "lng": 11.242,
+        "name": "San Frediano"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.7688,
+        "lng": 11.262,
+        "name": "Santa Croce"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.7755,
+        "lng": 11.254,
+        "name": "San Lorenzo"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.7768,
+        "lng": 11.259,
+        "name": "San Marco"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.7688,
+        "lng": 11.262,
+        "name": "Sant'Ambrogio"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.782,
+        "lng": 11.282,
+        "name": "Campo di Marte"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.788,
+        "lng": 11.222,
+        "name": "Novoli"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.795,
+        "lng": 11.241,
+        "name": "Rifredi"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.789,
+        "lng": 11.258,
+        "name": "Le Cure"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.802,
+        "lng": 11.253,
+        "name": "Careggi"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.796,
+        "lng": 11.205,
+        "name": "Peretola"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.762,
+        "lng": 11.22,
+        "name": "Isolotto"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.752,
+        "lng": 11.268,
+        "name": "Gavinana"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.74,
+        "lng": 11.248,
+        "name": "Galluzzo"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.761,
+        "lng": 11.256,
+        "name": "Porta Romana"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.765,
+        "lng": 11.235,
+        "name": "Bellosguardo"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.75,
+        "lng": 11.253,
+        "name": "Arcetri"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.8055,
+        "lng": 11.2935,
+        "name": "Fiesole"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.785,
+        "lng": 11.31,
+        "name": "Settignano"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7688,
+        "lng": 11.262,
+        "name": "Mercato di Sant'Ambrogio"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7706,
+        "lng": 11.2515,
+        "name": "Procacci"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7755,
+        "lng": 11.254,
+        "name": "La Menagere"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7693,
+        "lng": 11.2563,
+        "name": "Rivoire"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7688,
+        "lng": 11.262,
+        "name": "Gelateria dei Neri"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.7762,
+        "lng": 11.254,
+        "name": "Trattoria Za Za"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.768,
+        "lng": 11.242,
+        "name": "Il Santo Bevitore"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.761,
+        "lng": 11.256,
+        "name": "Da Ruggero"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.789,
+        "lng": 11.258,
+        "name": "Perseus"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 43.772,
+        "lng": 11.2535,
+        "name": "Coquinarius"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7755,
+        "lng": 11.254,
+        "name": "Santa Maria del Fiore"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.778,
+        "lng": 11.247,
+        "name": "Stazione Leopolda"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7762,
+        "lng": 11.254,
+        "name": "Fortezza da Basso"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7765,
+        "lng": 11.2555,
+        "name": "Palazzo Medici Riccardi"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7762,
+        "lng": 11.254,
+        "name": "San Lorenzo Market"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7745,
+        "lng": 11.2487,
+        "name": "Santa Maria Novella"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.7665,
+        "lng": 11.247,
+        "name": "Boboli Gardens Office"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.766,
+        "lng": 11.265,
+        "name": "Villa Bardini"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.802,
+        "lng": 11.253,
+        "name": "Careggi Hospital"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.785,
+        "lng": 11.31,
+        "name": "Coverciano Offices"
+      },
+      {
+        "customerType": "business",
+        "lat": 43.796,
+        "lng": 11.205,
+        "name": "Firenze Airport Cargo"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.789,
+        "lng": 11.258,
+        "name": "Statuto"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.7688,
+        "lng": 11.262,
+        "name": "Piazza Beccaria"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.785,
+        "lng": 11.31,
+        "name": "Coverciano"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.782,
+        "lng": 11.282,
+        "name": "Campo di Marte East"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.788,
+        "lng": 11.222,
+        "name": "Novoli South"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.795,
+        "lng": 11.241,
+        "name": "Rifredi South"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.802,
+        "lng": 11.253,
+        "name": "Careggi North"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.762,
+        "lng": 11.22,
+        "name": "Isolotto South"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.752,
+        "lng": 11.268,
+        "name": "Gavinana South"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.74,
+        "lng": 11.248,
+        "name": "Galluzzo Center"
+      },
+      {
+        "customerType": "residential",
+        "lat": 43.75,
+        "lng": 11.253,
+        "name": "Arcetri Hill"
+      }
+    ]
+  },
+  "HARTFORD": {
+    "depots": [
+      {
+        "customerType": "business",
+        "lat": 41.7658,
+        "lng": -72.6734,
+        "name": "Downtown Hartford Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.77,
+        "lng": -72.69,
+        "name": "Asylum Hill Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.74,
+        "lng": -72.675,
+        "name": "South End Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.768,
+        "lng": -72.71,
+        "name": "West End Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.745,
+        "lng": -72.68,
+        "name": "Barry Square Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.775,
+        "lng": -72.685,
+        "name": "Clay Arsenal Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.765,
+        "lng": -72.6695,
+        "name": "Science Center Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.758,
+        "lng": -72.69,
+        "name": "Frog Hollow Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.785,
+        "lng": -72.705,
+        "name": "Blue Hills Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.7495,
+        "lng": -72.665,
+        "name": "Charter Oak Depot"
+      }
+    ],
+    "visits": [
+      {
+        "customerType": "restaurant",
+        "lat": 41.767,
+        "lng": -72.673,
+        "name": "Max Downtown"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.765,
+        "lng": -72.675,
+        "name": "Trumbull Kitchen"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.763,
+        "lng": -72.674,
+        "name": "Salute"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.768,
+        "lng": -72.67,
+        "name": "Peppercorns Grill"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.764,
+        "lng": -72.6725,
+        "name": "Feng Asian Bistro"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.7655,
+        "lng": -72.6728,
+        "name": "On20"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.762,
+        "lng": -72.705,
+        "name": "First and Last Tavern"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.758,
+        "lng": -72.682,
+        "name": "Agave Grill"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.755,
+        "lng": -72.678,
+        "name": "Bear's Smokehouse"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.763,
+        "lng": -72.675,
+        "name": "City Steam Brewery"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.7658,
+        "lng": -72.6734,
+        "name": "Travelers Tower"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.768,
+        "lng": -72.67,
+        "name": "Hartford Steam Boiler"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.77,
+        "lng": -72.69,
+        "name": "Aetna Building"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.7615,
+        "lng": -72.682,
+        "name": "Connecticut Convention Center"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.7547,
+        "lng": -72.6858,
+        "name": "Hartford Hospital"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.756,
+        "lng": -72.685,
+        "name": "Connecticut Children's"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.758,
+        "lng": -72.69,
+        "name": "Trinity College"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.765,
+        "lng": -72.6695,
+        "name": "Connecticut Science Center"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.768,
+        "lng": -72.7,
+        "name": "West End Hartford"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.772,
+        "lng": -72.685,
+        "name": "Asylum Hill"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.758,
+        "lng": -72.69,
+        "name": "Frog Hollow"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.745,
+        "lng": -72.68,
+        "name": "Barry Square"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.74,
+        "lng": -72.675,
+        "name": "South End"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.785,
+        "lng": -72.705,
+        "name": "Blue Hills"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.765,
+        "lng": -72.71,
+        "name": "Parkville"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.755,
+        "lng": -72.705,
+        "name": "Behind the Rocks"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.7495,
+        "lng": -72.665,
+        "name": "Charter Oak"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.751,
+        "lng": -72.67,
+        "name": "Sheldon Charter Oak"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.775,
+        "lng": -72.685,
+        "name": "Clay Arsenal"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.778,
+        "lng": -72.695,
+        "name": "Upper Albany"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.767,
+        "lng": -72.673,
+        "name": "The Place 2 Be"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.765,
+        "lng": -72.675,
+        "name": "Republic at the Linden"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.763,
+        "lng": -72.675,
+        "name": "Sorella"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.758,
+        "lng": -72.682,
+        "name": "Black-Eyed Sally's"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.7655,
+        "lng": -72.6728,
+        "name": "The Russell Hartford"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 41.758,
+        "lng": -72.69,
+        "name": "Fiddleheads Cafe"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.7615,
+        "lng": -72.682,
+        "name": "Bushnell Center"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.763,
+        "lng": -72.674,
+        "name": "State Capitol"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.765,
+        "lng": -72.6695,
+        "name": "Hartford Public Library"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.7658,
+        "lng": -72.6734,
+        "name": "XL Center"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.768,
+        "lng": -72.67,
+        "name": "Union Station Hartford"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.765,
+        "lng": -72.71,
+        "name": "Real Art Ways"
+      },
+      {
+        "customerType": "business",
+        "lat": 41.7495,
+        "lng": -72.665,
+        "name": "Colt Gateway"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.755,
+        "lng": -72.678,
+        "name": "South Green"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.775,
+        "lng": -72.685,
+        "name": "North Meadows"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.74,
+        "lng": -72.675,
+        "name": "South Meadows"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.768,
+        "lng": -72.7,
+        "name": "West Hartford Line"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.755,
+        "lng": -72.705,
+        "name": "Southwest Hartford"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.778,
+        "lng": -72.695,
+        "name": "North End"
+      },
+      {
+        "customerType": "residential",
+        "lat": 41.745,
+        "lng": -72.68,
+        "name": "Park Terrace"
+      }
+    ]
+  },
+  "PHILADELPHIA": {
+    "depots": [
+      {
+        "customerType": "business",
+        "lat": 39.9526,
+        "lng": -75.1652,
+        "name": "Central Depot - City Hall"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9256,
+        "lng": -75.1697,
+        "name": "South Philly Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9522,
+        "lng": -75.1932,
+        "name": "University City Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9907,
+        "lng": -75.1556,
+        "name": "North Philly Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9712,
+        "lng": -75.134,
+        "name": "Fishtown Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9601,
+        "lng": -75.2175,
+        "name": "West Philly Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9567,
+        "lng": -75.172,
+        "name": "Logan Square Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.932,
+        "lng": -75.145,
+        "name": "Pennsport Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.985,
+        "lng": -75.128,
+        "name": "Kensington Depot"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.953,
+        "lng": -75.21,
+        "name": "Spruce Hill Depot"
+      }
+    ],
+    "visits": [
+      {
+        "customerType": "restaurant",
+        "lat": 39.9535,
+        "lng": -75.1589,
+        "name": "Reading Terminal Market"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9493,
+        "lng": -75.1727,
+        "name": "Parc Restaurant"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.943,
+        "lng": -75.1474,
+        "name": "Zahav"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9499,
+        "lng": -75.1659,
+        "name": "Vetri Cucina"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.947,
+        "lng": -75.1709,
+        "name": "Talula's Garden"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9493,
+        "lng": -75.1539,
+        "name": "Fork"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9488,
+        "lng": -75.1559,
+        "name": "Morimoto"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9508,
+        "lng": -75.1718,
+        "name": "Vernick Food & Drink"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9492,
+        "lng": -75.1715,
+        "name": "Friday Saturday Sunday"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.941,
+        "lng": -75.1509,
+        "name": "Royal Izakaya"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9392,
+        "lng": -75.1538,
+        "name": "Laurel"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9533,
+        "lng": -75.192,
+        "name": "Marigold Kitchen"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9543,
+        "lng": -75.169,
+        "name": "Comcast Center"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.952,
+        "lng": -75.1685,
+        "name": "Liberty Place"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9505,
+        "lng": -75.166,
+        "name": "BNY Mellon Center"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.952,
+        "lng": -75.1685,
+        "name": "One Liberty Place"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.955,
+        "lng": -75.1705,
+        "name": "Aramark Tower"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9521,
+        "lng": -75.1602,
+        "name": "PSFS Building"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9567,
+        "lng": -75.172,
+        "name": "Three Logan Square"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9551,
+        "lng": -75.1675,
+        "name": "Two Commerce Square"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.95,
+        "lng": -75.193,
+        "name": "Penn Medicine"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9482,
+        "lng": -75.195,
+        "name": "Children's Hospital"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9566,
+        "lng": -75.1899,
+        "name": "Drexel University"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9812,
+        "lng": -75.1554,
+        "name": "Temple University"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9487,
+        "lng": -75.1577,
+        "name": "Jefferson Hospital"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9445,
+        "lng": -75.1545,
+        "name": "Pennsylvania Hospital"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9499,
+        "lng": -75.178,
+        "name": "FMC Tower"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.956,
+        "lng": -75.1822,
+        "name": "Cira Centre"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9496,
+        "lng": -75.1718,
+        "name": "Rittenhouse Square"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9468,
+        "lng": -75.1545,
+        "name": "Washington Square West"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9425,
+        "lng": -75.1478,
+        "name": "Society Hill"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.951,
+        "lng": -75.145,
+        "name": "Old City"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.965,
+        "lng": -75.142,
+        "name": "Northern Liberties"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9712,
+        "lng": -75.134,
+        "name": "Fishtown"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.938,
+        "lng": -75.152,
+        "name": "Queen Village"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9395,
+        "lng": -75.1598,
+        "name": "Bella Vista"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9425,
+        "lng": -75.1768,
+        "name": "Graduate Hospital"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.968,
+        "lng": -75.175,
+        "name": "Fairmount"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.962,
+        "lng": -75.162,
+        "name": "Spring Garden"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9656,
+        "lng": -75.181,
+        "name": "Art Museum Area"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.975,
+        "lng": -75.185,
+        "name": "Brewerytown"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.931,
+        "lng": -75.1605,
+        "name": "East Passyunk"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9285,
+        "lng": -75.178,
+        "name": "Point Breeze"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.932,
+        "lng": -75.145,
+        "name": "Pennsport"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.961,
+        "lng": -75.195,
+        "name": "Powelton Village"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.953,
+        "lng": -75.21,
+        "name": "Spruce Hill"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.949,
+        "lng": -75.22,
+        "name": "Cedar Park"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.985,
+        "lng": -75.128,
+        "name": "Kensington"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.987,
+        "lng": -75.112,
+        "name": "Port Richmond"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9496,
+        "lng": -75.1718,
+        "name": "Di Bruno Bros"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9492,
+        "lng": -75.1715,
+        "name": "Federal Donuts Center City"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9493,
+        "lng": -75.1539,
+        "name": "High Street Philly"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9712,
+        "lng": -75.134,
+        "name": "Suraya"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9712,
+        "lng": -75.134,
+        "name": "Wm Mulherin's Sons"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9499,
+        "lng": -75.1659,
+        "name": "El Vez"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9493,
+        "lng": -75.1727,
+        "name": "Barbuzzo"
+      },
+      {
+        "customerType": "restaurant",
+        "lat": 39.9508,
+        "lng": -75.1718,
+        "name": "The Love"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.956,
+        "lng": -75.1822,
+        "name": "30th Street Station"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.95,
+        "lng": -75.193,
+        "name": "University of Pennsylvania"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9567,
+        "lng": -75.172,
+        "name": "Franklin Institute"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9567,
+        "lng": -75.172,
+        "name": "Academy of Natural Sciences"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9499,
+        "lng": -75.1659,
+        "name": "Kimmel Center"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9526,
+        "lng": -75.1652,
+        "name": "City Hall Annex"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.951,
+        "lng": -75.145,
+        "name": "Independence Hall"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9256,
+        "lng": -75.1697,
+        "name": "Navy Yard Offices"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.941,
+        "lng": -75.1509,
+        "name": "Penn's Landing"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9656,
+        "lng": -75.181,
+        "name": "Rodin Museum"
+      },
+      {
+        "customerType": "business",
+        "lat": 39.9656,
+        "lng": -75.181,
+        "name": "Barnes Foundation"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9499,
+        "lng": -75.178,
+        "name": "Fitler Square"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9567,
+        "lng": -75.172,
+        "name": "Logan Square"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.962,
+        "lng": -75.162,
+        "name": "Callowhill"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.968,
+        "lng": -75.175,
+        "name": "Francisville"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9256,
+        "lng": -75.1697,
+        "name": "Whitman"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.931,
+        "lng": -75.1605,
+        "name": "Passyunk Square"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.9285,
+        "lng": -75.178,
+        "name": "Girard Estates"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.961,
+        "lng": -75.195,
+        "name": "West Powelton"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.961,
+        "lng": -75.195,
+        "name": "Mantua"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.953,
+        "lng": -75.21,
+        "name": "Walnut Hill"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.949,
+        "lng": -75.22,
+        "name": "Cobbs Creek"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.985,
+        "lng": -75.128,
+        "name": "Harrowgate"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.987,
+        "lng": -75.112,
+        "name": "Tacony"
+      },
+      {
+        "customerType": "residential",
+        "lat": 39.975,
+        "lng": -75.185,
+        "name": "Manayunk"
+      }
+    ]
+  }
+}

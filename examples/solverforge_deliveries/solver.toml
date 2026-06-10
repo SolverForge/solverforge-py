@@ -1,0 +1,51 @@
+environment_mode = "reproducible"
+random_seed = 42
+
+[termination]
+seconds_spent_limit = 3
+unimproved_seconds_spent_limit = 1
+
+[[phases]]
+type = "construction_heuristic"
+construction_heuristic_type = "list_cheapest_insertion"
+entity_class = "Vehicle"
+variable_name = "delivery_order"
+
+[[phases]]
+type = "construction_heuristic"
+construction_heuristic_type = "list_k_opt"
+k = 2
+entity_class = "Vehicle"
+variable_name = "delivery_order"
+
+[[phases]]
+type = "local_search"
+
+[phases.termination]
+step_count_limit = 100
+
+[phases.acceptor]
+type = "late_acceptance"
+late_acceptance_size = 100
+
+[phases.forager]
+type = "accepted_count"
+limit = 4
+
+[phases.move_selector]
+type = "union_move_selector"
+
+[[phases.move_selector.selectors]]
+type = "list_change_move_selector"
+entity_class = "Vehicle"
+variable_name = "delivery_order"
+
+[[phases.move_selector.selectors]]
+type = "list_swap_move_selector"
+entity_class = "Vehicle"
+variable_name = "delivery_order"
+
+[[phases.move_selector.selectors]]
+type = "list_reverse_move_selector"
+entity_class = "Vehicle"
+variable_name = "delivery_order"
