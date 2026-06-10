@@ -20,9 +20,10 @@ requirements, and other APIs that are not part of this package.
 python3.14 -m pip install solverforge
 ```
 
-The installable wheel contains the core `solverforge` package and native
-extension. Source-checkout examples, including the hospital FastAPI app and its
-static assets, are maintained in this repository rather than installed into the
+The installable wheel contains the core `solverforge` package, native extension,
+and embedded shared `solverforge-ui` assets exposed through `solverforge.ui`.
+Source-checkout examples, including the hospital FastAPI app and app-specific
+static files, are maintained in this repository rather than installed into the
 runtime wheel.
 
 ## Examples

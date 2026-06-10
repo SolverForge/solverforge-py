@@ -20,6 +20,8 @@ shape, and hospital example UI/API surface.
 - `examples/solverforge_hospital/`: FastAPI hospital demo with static UI,
   generated UI model, canonical `LARGE` data, solver config, and retained job
   lifecycle.
+- Shared `/sf/*` frontend assets are embedded by the `solverforge-ui` Rust crate
+  and exposed to Python through `solverforge.ui`, not copied into each example.
 - `docs/`: upstream bridge, callback, threading, non-goal, and dynamic move
   parity contracts.
 
@@ -27,7 +29,7 @@ shape, and hospital example UI/API surface.
 
 The package exports `Solver`, `SolverManager`, `SolverConfig`,
 `TerminationConfig`, `ConstraintFactory`, score classes, stable package error
-classes, `joiner`, `console`, and decorators/fields for model authoring:
+classes, `joiner`, `console`, `ui`, and decorators/fields for model authoring:
 
 - `@planning_solution`, `@planning_entity`, `@problem_fact`
 - `planning_id`, `planning_variable`, `planning_list_variable`
@@ -115,6 +117,9 @@ schedule views by location and by employee, streams retained job events over
 SSE, shows score/telemetry state, opens snapshot analysis, and supports pause,
 resume, cancel, and terminal delete controls.
 
+The app serves `/sf/{path}` from the native `solverforge-ui` bridge and serves
+only app-specific files from `examples/solverforge_hospital/static`.
+
 The hospital app is source-checkout example material. It is included in the
 source distribution for reproducible builds and development, but it is not
 installed into the runtime wheel.
@@ -128,6 +133,9 @@ The installable wheel contains only:
 - `solverforge/_native.pyi`
 - `solverforge/py.typed`
 - `solverforge-*.dist-info/`
+
+The native extension embeds shared `solverforge-ui` assets and exposes them via
+`solverforge.ui.asset()` for example applications and other Python HTTP hosts.
 
 The source distribution also carries the repository tests, examples, and docs.
 SolverForge Rust dependencies are declared from the exact git revision in

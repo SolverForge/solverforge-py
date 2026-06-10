@@ -6,8 +6,10 @@
 maturin. Python package code lives under `python/solverforge/`; the native
 extension, dynamic runtime bridge, callbacks, manager, and schema code live under
 `src/`. Python tests are in `tests/python/`, Rust tests are in `tests/rust/`, and
-examples are in `examples/`. The hospital demo owns its FastAPI app, static UI,
-generated UI model, and seed data under `examples/solverforge_hospital/`.
+examples are in `examples/`. The hospital demo owns its FastAPI app,
+app-specific static UI, generated UI model, and seed data under
+`examples/solverforge_hospital/`; shared `/sf/*` assets are served from the
+`solverforge-ui` crate through the native binding.
 `WIREFRAME.md` is the as-built API/UI map; `docs/` contains bridge and callback
 contracts.
 
