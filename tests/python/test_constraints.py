@@ -8,14 +8,24 @@ from solverforge import (
     constraint_provider,
     joiner,
     planning_entity,
+    planning_list_variable,
     planning_solution,
     planning_variable,
     problem_fact,
+    shadow_variable_updates,
 )
 
 
 class Item:
     pass
+
+
+@planning_entity
+class ListOwnerItem:
+    values = planning_list_variable(element_collection="value_ids")
+
+    def __init__(self) -> None:
+        self.values = []
 
 
 def test_constraint_plan_uses_callback_surface_only() -> None:
@@ -95,7 +105,28 @@ def test_sequence_weight_uses_factory_score_family() -> None:
     assert native["weight"] == {"family": "hard_soft", "levels": [1, 0]}
 
 
-@pytest.mark.parametrize("method_name", ["join", "if_exists", "if_not_exists", "group_by", "flattened"])
+def test_unassigned_list_element_plan_uses_owner_list_variable_metadata() -> None:
+    constraint = (
+        ConstraintFactory(score_family="hard_soft")
+        .for_each_unassigned_element(ListOwnerItem, "values")
+        .filter(lambda value: value > 0)
+        .penalize(HardSoftScore.ONE_HARD)
+        .named("unassigned values")
+    )
+
+    native = constraint.to_native()
+
+    assert native["constraint_type"] == "list_unassigned_element"
+    assert native["entity_type"] == "ListOwnerItem"
+    assert native["variable_name"] == "values"
+    assert native["element_collection"] == "value_ids"
+    assert callable(native["filters"][0])
+    assert native["weight"] == {"family": "hard_soft", "levels": [1, 0]}
+
+
+@pytest.mark.parametrize(
+    "method_name", ["join", "if_exists", "if_not_exists", "group_by", "flattened"]
+)
 def test_advanced_stream_methods_are_explicitly_unsupported(method_name: str) -> None:
     method = getattr(ConstraintFactory(), method_name)
     with pytest.raises(NotImplementedError):
@@ -205,6 +236,62 @@ def test_callback_sequence_score_weight_scores_with_solution_family() -> None:
     score = Solver.analyze(plan)
 
     assert score == {"family": "hard_soft", "levels": [-1, 0]}
+
+
+shadow_refresh_calls: list[tuple[str, int]] = []
+
+
+def first_shadow_listener(solution: object, entity_index: int) -> dict[str, int]:
+    del solution
+    shadow_refresh_calls.append(("first", entity_index))
+    return {}
+
+
+def second_shadow_listener(solution: object, entity_index: int) -> dict[str, int]:
+    del solution
+    shadow_refresh_calls.append(("second", entity_index))
+    return {}
+
+
+@planning_entity
+class MultiShadowItem:
+    value = planning_variable(value_range_provider="values", allows_unassigned=True)
+
+    def __init__(self) -> None:
+        self.value = 0
+
+
+@planning_solution(
+    score=HardSoftScore,
+    shadow_updates=[
+        shadow_variable_updates(
+            list_owner="items", post_update_listener=first_shadow_listener
+        ),
+        shadow_variable_updates(
+            list_owner="items", post_update_listener=second_shadow_listener
+        ),
+    ],
+)
+class MultiShadowPlan:
+    items: list[MultiShadowItem]
+
+    def __init__(self) -> None:
+        self.items = [MultiShadowItem(), MultiShadowItem()]
+        self.values = [0]
+        self.score = None
+
+
+def test_refresh_all_shadows_runs_each_listener_once_per_entity() -> None:
+    shadow_refresh_calls.clear()
+
+    Solver.analyze(MultiShadowPlan())
+
+    assert shadow_refresh_calls == [
+        ("first", 0),
+        ("second", 0),
+        ("first", 1),
+        ("second", 1),
+    ]
 
 
 @planning_entity
@@ -339,3 +426,97 @@ def test_equal_join_preserves_python_key_equality_not_repr() -> None:
 
     assert score == {"family": "hard_soft", "levels": [0, -1]}
     assert plan.score == score
+
+
+@planning_entity
+class ReadOnlyMetricItem:
+    value = planning_variable(value_range_provider="values", allows_unassigned=True)
+
+    def __init__(self) -> None:
+        self.value = 0
+
+    @property
+    def load(self) -> int:
+        return 5
+
+
+@constraint_provider
+def read_only_property_constraints(factory: ConstraintFactory):
+    return [
+        factory.for_each(ReadOnlyMetricItem)
+        .filter(lambda item: item.load == 5)
+        .penalize(HardSoftScore.ONE_HARD)
+        .named("read only metric")
+    ]
+
+
+@planning_solution(score=HardSoftScore, constraints=read_only_property_constraints)
+class ReadOnlyMetricPlan:
+    items: list[ReadOnlyMetricItem]
+
+    def __init__(self) -> None:
+        self.items = [ReadOnlyMetricItem()]
+        self.values = [0]
+        self.score = None
+
+
+def test_read_only_property_values_are_available_to_constraint_callbacks() -> None:
+    plan = ReadOnlyMetricPlan()
+
+    score = Solver.analyze(plan)
+
+    assert score == {"family": "hard_soft", "levels": [-1, 0]}
+
+
+def shadow_export_listener(solution: object, entity_index: int) -> dict[str, int]:
+    return {"route_total": int(solution.shadow_export_items[entity_index].value) + 5}
+
+
+@planning_entity
+class ShadowExportItem:
+    value = planning_variable(value_range_provider="values", allows_unassigned=True)
+
+    def __init__(self) -> None:
+        self.value = 0
+        self.route_total = 0.0
+        self.transient_cache = object()
+
+
+@constraint_provider
+def shadow_export_constraints(factory: ConstraintFactory):
+    return [
+        factory.for_each(ShadowExportItem)
+        .filter(lambda item: item.route_total != 5)
+        .penalize(HardSoftScore.ONE_HARD)
+        .named("shadow export")
+    ]
+
+
+@planning_solution(
+    score=HardSoftScore,
+    constraints=shadow_export_constraints,
+    shadow_updates=shadow_variable_updates(
+        list_owner="shadow_export_items",
+        post_update_listener=shadow_export_listener,
+    ),
+)
+class ShadowExportPlan:
+    shadow_export_items: list[ShadowExportItem]
+
+    def __init__(self) -> None:
+        self.shadow_export_items = [ShadowExportItem()]
+        self.values = [0]
+        self.score = None
+
+
+def test_analyze_exports_only_native_owned_shadow_fields() -> None:
+    plan = ShadowExportPlan()
+    original_cache = plan.shadow_export_items[0].transient_cache
+
+    score = Solver.analyze(plan)
+
+    assert score == {"family": "hard_soft", "levels": [0, 0]}
+    assert plan.score == score
+    assert plan.shadow_export_items[0].route_total == 5
+    assert type(plan.shadow_export_items[0].route_total) is int
+    assert plan.shadow_export_items[0].transient_cache is original_cache

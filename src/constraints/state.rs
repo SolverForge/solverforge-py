@@ -21,6 +21,7 @@ struct PythonRowSet {
 type JoinKeyCache = BTreeMap<(usize, u8), Vec<Py<PyAny>>>;
 type JoinIndexCache = BTreeMap<(usize, u8), Vec<(Py<PyAny>, Vec<usize>)>>;
 type BalanceCountCache = BTreeMap<usize, Vec<(Py<PyAny>, i64)>>;
+type ListUnassignedCountCache = BTreeMap<usize, BTreeMap<usize, i64>>;
 type RetractedEntitySet = BTreeSet<(usize, usize)>;
 
 #[derive(Clone, Copy)]
@@ -40,6 +41,7 @@ struct ConstraintStateCaches<'a> {
     join_key: &'a mut JoinKeyCache,
     join_index: &'a mut JoinIndexCache,
     balance_count: &'a mut BalanceCountCache,
+    list_unassigned_count: &'a mut ListUnassignedCountCache,
 }
 
 #[derive(Clone, Copy)]
@@ -92,11 +94,11 @@ struct JoinKeySide<'a> {
 
 pub struct PyDynamicConstraintSet {
     constraints: Py<PyAny>,
-    current_score: DynamicScore,
     cached_rows: Option<Vec<PythonRowSet>>,
     join_key_cache: JoinKeyCache,
     join_index_cache: JoinIndexCache,
     balance_count_cache: BalanceCountCache,
+    list_unassigned_count_cache: ListUnassignedCountCache,
     retracted_entities: RetractedEntitySet,
 }
 
@@ -107,11 +109,11 @@ impl PyDynamicConstraintSet {
     pub fn new(constraints: Py<PyAny>) -> Self {
         Self {
             constraints,
-            current_score: DynamicScore::ZERO,
             cached_rows: None,
             join_key_cache: JoinKeyCache::new(),
             join_index_cache: JoinIndexCache::new(),
             balance_count_cache: BalanceCountCache::new(),
+            list_unassigned_count_cache: ListUnassignedCountCache::new(),
             retracted_entities: RetractedEntitySet::new(),
         }
     }
@@ -126,6 +128,37 @@ impl PyDynamicConstraintSet {
 
     pub fn evaluate_solution(&self, solution: &PyDynamicSolution) -> PyResult<DynamicScore> {
         Python::attach(|py| evaluate_state_constraints(py, solution, self.constraints.bind(py)))
+    }
+
+    fn initialize_incremental_state(
+        &mut self,
+        solution: &PyDynamicSolution,
+    ) -> PyResult<DynamicScore> {
+        Python::attach(|py| {
+            let row_sets = python_rows_by_type(py, solution)?;
+            let score = evaluate_state_constraint_plans(
+                py,
+                solution,
+                &row_sets,
+                self.constraints.bind(py),
+            )?;
+            self.cached_rows = Some(row_sets);
+            self.join_key_cache.clear();
+            self.join_index_cache.clear();
+            self.balance_count_cache.clear();
+            self.list_unassigned_count_cache.clear();
+            self.retracted_entities.clear();
+            Ok(score)
+        })
+    }
+
+    fn reset_incremental_state(&mut self) {
+        self.cached_rows = None;
+        self.join_key_cache.clear();
+        self.join_index_cache.clear();
+        self.balance_count_cache.clear();
+        self.list_unassigned_count_cache.clear();
+        self.retracted_entities.clear();
     }
 }
 
@@ -164,18 +197,8 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
     }
 
     fn initialize_all(&mut self, solution: &PyDynamicSolution) -> DynamicScore {
-        self.current_score = Python::attach(|py| {
-            let row_sets = python_rows_by_type(py, solution)?;
-            let score = evaluate_state_constraint_plans(py, &row_sets, self.constraints.bind(py))?;
-            self.cached_rows = Some(row_sets);
-            self.join_key_cache.clear();
-            self.join_index_cache.clear();
-            self.balance_count_cache.clear();
-            self.retracted_entities.clear();
-            Ok::<DynamicScore, PyErr>(score)
-        })
-        .unwrap_or_else(|err| panic!("python constraint callback failed: {err:?}"));
-        self.current_score
+        self.initialize_incremental_state(solution)
+            .unwrap_or_else(|err| panic!("python constraint callback failed: {err:?}"))
     }
 
     fn on_insert_all(
@@ -195,9 +218,11 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
                 join_key: &mut self.join_key_cache,
                 join_index: &mut self.join_index_cache,
                 balance_count: &mut self.balance_count_cache,
+                list_unassigned_count: &mut self.list_unassigned_count_cache,
             };
             evaluate_impacted_state_constraints(
                 py,
+                solution,
                 row_sets,
                 &mut caches,
                 &self.retracted_entities,
@@ -212,7 +237,6 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
         .unwrap_or_else(|err| panic!("python constraint callback failed: {err:?}"));
         self.retracted_entities
             .remove(&(descriptor_index, entity_index));
-        self.current_score = self.current_score + delta;
         delta
     }
 
@@ -228,9 +252,11 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
                 join_key: &mut self.join_key_cache,
                 join_index: &mut self.join_index_cache,
                 balance_count: &mut self.balance_count_cache,
+                list_unassigned_count: &mut self.list_unassigned_count_cache,
             };
             evaluate_impacted_state_constraints(
                 py,
+                solution,
                 self.cached_rows
                     .as_ref()
                     .expect("cached rows must exist after ensure_cached_rows"),
@@ -247,17 +273,11 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
         .unwrap_or_else(|err| panic!("python constraint callback failed: {err:?}"));
         self.retracted_entities
             .insert((descriptor_index, entity_index));
-        self.current_score = self.current_score + delta;
         delta
     }
 
     fn reset_all(&mut self) {
-        self.current_score = DynamicScore::zero();
-        self.cached_rows = None;
-        self.join_key_cache.clear();
-        self.join_index_cache.clear();
-        self.balance_count_cache.clear();
-        self.retracted_entities.clear();
+        self.reset_incremental_state();
     }
 }
 
@@ -267,11 +287,12 @@ fn evaluate_state_constraints(
     constraints: &Bound<'_, PyAny>,
 ) -> PyResult<DynamicScore> {
     let row_sets = python_rows_by_type(py, solution)?;
-    evaluate_state_constraint_plans(py, &row_sets, constraints)
+    evaluate_state_constraint_plans(py, solution, &row_sets, constraints)
 }
 
 fn evaluate_state_constraint_plans(
     py: Python<'_>,
+    solution: &PyDynamicSolution,
     row_sets: &[PythonRowSet],
     constraints: &Bound<'_, PyAny>,
 ) -> PyResult<DynamicScore> {
@@ -305,6 +326,26 @@ fn evaluate_state_constraint_plans(
             .ok_or_else(|| py_err("constraint missing weight"))?;
         let weight = dynamic_score_from_native(&weight_any)?;
         let weight_callback = plan.get_item("weight_callback")?;
+        let constraint_type = plan
+            .get_item("constraint_type")?
+            .map(|value| value.extract::<String>())
+            .transpose()?;
+        if constraint_type.as_deref() == Some("list_unassigned_element") {
+            total = evaluate_list_unassigned_plan(
+                py,
+                total,
+                solution,
+                entity_index,
+                filters,
+                plan,
+                WeightedPlan {
+                    impact: impact.as_str(),
+                    weight,
+                    weight_callback: weight_callback.as_ref(),
+                },
+            )?;
+            continue;
+        }
         if let Some(balance_key) = plan.get_item("balance_key")? {
             total = evaluate_balance_plan(
                 total,
@@ -405,6 +446,7 @@ fn evaluate_state_constraint_plans(
 
 fn evaluate_impacted_state_constraints(
     py: Python<'_>,
+    solution: &PyDynamicSolution,
     row_sets: &[PythonRowSet],
     caches: &mut ConstraintStateCaches<'_>,
     retracted_entities: &RetractedEntitySet,
@@ -441,6 +483,33 @@ fn evaluate_impacted_state_constraints(
             .ok_or_else(|| py_err("constraint missing weight"))?;
         let weight = dynamic_score_from_native(&weight_any)?;
         let weight_callback = plan.get_item("weight_callback")?;
+        let constraint_type = plan
+            .get_item("constraint_type")?
+            .map(|value| value.extract::<String>())
+            .transpose()?;
+        if constraint_type.as_deref() == Some("list_unassigned_element") {
+            if entity_index == target.descriptor_index {
+                total = evaluate_list_unassigned_delta(
+                    py,
+                    total,
+                    solution,
+                    caches.list_unassigned_count,
+                    plan_index,
+                    entity_index,
+                    target.entity_index,
+                    filters,
+                    plan,
+                    WeightedPlan {
+                        impact: impact.as_str(),
+                        weight,
+                        weight_callback: weight_callback.as_ref(),
+                    },
+                    target.mode,
+                    retracted_entities,
+                )?;
+            }
+            continue;
+        }
 
         if let Some(balance_key) = plan.get_item("balance_key")? {
             if entity_index == target.descriptor_index {
@@ -673,6 +742,168 @@ fn evaluate_balance_delta(
     }
     let after = balance_score_from_counts(counts, weighted)?;
     Ok(total + (after - before))
+}
+
+fn evaluate_list_unassigned_plan(
+    py: Python<'_>,
+    mut total: DynamicScore,
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    filters: &Bound<'_, PyList>,
+    plan: &Bound<'_, PyDict>,
+    weighted: WeightedPlan<'_, '_>,
+) -> PyResult<DynamicScore> {
+    let variable_name = required_plan_string(plan, "variable_name")?;
+    let counts = assigned_list_counts(solution, entity_index, variable_name.as_str(), None)?;
+    for element in list_elements_for_variable(solution, entity_index, variable_name.as_str())? {
+        if counts.get(element).copied().unwrap_or(0) == 0 {
+            total = total + list_unassigned_contribution(py, filters, weighted, *element)?;
+        }
+    }
+    Ok(total)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn evaluate_list_unassigned_delta(
+    py: Python<'_>,
+    mut total: DynamicScore,
+    solution: &PyDynamicSolution,
+    list_unassigned_count_cache: &mut ListUnassignedCountCache,
+    plan_index: usize,
+    entity_index: usize,
+    changed_entity_index: usize,
+    filters: &Bound<'_, PyList>,
+    plan: &Bound<'_, PyDict>,
+    weighted: WeightedPlan<'_, '_>,
+    mode: DeltaMode,
+    retracted_entities: &RetractedEntitySet,
+) -> PyResult<DynamicScore> {
+    let variable_name = required_plan_string(plan, "variable_name")?;
+    ensure_list_unassigned_counts(
+        list_unassigned_count_cache,
+        plan_index,
+        solution,
+        entity_index,
+        variable_name.as_str(),
+        retracted_entities,
+    )?;
+    let universe = list_elements_for_variable(solution, entity_index, variable_name.as_str())?;
+    let Some(changed_values) = solution
+        .state
+        .entities
+        .get(entity_index)
+        .and_then(|rows| rows.get(changed_entity_index))
+        .and_then(|row| row.lists.get(variable_name.as_str()))
+    else {
+        return Ok(total);
+    };
+    let counts = list_unassigned_count_cache
+        .get_mut(&plan_index)
+        .expect("list unassigned counts must exist after ensure_list_unassigned_counts");
+    for element in changed_values {
+        let before = counts.get(element).copied().unwrap_or(0);
+        let after = match mode {
+            DeltaMode::Insert => before + 1,
+            DeltaMode::Retract => before.saturating_sub(1),
+        };
+        if after == 0 {
+            counts.remove(element);
+        } else {
+            counts.insert(*element, after);
+        }
+        if !universe.contains(element) {
+            continue;
+        }
+        let contribution = list_unassigned_contribution(py, filters, weighted, *element)?;
+        match mode {
+            DeltaMode::Insert if before == 0 && after == 1 => {
+                total = total - contribution;
+            }
+            DeltaMode::Retract if before == 1 && after == 0 => {
+                total = total + contribution;
+            }
+            _ => {}
+        }
+    }
+    Ok(total)
+}
+
+fn ensure_list_unassigned_counts(
+    list_unassigned_count_cache: &mut ListUnassignedCountCache,
+    plan_index: usize,
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    variable_name: &str,
+    retracted_entities: &RetractedEntitySet,
+) -> PyResult<()> {
+    if list_unassigned_count_cache.contains_key(&plan_index) {
+        return Ok(());
+    }
+    list_unassigned_count_cache.insert(
+        plan_index,
+        assigned_list_counts(
+            solution,
+            entity_index,
+            variable_name,
+            Some(retracted_entities),
+        )?,
+    );
+    Ok(())
+}
+
+fn assigned_list_counts(
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    variable_name: &str,
+    retracted_entities: Option<&RetractedEntitySet>,
+) -> PyResult<BTreeMap<usize, i64>> {
+    let rows = solution.state.entities.get(entity_index).ok_or_else(|| {
+        py_err(format!(
+            "missing state rows for entity index `{entity_index}`"
+        ))
+    })?;
+    let mut counts = BTreeMap::new();
+    for (row_index, row) in rows.iter().enumerate() {
+        if retracted_entities.is_some_and(|entities| entities.contains(&(entity_index, row_index)))
+        {
+            continue;
+        }
+        for element in row.lists.get(variable_name).into_iter().flatten() {
+            *counts.entry(*element).or_insert(0) += 1;
+        }
+    }
+    Ok(counts)
+}
+
+fn list_elements_for_variable<'a>(
+    solution: &'a PyDynamicSolution,
+    entity_index: usize,
+    variable_name: &str,
+) -> PyResult<&'a [usize]> {
+    solution
+        .state
+        .list_elements
+        .get(entity_index)
+        .and_then(|variables| variables.get(variable_name))
+        .map(Vec::as_slice)
+        .ok_or_else(|| {
+            py_err(format!(
+                "planning list variable `{variable_name}` has no element collection"
+            ))
+        })
+}
+
+fn list_unassigned_contribution(
+    _py: Python<'_>,
+    filters: &Bound<'_, PyList>,
+    weighted: WeightedPlan<'_, '_>,
+    element: usize,
+) -> PyResult<DynamicScore> {
+    if !passes_element_filters(filters, element)? {
+        return Ok(DynamicScore::zero());
+    }
+    let score = match_score_element(weighted.weight, weighted.weight_callback, element)?;
+    Ok(apply_impact(DynamicScore::zero(), weighted.impact, score))
 }
 
 fn ensure_balance_counts(
@@ -1118,6 +1349,10 @@ fn sync_cached_entity_row(
         return Ok(());
     };
     let py_row = py_row.bind(py);
+    for (name, value) in &state_row.fields {
+        let value = value.to_python(py)?;
+        py_row.setattr(name.as_str(), value.bind(py))?;
+    }
     for variable in &entity_schema.variables {
         match variable.kind.as_str() {
             "planning_variable" => match state_row.scalars.get(variable.name.as_str()) {
@@ -1408,6 +1643,15 @@ fn find_row_group_index(
 fn passes_unary_filters(filters: &Bound<'_, PyList>, entity: &Bound<'_, PyAny>) -> PyResult<bool> {
     for filter in filters.iter() {
         if !filter.call1((entity,))?.extract::<bool>()? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn passes_element_filters(filters: &Bound<'_, PyList>, element: usize) -> PyResult<bool> {
+    for filter in filters.iter() {
+        if !filter.call1((element,))?.extract::<bool>()? {
             return Ok(false);
         }
     }
@@ -1764,6 +2008,17 @@ fn match_score_unary(
     }
 }
 
+fn match_score_element(
+    fixed: DynamicScore,
+    callback: Option<&Bound<'_, PyAny>>,
+    element: usize,
+) -> PyResult<DynamicScore> {
+    match callback {
+        Some(callback) => dynamic_score_from_native(&callback.call1((element,))?),
+        None => Ok(fixed),
+    }
+}
+
 fn match_score_binary(
     fixed: DynamicScore,
     callback: Option<&Bound<'_, PyAny>>,
@@ -1817,6 +2072,12 @@ fn apply_delta_impact(
         DeltaMode::Insert => total + contribution,
         DeltaMode::Retract => total - contribution,
     }
+}
+
+fn required_plan_string(plan: &Bound<'_, PyDict>, key: &str) -> PyResult<String> {
+    plan.get_item(key)?
+        .ok_or_else(|| py_err(format!("constraint missing {key}")))?
+        .extract::<String>()
 }
 
 fn state_row_to_python(

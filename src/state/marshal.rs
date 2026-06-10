@@ -95,7 +95,7 @@ pub fn import_solution(
         }
         fact_tables.push(rows);
     }
-    Ok(PyDynamicSolution {
+    let mut solution = PyDynamicSolution {
         schema,
         state: DynamicState {
             entities: entity_tables,
@@ -104,7 +104,9 @@ pub fn import_solution(
         },
         score: None,
         solver_config: SolverConfig::default(),
-    })
+    };
+    solution.refresh_all_shadows()?;
+    Ok(solution)
 }
 
 fn import_fields_from_python(
@@ -128,6 +130,18 @@ fn import_fields_from_python(
     Ok(row)
 }
 
+fn is_read_only_property(item: &Bound<'_, PyAny>, name: &str) -> PyResult<bool> {
+    let Ok(class_attr) = item.get_type().getattr(name) else {
+        return Ok(false);
+    };
+    let builtins = item.py().import("builtins")?;
+    let property_type = builtins.getattr("property")?;
+    if !class_attr.is_instance(&property_type)? {
+        return Ok(false);
+    }
+    Ok(class_attr.getattr("fset")?.is_none())
+}
+
 pub fn export_solution(
     py_solution: &Bound<'_, PyAny>,
     solution: &PyDynamicSolution,
@@ -148,6 +162,16 @@ pub fn export_solution(
                         item.setattr(variable.name.as_str(), values.clone())?;
                     }
                 }
+            }
+            for name in &row.shadow_fields {
+                let Some(value) = row.fields.get(name) else {
+                    continue;
+                };
+                if is_read_only_property(&item, name.as_str())? {
+                    continue;
+                }
+                let value = value.to_python(py_solution.py())?;
+                item.setattr(name.as_str(), value.bind(py_solution.py()))?;
             }
         }
     }

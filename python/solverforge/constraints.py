@@ -11,6 +11,8 @@ from .score import score_to_native
 class ConstraintPlan:
     entity_type: type[object]
     score_family: str = "hard_soft"
+    constraint_type: str | None = None
+    variable_name: str | None = None
     arity: int = 1
     left_filters: tuple[Callable[..., bool], ...] = ()
     right_filters: tuple[Callable[..., bool], ...] = ()
@@ -37,6 +39,14 @@ class ConstraintPlan:
         }
         if self.right_entity_type is not None:
             plan["right_entity_type"] = self.right_entity_type.__name__
+        if self.constraint_type is not None:
+            plan["constraint_type"] = self.constraint_type
+        if self.variable_name is not None:
+            plan["variable_name"] = self.variable_name
+            plan["element_collection"] = _list_variable_element_collection(
+                self.entity_type,
+                self.variable_name,
+            )
         if self.joiners:
             plan["joiners"] = [joiner_to_native(joiner) for joiner in self.joiners]
         if self.group_key is not None:
@@ -49,6 +59,42 @@ class ConstraintPlan:
         else:
             plan["weight"] = score_to_native(self.weight, self.score_family)
         return plan
+
+
+@dataclass
+class UnassignedListElementConstraintStream:
+    entity_type: type[object]
+    variable_name: str
+    score_family: str = "hard_soft"
+    filters: list[Callable[..., bool]] = field(default_factory=list)
+    impact: str | None = None
+    weight: object | None = None
+
+    def filter(self, predicate: Callable[..., bool]) -> Self:
+        self.filters.append(predicate)
+        return self
+
+    def penalize(self, weight: object) -> Self:
+        self.impact = "penalty"
+        self.weight = weight
+        return self
+
+    def reward(self, weight: object) -> Self:
+        self.impact = "reward"
+        self.weight = weight
+        return self
+
+    def named(self, name: str) -> ConstraintPlan:
+        return ConstraintPlan(
+            entity_type=self.entity_type,
+            score_family=self.score_family,
+            constraint_type="list_unassigned_element",
+            variable_name=self.variable_name,
+            filters=tuple(self.filters),
+            impact=self.impact or "penalty",
+            weight=self.weight if self.weight is not None else 1,
+            name=name,
+        )
 
 
 @dataclass
@@ -253,22 +299,45 @@ class ConstraintFactory:
         self.score_family = score_family
 
     def for_each(self, entity_type: type[object]) -> UniConstraintStream:
-        return UniConstraintStream(entity_type=entity_type, score_family=self.score_family)
+        return UniConstraintStream(
+            entity_type=entity_type, score_family=self.score_family
+        )
+
+    def for_each_unassigned_element(
+        self,
+        owner_entity_type: type[object],
+        variable_name: str,
+    ) -> UnassignedListElementConstraintStream:
+        return UnassignedListElementConstraintStream(
+            entity_type=owner_entity_type,
+            variable_name=variable_name,
+            score_family=self.score_family,
+        )
 
     def join(self, *_args: Any, **_kwargs: Any) -> None:
-        raise NotImplementedError("dynamic join is implemented in the native stream planner")
+        raise NotImplementedError(
+            "dynamic join is implemented in the native stream planner"
+        )
 
     def if_exists(self, *_args: Any, **_kwargs: Any) -> None:
-        raise NotImplementedError("dynamic if_exists is implemented in the native stream planner")
+        raise NotImplementedError(
+            "dynamic if_exists is implemented in the native stream planner"
+        )
 
     def if_not_exists(self, *_args: Any, **_kwargs: Any) -> None:
-        raise NotImplementedError("dynamic if_not_exists is implemented in the native stream planner")
+        raise NotImplementedError(
+            "dynamic if_not_exists is implemented in the native stream planner"
+        )
 
     def group_by(self, *_args: Any, **_kwargs: Any) -> None:
-        raise NotImplementedError("dynamic group_by is implemented in the native stream planner")
+        raise NotImplementedError(
+            "dynamic group_by is implemented in the native stream planner"
+        )
 
     def flattened(self, *_args: Any, **_kwargs: Any) -> None:
-        raise NotImplementedError("dynamic flattened is implemented in the native stream planner")
+        raise NotImplementedError(
+            "dynamic flattened is implemented in the native stream planner"
+        )
 
 
 def joiner_to_native(joiner: object) -> object:
@@ -277,6 +346,27 @@ def joiner_to_native(joiner: object) -> object:
         if isinstance(native, dict):
             return native
     return joiner
+
+
+def _list_variable_element_collection(
+    entity_type: type[object], variable_name: str
+) -> str:
+    metadata = getattr(entity_type, "__solverforge_entity__", None)
+    if not isinstance(metadata, dict):
+        msg = f"{entity_type.__name__} is not marked with @planning_entity"
+        raise TypeError(msg)
+    for field_info in metadata.get("fields", []):
+        if not isinstance(field_info, dict):
+            continue
+        if (
+            field_info.get("name") == variable_name
+            and field_info.get("kind") == "planning_list_variable"
+        ):
+            collection = field_info.get("element_collection")
+            if isinstance(collection, str) and collection:
+                return collection
+    msg = f"{entity_type.__name__}.{variable_name} is not a planning list variable"
+    raise TypeError(msg)
 
 
 def _callback_weight_placeholder(score_family: str) -> dict[str, object]:
