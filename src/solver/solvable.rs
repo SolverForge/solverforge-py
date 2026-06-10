@@ -18,6 +18,7 @@ impl Solvable for PyDynamicSolution {
         let model = dynamic_runtime_model(&schema, &descriptor).expect(
             "dynamic runtime model built from schema should resolve against its descriptor",
         );
+        let phase_schema = Arc::clone(&schema);
         let constraints = pyo3::Python::attach(|py| {
             PyDynamicConstraintSet::new(schema.constraints.clone_ref(py))
         });
@@ -34,7 +35,9 @@ impl Solvable for PyDynamicSolution {
                 30,
                 dynamic_is_trivial,
                 dynamic_log_scale,
-                move |config, descriptor| build_dynamic_phases(config, descriptor, &model),
+                move |config, descriptor| {
+                    build_dynamic_phases(config, descriptor, &model, &phase_schema)
+                },
             )
         });
     }

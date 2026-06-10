@@ -34,6 +34,7 @@ pub fn calculate_score(
     }))
     .map_err(panic_to_py_err)??;
     let py_solution = solution.bind(py);
+    export_solution(py_solution, &imported)?;
     py_solution.setattr(
         "score",
         score.to_python_for_family(py, &parsed.score_family)?,
@@ -59,7 +60,8 @@ pub fn solve(
     let solver_config = config_from_python(config)?;
     imported.solver_config = solver_config.clone();
     let score_family = score_family_from_name(&parsed.score_family)?;
-    let solved = catch_unwind(AssertUnwindSafe(|| {
+    let phase_schema = Arc::clone(&parsed);
+    let mut solved = catch_unwind(AssertUnwindSafe(|| {
         scoped_dynamic_score_family(score_family, || {
             run_dynamic_solver_with_config(
                 imported,
@@ -71,11 +73,14 @@ pub fn solve(
                 30,
                 dynamic_is_trivial,
                 dynamic_log_scale,
-                move |config, descriptor| build_dynamic_phases(config, descriptor, &model),
+                move |config, descriptor| {
+                    build_dynamic_phases(config, descriptor, &model, &phase_schema)
+                },
             )
         })
     }))
     .map_err(panic_to_py_err)?;
+    solved.refresh_all_shadows()?;
     export_solution(py_solution, &solved)?;
     if let Some(score) = solved.score {
         py_solution.setattr(

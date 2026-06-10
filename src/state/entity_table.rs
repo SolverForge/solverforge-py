@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::value::DynamicValue;
 
@@ -33,6 +33,7 @@ impl DynamicState {
 #[derive(Debug, Clone, Default)]
 pub struct DynamicEntityRow {
     pub fields: BTreeMap<String, DynamicValue>,
+    pub shadow_fields: BTreeSet<String>,
     pub scalars: BTreeMap<String, Option<usize>>,
     pub candidates: BTreeMap<String, Vec<usize>>,
     pub lists: BTreeMap<String, Vec<usize>>,

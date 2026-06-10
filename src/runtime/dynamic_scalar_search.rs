@@ -31,13 +31,15 @@ use solverforge_solver::scope::ProgressCallback;
 use solverforge_solver::{
     AcceptorBuilder, AnyAcceptor, AnyForager, BestFitForager, ConstructionHeuristicPhase,
     EntityPlacer, EntityReference, FirstFitForager, ForagerBuilder, FromSolutionEntitySelector,
-    IntraDistanceAdapter, KOptConfig, KOptMoveSelector, ListRuinMoveSelector, ListVariableSlot,
-    LocalSearchPhase, LocalSearchStrategy, Move, NearbyKOptMoveSelector, Phase, PhaseSequence,
-    Placement, RuntimeModel,
+    IntraDistanceAdapter, KOptConfig, KOptMoveSelector, ListCheapestInsertionPhase,
+    ListClarkeWrightPhase, ListKOptPhase, ListRuinMoveSelector, ListVariableSlot, LocalSearchPhase,
+    LocalSearchStrategy, Move, NearbyKOptMoveSelector, Phase, PhaseSequence, Placement,
+    RuntimeModel,
 };
 
 use crate::constraints::PyDynamicConstraintSet;
 use crate::runtime::distance::PyDistanceMeter;
+use crate::schema::{DynamicSchema, VariableSchema};
 use crate::score::DynamicScore;
 use crate::state::PyDynamicSolution;
 use crate::value::DynamicValue;
@@ -66,6 +68,18 @@ const DEFAULT_SIMULATED_ANNEALING_DECAY_RATE: f64 = 0.999985;
 pub(crate) enum PyDynamicRuntimePhase {
     Upstream(PhaseSequence<UpstreamRuntimePhase>),
     DynamicScalarConstruction(DynamicScalarConstructionPhase),
+    DynamicListCheapestInsertion {
+        slot: DynamicListVariableSlot<PyDynamicSolution>,
+        phase: ListCheapestInsertionPhase<PyDynamicSolution, usize>,
+    },
+    DynamicListClarkeWright {
+        slot: DynamicListVariableSlot<PyDynamicSolution>,
+        phase: ListClarkeWrightPhase<PyDynamicSolution, usize>,
+    },
+    DynamicListKOpt {
+        slot: DynamicListVariableSlot<PyDynamicSolution>,
+        phase: ListKOptPhase<PyDynamicSolution, usize>,
+    },
     DynamicLocalSearch(Box<DynamicLocalSearch>),
 }
 
@@ -78,6 +92,18 @@ impl Debug for PyDynamicRuntimePhase {
                 .finish(),
             Self::DynamicScalarConstruction(phase) => f
                 .debug_tuple("PyDynamicRuntimePhase::DynamicScalarConstruction")
+                .field(phase)
+                .finish(),
+            Self::DynamicListCheapestInsertion { phase, .. } => f
+                .debug_tuple("PyDynamicRuntimePhase::DynamicListCheapestInsertion")
+                .field(phase)
+                .finish(),
+            Self::DynamicListClarkeWright { phase, .. } => f
+                .debug_tuple("PyDynamicRuntimePhase::DynamicListClarkeWright")
+                .field(phase)
+                .finish(),
+            Self::DynamicListKOpt { phase, .. } => f
+                .debug_tuple("PyDynamicRuntimePhase::DynamicListKOpt")
                 .field(phase)
                 .finish(),
             Self::DynamicLocalSearch(phase) => f
@@ -100,6 +126,18 @@ where
         match self {
             Self::Upstream(phase) => phase.solve(solver_scope),
             Self::DynamicScalarConstruction(phase) => phase.solve(solver_scope),
+            Self::DynamicListCheapestInsertion { slot, phase } => {
+                with_dynamic_list_slot(slot, || phase.solve(solver_scope));
+                publish_current_list_solution_if_not_worse(solver_scope);
+            }
+            Self::DynamicListClarkeWright { slot, phase } => {
+                with_dynamic_list_slot(slot, || phase.solve(solver_scope));
+                publish_current_list_solution_if_not_worse(solver_scope);
+            }
+            Self::DynamicListKOpt { slot, phase } => {
+                with_dynamic_list_slot(slot, || phase.solve(solver_scope));
+                publish_current_list_solution_if_not_worse(solver_scope);
+            }
             Self::DynamicLocalSearch(phase) => phase.solve(solver_scope),
         }
     }
@@ -113,6 +151,7 @@ pub(crate) fn build_dynamic_phases(
     config: &SolverConfig,
     descriptor: &solverforge_core::domain::SolutionDescriptor,
     model: &RuntimeModel<PyDynamicSolution, usize, PyDistanceMeter, PyDistanceMeter>,
+    schema: &DynamicSchema,
 ) -> PhaseSequence<PyDynamicRuntimePhase> {
     if config.phases.is_empty() {
         return PhaseSequence::new(vec![PyDynamicRuntimePhase::Upstream(
@@ -130,6 +169,11 @@ pub(crate) fn build_dynamic_phases(
                     build_dynamic_scalar_construction(construction, model),
                 ));
             }
+            PhaseConfig::ConstructionHeuristic(construction)
+                if can_bind_dynamic_list_construction(construction, model, schema) =>
+            {
+                phases.extend(build_dynamic_list_construction(construction, model, schema));
+            }
             PhaseConfig::LocalSearch(local_search) if can_bind_dynamic(local_search, model) => {
                 phases.push(PyDynamicRuntimePhase::DynamicLocalSearch(Box::new(
                     build_dynamic_local_search(local_search, model, config.random_seed),
@@ -145,6 +189,90 @@ pub(crate) fn build_dynamic_phases(
         }
     }
     PhaseSequence::new(phases)
+}
+
+fn can_bind_dynamic_list_construction(
+    config: &ConstructionHeuristicConfig,
+    model: &RuntimeModel<PyDynamicSolution, usize, PyDistanceMeter, PyDistanceMeter>,
+    schema: &DynamicSchema,
+) -> bool {
+    match config.construction_heuristic_type {
+        ConstructionHeuristicType::ListCheapestInsertion => {
+            !matching_list_slots(model, &config.target).is_empty()
+        }
+        ConstructionHeuristicType::ListClarkeWright | ConstructionHeuristicType::ListKOpt => {
+            !matching_route_list_slots(model, &config.target, schema).is_empty()
+        }
+        _ => false,
+    }
+}
+
+fn build_dynamic_list_construction(
+    config: &ConstructionHeuristicConfig,
+    model: &RuntimeModel<PyDynamicSolution, usize, PyDistanceMeter, PyDistanceMeter>,
+    schema: &DynamicSchema,
+) -> Vec<PyDynamicRuntimePhase> {
+    match config.construction_heuristic_type {
+        ConstructionHeuristicType::ListCheapestInsertion => {
+            matching_list_slots(model, &config.target)
+                .into_iter()
+                .map(|slot| PyDynamicRuntimePhase::DynamicListCheapestInsertion {
+                    slot: slot.clone(),
+                    phase: ListCheapestInsertionPhase::new(
+                        dynamic_list_element_count,
+                        dynamic_list_assigned_elements,
+                        dynamic_list_entity_count,
+                        dynamic_list_len,
+                        dynamic_list_insert,
+                        dynamic_list_construction_remove,
+                        dynamic_list_index_to_element,
+                        slot.descriptor_index(),
+                    )
+                    .with_element_owner_fn(dynamic_element_owner_for_slot(&slot, schema)),
+                })
+                .collect()
+        }
+        _ => matching_route_list_slots(model, &config.target, schema)
+            .into_iter()
+            .filter_map(|slot| match config.construction_heuristic_type {
+                ConstructionHeuristicType::ListClarkeWright => {
+                    Some(PyDynamicRuntimePhase::DynamicListClarkeWright {
+                        slot: slot.clone(),
+                        phase: ListClarkeWrightPhase::new(
+                            dynamic_list_element_count,
+                            dynamic_list_assigned_elements,
+                            dynamic_list_entity_count,
+                            dynamic_list_len,
+                            dynamic_route_set,
+                            dynamic_list_index_to_element,
+                            dynamic_route_depot,
+                            dynamic_route_distance,
+                            dynamic_route_feasible,
+                            slot.descriptor_index(),
+                        )
+                        .with_element_owner_fn(dynamic_element_owner_for_slot(&slot, schema))
+                        .with_metric_class_fn(dynamic_route_metric_class),
+                    })
+                }
+                ConstructionHeuristicType::ListKOpt => {
+                    Some(PyDynamicRuntimePhase::DynamicListKOpt {
+                        slot: slot.clone(),
+                        phase: ListKOptPhase::<PyDynamicSolution, usize>::new(
+                            config.k,
+                            dynamic_list_entity_count,
+                            dynamic_route_get,
+                            dynamic_route_set,
+                            dynamic_route_depot,
+                            dynamic_route_distance,
+                            Some(dynamic_route_feasible),
+                            slot.descriptor_index(),
+                        ),
+                    })
+                }
+                _ => None,
+            })
+            .collect(),
+    }
 }
 
 fn can_bind_dynamic_scalar_construction(
@@ -1623,6 +1751,19 @@ fn with_dynamic_list_slot<R>(
     }
 }
 
+fn publish_current_list_solution_if_not_worse<D, ProgressCb>(
+    solver_scope: &mut solverforge_solver::SolverScope<'_, PyDynamicSolution, D, ProgressCb>,
+) where
+    D: Director<PyDynamicSolution>,
+    ProgressCb: ProgressCallback<PyDynamicSolution>,
+{
+    let score = solver_scope.calculate_score();
+    if solver_scope.best_score().is_none_or(|best| score >= *best) {
+        let solution = solver_scope.working_solution().clone();
+        solver_scope.set_best_solution(solution, score);
+    }
+}
+
 fn active_dynamic_list_slot() -> DynamicListVariableSlot<PyDynamicSolution> {
     ACTIVE_DYNAMIC_LIST_SLOT.with(|stack| {
         stack
@@ -1635,6 +1776,7 @@ fn active_dynamic_list_slot() -> DynamicListVariableSlot<PyDynamicSolution> {
 
 fn typed_dynamic_list_slot(
     slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    solution: &PyDynamicSolution,
 ) -> DynamicTypedListSlot {
     ListVariableSlot::new(
         slot.entity_type_name,
@@ -1664,6 +1806,10 @@ fn typed_dynamic_list_slot(
         None,
         None,
     )
+    .with_element_owner_fn(dynamic_element_owner_for_slot(
+        slot,
+        solution.schema.as_ref(),
+    ))
 }
 
 fn dynamic_list_entity_count(solution: &PyDynamicSolution) -> usize {
@@ -1794,6 +1940,139 @@ fn dynamic_list_index_to_element(solution: &PyDynamicSolution, element_index: us
     active_dynamic_list_slot()
         .element(solution, element_index)
         .unwrap_or(element_index)
+}
+
+fn dynamic_route_get(solution: &PyDynamicSolution, entity_index: usize) -> Vec<usize> {
+    let slot = active_dynamic_list_slot();
+    solution
+        .state
+        .entities
+        .get(slot.entity.0)
+        .and_then(|rows| rows.get(entity_index))
+        .and_then(|row| row.lists.get(slot.variable_name))
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn dynamic_route_set(solution: &mut PyDynamicSolution, entity_index: usize, route: Vec<usize>) {
+    let slot = active_dynamic_list_slot();
+    if let Some(row) = solution
+        .state
+        .entities
+        .get_mut(slot.entity.0)
+        .and_then(|rows| rows.get_mut(entity_index))
+    {
+        row.lists.insert(slot.variable_name.to_string(), route);
+    }
+}
+
+fn dynamic_route_depot(solution: &PyDynamicSolution, entity_index: usize) -> usize {
+    Python::attach(|py| -> PyResult<Option<usize>> {
+        let slot = active_dynamic_list_slot();
+        let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.route_depot.as_ref() else {
+            return Ok(None);
+        };
+        let snapshot = solution.to_python_snapshot(py)?;
+        callback
+            .bind(py)
+            .call1((snapshot, entity_index))?
+            .extract::<usize>()
+            .map(Some)
+    })
+    .unwrap_or_else(|error| panic!("dynamic route depot callback failed: {error}"))
+    .unwrap_or_else(|| active_dynamic_list_slot().element_count(solution))
+}
+
+fn dynamic_route_metric_class(solution: &PyDynamicSolution, entity_index: usize) -> usize {
+    Python::attach(|py| -> PyResult<Option<usize>> {
+        let slot = active_dynamic_list_slot();
+        let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.route_metric_class.as_ref() else {
+            return Ok(None);
+        };
+        let snapshot = solution.to_python_snapshot(py)?;
+        callback
+            .bind(py)
+            .call1((snapshot, entity_index))?
+            .extract::<usize>()
+            .map(Some)
+    })
+    .unwrap_or_else(|error| panic!("dynamic route metric class callback failed: {error}"))
+    .unwrap_or(entity_index)
+}
+
+fn dynamic_route_distance(
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    from: usize,
+    to: usize,
+) -> i64 {
+    Python::attach(|py| -> PyResult<Option<i64>> {
+        let slot = active_dynamic_list_slot();
+        let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.route_distance.as_ref() else {
+            return Ok(None);
+        };
+        let snapshot = solution.to_python_snapshot(py)?;
+        callback
+            .bind(py)
+            .call1((snapshot, entity_index, from, to))?
+            .extract::<i64>()
+            .map(Some)
+    })
+    .unwrap_or_else(|error| panic!("dynamic route distance callback failed: {error}"))
+    .unwrap_or_else(|| from.abs_diff(to) as i64)
+}
+
+fn dynamic_route_feasible(
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    route: &[usize],
+) -> bool {
+    Python::attach(|py| -> PyResult<Option<bool>> {
+        let slot = active_dynamic_list_slot();
+        let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.route_feasible.as_ref() else {
+            return Ok(None);
+        };
+        let snapshot = solution.to_python_snapshot(py)?;
+        callback
+            .bind(py)
+            .call1((snapshot, entity_index, route.to_vec()))?
+            .extract::<bool>()
+            .map(Some)
+    })
+    .unwrap_or_else(|error| panic!("dynamic route feasible callback failed: {error}"))
+    .unwrap_or(true)
+}
+
+fn dynamic_element_owner(solution: &PyDynamicSolution, element: &usize) -> Option<usize> {
+    Python::attach(|py| -> PyResult<Option<usize>> {
+        let slot = active_dynamic_list_slot();
+        let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.element_owner.as_ref() else {
+            return Ok(None);
+        };
+        let snapshot = solution.to_python_snapshot(py)?;
+        let result = callback.bind(py).call1((snapshot, *element))?;
+        if result.is_none() {
+            Ok(None)
+        } else {
+            result.extract::<usize>().map(Some)
+        }
+    })
+    .unwrap_or_else(|error| panic!("dynamic element owner callback failed: {error}"))
 }
 
 #[derive(Clone)]
@@ -2162,7 +2441,7 @@ fn dynamic_list_leaf_moves<D: Director<PyDynamicSolution>>(
     context: MoveStreamContext,
 ) -> Vec<DynamicList> {
     with_dynamic_list_slot(slot, || {
-        let typed_slot = typed_dynamic_list_slot(slot);
+        let typed_slot = typed_dynamic_list_slot(slot, score_director.working_solution());
         let mut moves = Vec::new();
 
         match config {
@@ -2692,6 +2971,40 @@ fn matching_list_slots(
         })
         .cloned()
         .collect()
+}
+
+fn matching_route_list_slots(
+    model: &RuntimeModel<PyDynamicSolution, usize, PyDistanceMeter, PyDistanceMeter>,
+    target: &VariableTargetConfig,
+    schema: &DynamicSchema,
+) -> Vec<DynamicListVariableSlot<PyDynamicSolution>> {
+    matching_list_slots(model, target)
+        .into_iter()
+        .filter(|slot| {
+            schema_variable_for_slot(schema, slot)
+                .is_some_and(|variable| variable.route_distance.is_some())
+        })
+        .collect()
+}
+
+fn dynamic_element_owner_for_slot(
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    schema: &DynamicSchema,
+) -> Option<fn(&PyDynamicSolution, &usize) -> Option<usize>> {
+    schema_variable_for_slot(schema, slot)
+        .and_then(|variable| variable.element_owner.as_ref())
+        .map(|_| dynamic_element_owner as fn(&PyDynamicSolution, &usize) -> Option<usize>)
+}
+
+fn schema_variable_for_slot<'a>(
+    schema: &'a DynamicSchema,
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+) -> Option<&'a VariableSchema> {
+    schema
+        .entities
+        .get(slot.entity.0)?
+        .variables
+        .get(slot.variable.0)
 }
 
 impl MoveSelector<PyDynamicSolution, DynamicScalar> for DynamicScalarMoveSelector {
