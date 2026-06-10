@@ -41,6 +41,7 @@ DIST_DIR ?= $(CURDIR)/dist
 SOLVERFORGE_RELEASE_VERSION := $(shell $(HOST_PYTHON) scripts/verify_solverforge_release_base.py --print-version 2>/dev/null || printf unknown)
 MYPY_PATHS := python/solverforge examples/solverforge_hospital examples/solverforge_deliveries
 PY_STYLE_PATHS := python tests examples scripts
+DOC_CHECK_PATHS := README.md AGENTS.md WIREFRAME.md docs examples/solverforge_hospital/README.md examples/solverforge_deliveries/README.md vendor/solverforge-ui/README.md
 PY_DEPS_STAMP := $(VENV)/.solverforge-py-deps
 PY_LIBDIR := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')
 PY_LDLIBRARY := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("LDLIBRARY") or "")')
@@ -217,7 +218,10 @@ docs-check:
 	@test -f AGENTS.md
 	@test -f WIREFRAME.md
 	@test -f docs/release.md
-	@! rg -n "move_count_limit|bounded scalar assignment fallback|currently contains scaffolding|owner-aware, nearby, swap, sublist, reverse, k-opt, and ruin selectors .*not yet|/home/pvd/dev/solverforge" README.md AGENTS.md WIREFRAME.md docs examples/solverforge_hospital/README.md
+	@test -f examples/solverforge_hospital/README.md
+	@test -f examples/solverforge_deliveries/README.md
+	@test -f vendor/solverforge-ui/README.md
+	@! rg -n "move_count_limit|bounded scalar assignment fallback|currently contains scaffolding|owner-aware, nearby, swap, sublist, reverse, k-opt, and ruin selectors .*not yet|/home/pvd/dev/solverforge" $(DOC_CHECK_PATHS)
 	@printf -- "$(GREEN)$(CHECK) Documentation surface looks current$(RESET)\n"
 
 release-base-check:
@@ -338,7 +342,7 @@ help: banner
 	@printf -- "  $(GREEN)make check$(RESET)               Run cargo check --locked\n\n"
 	@printf -- "$(BOLD)Test$(RESET)\n"
 	@printf -- "  $(GREEN)make test$(RESET)                Run Rust and Python tests\n"
-	@printf -- "  $(GREEN)make test-quick$(RESET)          Run fast Python regressions without hospital app tests\n"
+	@printf -- "  $(GREEN)make test-quick$(RESET)          Run fast Python regressions without example app tests\n"
 	@printf -- "  $(GREEN)make rust-test$(RESET)           Run cargo test --locked\n"
 	@printf -- "  $(GREEN)make py-test$(RESET)             Run pytest after release develop install\n"
 	@printf -- "  $(GREEN)make test-hospital$(RESET)       Run hospital model and frontend tests\n"
@@ -350,11 +354,11 @@ help: banner
 	@printf -- "  $(GREEN)make py-format$(RESET)           Format Python code with Black\n"
 	@printf -- "  $(GREEN)make py-format-check$(RESET)     Check Python formatting with Black\n"
 	@printf -- "  $(GREEN)make ruff$(RESET)                Run ruff over python, tests, and examples\n"
-	@printf -- "  $(GREEN)make typecheck$(RESET)           Run mypy over package and hospital example\n"
+	@printf -- "  $(GREEN)make typecheck$(RESET)           Run mypy over package and examples\n"
 	@printf -- "  $(GREEN)make clippy$(RESET)              Run clippy with warnings denied\n"
 	@printf -- "  $(GREEN)make lint$(RESET)                Run rustfmt check, ruff, mypy, and clippy\n"
 	@printf -- "  $(GREEN)make pre-commit$(RESET)          Run all pre-commit hooks\n"
-	@printf -- "  $(GREEN)make docs-check$(RESET)          Verify README, AGENTS, and WIREFRAME surface\n"
+	@printf -- "  $(GREEN)make docs-check$(RESET)          Verify tracked documentation surfaces\n"
 	@printf -- "  $(GREEN)make ci-local$(RESET)            Simulate the primary local CI gate\n"
 	@printf -- "  $(GREEN)make audit$(RESET)               Alias for ci-local\n\n"
 	@printf -- "$(BOLD)Release$(RESET)\n"
