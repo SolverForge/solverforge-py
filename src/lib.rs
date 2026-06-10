@@ -13,4 +13,5 @@ pub mod schema;
 pub mod score;
 pub mod solver;
 pub mod state;
+pub mod ui;
 pub mod value;

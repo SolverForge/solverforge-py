@@ -56,12 +56,24 @@ def request_text(base_url: str, path: str) -> str:
         return response.read().decode("utf-8")
 
 
+def request_asset_headers(base_url: str, path: str) -> tuple[str, str]:
+    with urlopen(f"{base_url}{path}", timeout=5) as response:
+        assert response.status == 200
+        response.read()
+        return (
+            response.headers.get("content-type") or "",
+            response.headers.get("cache-control") or "",
+        )
+
+
 def read_first_sse_event(
     base_url: str, job_id: str, timeout_seconds: float = 10.0
 ) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
     with urlopen(f"{base_url}/jobs/{job_id}/events", timeout=5) as response:
-        assert (response.headers.get("content-type") or "").startswith("text/event-stream")
+        assert (response.headers.get("content-type") or "").startswith(
+            "text/event-stream"
+        )
         assert response.headers.get("x-accel-buffering") == "no"
         while time.monotonic() < deadline:
             line = response.readline().decode("utf-8")
@@ -74,9 +86,13 @@ def read_first_sse_event(
     raise AssertionError(msg)
 
 
-def read_initial_sse_activity(base_url: str, job_id: str) -> tuple[dict[str, Any], bool]:
+def read_initial_sse_activity(
+    base_url: str, job_id: str
+) -> tuple[dict[str, Any], bool]:
     with urlopen(f"{base_url}/jobs/{job_id}/events", timeout=5) as response:
-        assert (response.headers.get("content-type") or "").startswith("text/event-stream")
+        assert (response.headers.get("content-type") or "").startswith(
+            "text/event-stream"
+        )
         assert response.headers.get("x-accel-buffering") == "no"
         first_event: dict[str, Any] | None = None
         saw_keep_alive = False
@@ -149,7 +165,9 @@ def wait_for_status(
     raise AssertionError(msg)
 
 
-def wait_for_terminal(base_url: str, job_id: str, timeout_seconds: float = 40.0) -> dict[str, Any]:
+def wait_for_terminal(
+    base_url: str, job_id: str, timeout_seconds: float = 40.0
+) -> dict[str, Any]:
     return wait_for_status(
         base_url,
         job_id,
@@ -162,7 +180,15 @@ def test_hospital_python_frontend_app_serves_static_and_solve_lifecycle() -> Non
     server, base_url = start_test_server()
     try:
         assert "sf-app" in request_text(base_url, "/")
-        assert "function createBackend" in request_text(base_url, "/sf/sf.js")
+        assert "sf.createBackend = function" in request_text(base_url, "/sf/sf.js")
+        assert request_asset_headers(base_url, "/sf/sf.js") == (
+            "application/javascript; charset=utf-8",
+            "public, max-age=3600",
+        )
+        assert request_asset_headers(base_url, "/sf/sf.0.6.5.css") == (
+            "text/css; charset=utf-8",
+            "public, max-age=31536000, immutable",
+        )
         assert "bootApp" in request_text(base_url, "/app/main.mjs")
 
         assert request_json(base_url, "/health") == {"status": "UP"}
@@ -201,7 +227,9 @@ def test_hospital_python_frontend_app_serves_static_and_solve_lifecycle() -> Non
         assert snapshot["solution"]["score"].startswith("0hard/")
         assert len(snapshot["solution"]["employees"]) == 50
         assert len(snapshot["solution"]["shifts"]) == 688
-        assert all(shift["employeeIdx"] is not None for shift in snapshot["solution"]["shifts"])
+        assert all(
+            shift["employeeIdx"] is not None for shift in snapshot["solution"]["shifts"]
+        )
 
         analysis = request_json(base_url, f"/jobs/{job_id}/analysis")
         assert analysis["analysis"]["score"].startswith("0hard/")

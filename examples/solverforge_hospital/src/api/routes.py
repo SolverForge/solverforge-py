@@ -11,6 +11,7 @@ from fastapi import Body, FastAPI, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from solverforge import console
+from solverforge.ui import asset as solverforge_ui_asset
 
 from ..data import list_demo_data
 from ..data.data_seed import demo_plan
@@ -41,7 +42,9 @@ async def solver_console_lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-def create_app(app_state: HospitalAppState | None = None, *, enable_console: bool = False) -> FastAPI:
+def create_app(
+    app_state: HospitalAppState | None = None, *, enable_console: bool = False
+) -> FastAPI:
     state = app_state or HospitalAppState()
     app = FastAPI(
         title="SolverForge Hospital Python",
@@ -62,6 +65,17 @@ def create_app(app_state: HospitalAppState | None = None, *, enable_console: boo
             "solverEngine": "SolverForge Python",
         }
 
+    @app.get("/sf/{path:path}")
+    def get_solverforge_ui_asset(path: str) -> Response:
+        asset = solverforge_ui_asset(path)
+        if asset is None:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="not found")
+        return Response(
+            content=asset.bytes,
+            media_type=asset.content_type,
+            headers={"cache-control": asset.cache_control},
+        )
+
     @app.get("/demo-data")
     def demo_data_ids() -> list[str]:
         return list_demo_data()
@@ -79,7 +93,9 @@ def create_app(app_state: HospitalAppState | None = None, *, enable_console: boo
         try:
             record = state.create_job(payload_to_plan(payload))
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(error)) from error
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST, detail=str(error)
+            ) from error
         except Exception as error:
             raise_http_error(error)
         return {"id": record.id}
@@ -97,7 +113,9 @@ def create_app(app_state: HospitalAppState | None = None, *, enable_console: boo
         return get_job(job_id)
 
     @app.get("/jobs/{job_id}/snapshot")
-    def get_snapshot(job_id: str, snapshot_revision: int | None = None) -> dict[str, Any]:
+    def get_snapshot(
+        job_id: str, snapshot_revision: int | None = None
+    ) -> dict[str, Any]:
         try:
             record = state.require_job(job_id)
             plan = state.snapshot(record, snapshot_revision)
@@ -107,7 +125,9 @@ def create_app(app_state: HospitalAppState | None = None, *, enable_console: boo
             raise_http_error(error)
 
     @app.get("/jobs/{job_id}/analysis")
-    def get_analysis(job_id: str, snapshot_revision: int | None = None) -> dict[str, Any]:
+    def get_analysis(
+        job_id: str, snapshot_revision: int | None = None
+    ) -> dict[str, Any]:
         try:
             record = state.require_job(job_id)
             plan = state.snapshot(record, snapshot_revision)

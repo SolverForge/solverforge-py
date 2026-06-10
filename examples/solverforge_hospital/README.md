@@ -17,8 +17,8 @@ It demonstrates:
 - dynamic scalar cheapest-insertion construction plus the original nearby
   change/swap late-acceptance local search.
 - the hospital browser shell, by-location and by-employee schedule tabs, shared
-  SolverForge UI assets, and the same retained async `/jobs` lifecycle used by
-  the Rust app: background
+  SolverForge UI assets served from the native `solverforge-ui` bridge, and the
+  same retained async `/jobs` lifecycle used by the Rust app: background
   `SolverManager` jobs, live SSE, exact snapshots, analysis, pause, resume,
   cancel, and terminal-job delete.
 - the upstream SolverForge Rust console in both terminal-only and FastAPI CLI
@@ -63,5 +63,6 @@ The Python example mirrors the Rust `uc-hospital/src` ownership tree:
 - `POST /jobs/{id}/pause`, `/jobs/{id}/resume`, `/jobs/{id}/cancel`
 - `DELETE /jobs/{id}` after a job reaches a terminal state
 
-Run `make test-hospital` to validate the model, tree shape, static app, retained
-snapshots, SSE stream, analysis payloads, and async controls.
+Run `make test-hospital` to validate the model, tree shape, static app, shared
+UI asset route, retained snapshots, SSE stream, analysis payloads, and async
+controls.

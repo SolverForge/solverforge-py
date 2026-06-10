@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib.util
+import io
 import re
 import tarfile
 import tomllib
@@ -11,6 +13,25 @@ ROOT = Path(__file__).resolve().parents[2]
 def load_toml(path: Path) -> dict[str, object]:
     with path.open("rb") as handle:
         return tomllib.load(handle)
+
+
+def load_release_artifact_verifier() -> object:
+    path = ROOT / "scripts" / "verify_release_artifacts.py"
+    spec = importlib.util.spec_from_file_location("verify_release_artifacts", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def write_tgz(path: Path, names: set[str]) -> None:
+    with tarfile.open(path, "w:gz") as archive:
+        for name in sorted(names):
+            payload = b""
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
 
 
 def workflow_job(text: str, job_name: str) -> str:
@@ -90,6 +111,15 @@ def test_solverforge_rust_dependency_base_is_manifest_owned() -> None:
         assert "path" not in spec
 
 
+def test_solverforge_ui_dependency_is_vendored() -> None:
+    cargo = load_toml(ROOT / "Cargo.toml")
+    ui_spec = cargo["dependencies"]["solverforge-ui"]
+
+    assert ui_spec == {"path": "vendor/solverforge-ui"}
+    assert (ROOT / "vendor" / "solverforge-ui" / "Cargo.toml").is_file()
+    assert (ROOT / "vendor" / "solverforge-ui" / "static" / "sf" / "sf.css").is_file()
+
+
 def test_release_workflow_validates_only_tagged_pypi_publish() -> None:
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8"
@@ -121,11 +151,37 @@ def test_latest_sdist_carries_locked_project_sources_when_present() -> None:
         f"{prefix}/src/lib.rs",
         f"{prefix}/python/solverforge/__init__.py",
     }
-    previous_vendored_layout = {
+    nested_project_layout = {
         f"{prefix}/solverforge-py/Cargo.lock",
         f"{prefix}/solverforge-py/Cargo.toml",
         f"{prefix}/solverforge-py/src/lib.rs",
         f"{prefix}/python/solverforge/__init__.py",
     }
 
-    assert direct_layout <= names or previous_vendored_layout <= names
+    assert direct_layout <= names or nested_project_layout <= names
+
+
+def test_release_artifact_verifier_accepts_vendored_ui_sdist(
+    tmp_path: Path,
+) -> None:
+    version = "0.4.1"
+    prefix = f"solverforge-{version}"
+    sdist = tmp_path / f"{prefix}.tar.gz"
+    write_tgz(
+        sdist,
+        {
+            f"{prefix}/python/solverforge/__init__.py",
+            f"{prefix}/solverforge-py/Cargo.lock",
+            f"{prefix}/solverforge-py/Cargo.toml",
+            f"{prefix}/solverforge-py/src/bindings.rs",
+            f"{prefix}/solverforge-py/src/lib.rs",
+            f"{prefix}/solverforge-py/vendor/solverforge-ui/Cargo.toml",
+            f"{prefix}/solverforge-py/vendor/solverforge-ui/src/assets.rs",
+            f"{prefix}/solverforge-py/vendor/solverforge-ui/src/lib.rs",
+            f"{prefix}/solverforge-py/vendor/solverforge-ui/static/sf/sf.css",
+            f"{prefix}/solverforge-py/vendor/solverforge-ui/static/sf/sf.js",
+        },
+    )
+    verifier = load_release_artifact_verifier()
+
+    verifier.assert_sdist(sdist, version)

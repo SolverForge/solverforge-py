@@ -37,6 +37,7 @@ solverforge-console = { version = "=0.15.1", features = ["verbose-logging"] }
 solverforge-core = { version = "=0.15.1" }
 solverforge-scoring = { version = "=0.15.1" }
 solverforge-solver = { version = "=0.15.1" }
+solverforge-ui = { path = "vendor/solverforge-ui" }
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
