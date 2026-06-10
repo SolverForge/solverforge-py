@@ -31,6 +31,7 @@ fn dynamic_descriptor_extracts_multiple_logical_classes_from_one_row_type() {
             constraints: py.None(),
             scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
             conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
+            shadow_updates: Vec::new(),
         });
         let descriptor: SolutionDescriptor = solution_descriptor(&schema);
         let solution = PyDynamicSolution {

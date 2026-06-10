@@ -20,6 +20,7 @@ fn dynamic_solution_clone_keeps_independent_state() {
             constraints: py.None(),
             scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
             conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
+            shadow_updates: Vec::new(),
         });
         let solution = PyDynamicSolution {
             schema,
@@ -49,6 +50,11 @@ fn dynamic_solution_implements_upstream_backend_contract() {
                         value_range_provider: None,
                         allows_unassigned: true,
                         element_collection: None,
+                        element_owner: None,
+                        route_depot: None,
+                        route_metric_class: None,
+                        route_distance: None,
+                        route_feasible: None,
                     },
                     VariableSchema {
                         name: "visits".to_string(),
@@ -56,6 +62,11 @@ fn dynamic_solution_implements_upstream_backend_contract() {
                         value_range_provider: None,
                         allows_unassigned: false,
                         element_collection: Some("visits".to_string()),
+                        element_owner: None,
+                        route_depot: None,
+                        route_metric_class: None,
+                        route_distance: None,
+                        route_feasible: None,
                     },
                 ],
             }],
@@ -63,6 +74,7 @@ fn dynamic_solution_implements_upstream_backend_contract() {
             constraints: py.None(),
             scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
             conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
+            shadow_updates: Vec::new(),
         });
         let mut row = DynamicEntityRow::default();
         row.set_scalar("depot", None);

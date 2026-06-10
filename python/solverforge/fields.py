@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Callable
 from typing import Any
 
 
@@ -11,6 +12,11 @@ class FieldMetadata:
     allows_unassigned: bool = False
     element_collection: str | None = None
     pinning: bool = False
+    element_owner: Callable[..., object] | None = None
+    route_depot: Callable[..., object] | None = None
+    route_metric_class: Callable[..., object] | None = None
+    route_distance: Callable[..., object] | None = None
+    route_feasible: Callable[..., object] | None = None
 
 
 class PlanningField:
@@ -54,8 +60,23 @@ def planning_variable(
     )
 
 
-def planning_list_variable(*, element_collection: str) -> PlanningField:
+def planning_list_variable(
+    *,
+    element_collection: str,
+    element_owner: Callable[..., object] | None = None,
+    route_depot: Callable[..., object] | None = None,
+    route_metric_class: Callable[..., object] | None = None,
+    route_distance: Callable[..., object] | None = None,
+    route_feasible: Callable[..., object] | None = None,
+) -> PlanningField:
     return PlanningField(
-        FieldMetadata(kind="planning_list_variable", element_collection=element_collection)
+        FieldMetadata(
+            kind="planning_list_variable",
+            element_collection=element_collection,
+            element_owner=element_owner,
+            route_depot=route_depot,
+            route_metric_class=route_metric_class,
+            route_distance=route_distance,
+            route_feasible=route_feasible,
+        )
     )
-

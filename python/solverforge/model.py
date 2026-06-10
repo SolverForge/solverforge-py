@@ -105,8 +105,12 @@ def _conflict_repairs(callbacks: object) -> list[dict[str, object]]:
         if not isinstance(metadata, dict):
             msg = f"{callback!r} is not marked with @conflict_repair"
             raise ModelValidationError(msg)
-        constraint_names = list(cast(Iterable[object], metadata.get("constraints") or []))
-        if not constraint_names or not all(isinstance(name, str) and name for name in constraint_names):
+        constraint_names = list(
+            cast(Iterable[object], metadata.get("constraints") or [])
+        )
+        if not constraint_names or not all(
+            isinstance(name, str) and name for name in constraint_names
+        ):
             msg = f"{callback!r} must declare at least one conflict repair constraint name"
             raise ModelValidationError(msg)
         repairs.append({"constraints": constraint_names, "callback": callback})
@@ -129,4 +133,7 @@ def build_schema(solution: object) -> dict[str, Any]:
         "constraints": constraints,
         "scalar_groups": _scalar_groups(solution_meta.get("scalar_groups")),
         "conflict_repairs": _conflict_repairs(solution_meta.get("conflict_repairs")),
+        "shadow_updates": list(
+            cast(Iterable[dict[str, object]], solution_meta.get("shadow_updates") or [])
+        ),
     }

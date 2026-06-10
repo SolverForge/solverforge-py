@@ -1,4 +1,4 @@
-from . import console, joiner
+from . import console, joiner, ui
 from .config import SolverConfig, TerminationConfig
 from .constraints import ConstraintFactory
 from .decorators import (
@@ -8,6 +8,7 @@ from .decorators import (
     planning_solution,
     problem_fact,
     scalar_group,
+    shadow_variable_updates,
 )
 from .errors import (
     CallbackError,
@@ -49,4 +50,6 @@ __all__ = [
     "planning_variable",
     "problem_fact",
     "scalar_group",
+    "shadow_variable_updates",
+    "ui",
 ]

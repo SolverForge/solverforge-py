@@ -23,6 +23,7 @@ fn dynamic_constraint_set_reports_constraint_count() {
                 constraints: py.None(),
                 scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
                 conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
+                shadow_updates: Vec::new(),
             }),
             state: DynamicState::default(),
             score: Some(DynamicScore::ZERO),
