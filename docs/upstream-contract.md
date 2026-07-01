@@ -14,14 +14,15 @@ The binding works against public upstream crates only.
   `fn() -> T` factories.
 - Runtime scalar/list slots now exist as first-class `RuntimeModel` variants.
   Dynamic construction is wired through upstream construction phases for
-  callback-backed scalar candidates and list element ranges. Dynamic scalar
-  change/swap, nearby change/swap, pillar change/swap, ruin-recreate, grouped
-  scalar, conflict repair, and compound conflict repair selectors are wired
-  through upstream move selectors and score-director move application.
+  callback-backed scalar candidates, generic list insertion/regret insertion,
+  and route-aware list construction. Dynamic scalar change/swap, nearby
+  change/swap, pillar change/swap, ruin-recreate, grouped scalar, conflict
+  repair, and compound conflict repair selectors are wired through upstream move
+  selectors and score-director move application.
 - Dynamic list selectors are wired through upstream list move machinery for
   list change/swap, nearby list change/swap, sublist change/swap, list reverse,
-  k-opt, and list ruin. Empty dynamic default solves still stay
-  construction-only.
+  list permute, list precedence, k-opt, and list ruin. Empty dynamic default
+  solves still stay construction-only.
 - `limited_neighborhood`, `union_move_selector`, and two-child
   `cartesian_product_move_selector` compose supported dynamic scalar and list
   selectors.

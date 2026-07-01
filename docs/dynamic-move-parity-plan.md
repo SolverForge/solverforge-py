@@ -32,6 +32,8 @@ List selectors bound for Python dynamic models:
 - `sublist_change_move_selector`
 - `sublist_swap_move_selector`
 - `list_reverse_move_selector`
+- `list_permute_move_selector`
+- `list_precedence_move_selector`
 - `k_opt_move_selector`
 - `list_ruin_move_selector`
 
@@ -77,6 +79,8 @@ pub enum DynamicList {
     SublistChange { ... },
     SublistSwap { ... },
     Reverse { ... },
+    MultiSwap { ... },
+    Permute { ... },
     KOpt { ... },
     Ruin { ... },
 }
@@ -131,8 +135,8 @@ Status: implemented.
 - `DynamicMove` contains `Scalar`, `List`, and `Cartesian` variants.
 - `DynamicScalar` contains change, swap, pillar change, pillar swap,
   ruin-recreate, grouped, conflict repair, and compound conflict repair.
-- `DynamicList` contains change, swap, sublist change, sublist swap, reverse,
-  k-opt, and ruin.
+- `DynamicList` contains change, swap, multi-swap, permute, sublist change,
+  sublist swap, reverse, k-opt, and ruin.
 - `DynamicCompoundScalarMove` applies Python callback edit candidates through
   Rust-owned dynamic scalar slots.
 - Dynamic grouped scalar uses Python scalar group hooks.
@@ -162,7 +166,8 @@ Status: implemented.
 
 Status: implemented.
 
-- Covers every list selector through a Python solve.
+- Covers core list selectors through Python solves, including focused coverage
+  for list permute and route/k-opt selectors.
 - Covers mixed scalar/list union composition.
 - Covers list/list cartesian composition.
 - Covers scalar/list cartesian composition.
