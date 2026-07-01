@@ -29,6 +29,7 @@ PYTEST ?= $(PYTHON) -m pytest
 MYPY ?= $(PYTHON) -m mypy
 RUFF ?= $(PYTHON) -m ruff
 BLACK ?= $(PYTHON) -m black --line-length 100 --target-version py314
+PLAYWRIGHT ?= $(PYTHON) -m playwright
 MATURIN_VERSION := 1.13.3
 BLACK_VERSION := 26.5.1
 PRE_COMMIT ?= $(PYTHON) -m pre_commit
@@ -43,15 +44,16 @@ MYPY_PATHS := python/solverforge examples/solverforge_hospital examples/solverfo
 PY_STYLE_PATHS := python tests examples scripts
 DOC_CHECK_PATHS := README.md AGENTS.md WIREFRAME.md docs examples/solverforge_hospital/README.md examples/solverforge_deliveries/README.md vendor/solverforge-ui/README.md
 PY_DEPS_STAMP := $(VENV)/.solverforge-py-deps
+PLAYWRIGHT_BROWSERS_STAMP := $(VENV)/.solverforge-py-playwright-chromium
 PY_LIBDIR := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')
 PY_LDLIBRARY := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("LDLIBRARY") or "")')
 PY_INSTSONAME := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("INSTSONAME") or sysconfig.get_config_var("LDLIBRARY") or "")')
 PY_LINK_DIR := $(CURDIR)/target/libpython-link
 
 # ============== Phony Targets ==============
-.PHONY: banner help doctor venv install-python-deps python-link develop develop-debug build build-wheel \
-	        build-sdist build-dist build-release check test test-quick rust-test py-test test-hospital test-deliveries test-one \
-        rust-test-one typecheck ruff lint fmt fmt-check py-format py-format-check clippy pre-commit docs-check \
+.PHONY: banner help doctor venv install-python-deps install-playwright-browsers python-link develop develop-debug build build-wheel \
+		        build-sdist build-dist build-release check test test-quick rust-test py-test test-hospital test-deliveries test-one \
+	        test-examples-browser rust-test-one typecheck ruff lint fmt fmt-check py-format py-format-check clippy pre-commit docs-check \
         ci-local audit pre-release release-base-check release-upstream-check dist-check smoke-wheel \
 	        hospital-run hospital-solve deliveries-run deliveries-solve version release-info clean clean-dist clean-py clean-venv
 
@@ -89,9 +91,17 @@ $(PY_DEPS_STAMP): pyproject.toml Makefile | venv
 	@printf -- "$(PROGRESS) Installing Python runtime and developer tools...\n"
 	@PIP_DISABLE_PIP_VERSION_CHECK=1 "$(PIP)" install \
 		"maturin==$(MATURIN_VERSION)" "fastapi>=0.115,<1" "uvicorn>=0.32,<1" \
-		pytest mypy ruff "black==$(BLACK_VERSION)" pre-commit twine
+		"playwright>=1.55,<2" pytest mypy ruff "black==$(BLACK_VERSION)" pre-commit twine
 	@touch "$(PY_DEPS_STAMP)"
 	@printf -- "$(GREEN)$(CHECK) Python dependencies installed$(RESET)\n\n"
+
+install-playwright-browsers: $(PLAYWRIGHT_BROWSERS_STAMP)
+
+$(PLAYWRIGHT_BROWSERS_STAMP): $(PY_DEPS_STAMP)
+	@printf -- "$(PROGRESS) Installing Playwright Chromium browser...\n"
+	@$(PLAYWRIGHT) install chromium
+	@touch "$(PLAYWRIGHT_BROWSERS_STAMP)"
+	@printf -- "$(GREEN)$(CHECK) Playwright Chromium browser installed$(RESET)\n\n"
 
 python-link: $(PY_LINK_DIR)/$(PY_LDLIBRARY)
 
@@ -154,17 +164,25 @@ rust-test: python-link banner
 	@printf -- "$(CYAN)$(BOLD)==== Rust Tests =====================================$(RESET)\n\n"
 	@LIBRARY_PATH="$(PY_LINK_DIR):$${LIBRARY_PATH:-}" cargo test --locked && printf -- "\n$(GREEN)$(CHECK) Rust tests passed$(RESET)\n\n"
 
-py-test: develop
+py-test: develop install-playwright-browsers
 	@printf -- "$(CYAN)$(BOLD)==== Python Tests ===================================$(RESET)\n\n"
 	@$(PYTEST) $(PYTEST_ARGS) && printf -- "\n$(GREEN)$(CHECK) Python tests passed$(RESET)\n\n"
 
-test-hospital: develop
+test-hospital: develop install-playwright-browsers
 	@printf -- "$(PROGRESS) Running hospital example tests...\n"
-	@$(PYTEST) tests/python/test_hospital_example.py tests/python/test_hospital_frontend_app.py $(PYTEST_ARGS)
+	@$(PYTEST) tests/python/test_hospital_example.py tests/python/test_hospital_frontend_app.py \
+		tests/python/test_examples_playwright.py::test_hospital_browser_solves_and_opens_analysis_modal \
+		$(PYTEST_ARGS)
 
-test-deliveries: develop
+test-deliveries: develop install-playwright-browsers
 	@printf -- "$(PROGRESS) Running deliveries example tests...\n"
-	@$(PYTEST) tests/python/test_deliveries_example.py tests/python/test_deliveries_frontend_app.py $(PYTEST_ARGS)
+	@$(PYTEST) tests/python/test_deliveries_example.py tests/python/test_deliveries_frontend_app.py \
+		tests/python/test_examples_playwright.py::test_deliveries_browser_recommends_insertions_for_assigned_delivery \
+		$(PYTEST_ARGS)
+
+test-examples-browser: develop install-playwright-browsers
+	@printf -- "$(PROGRESS) Running example browser tests...\n"
+	@$(PYTEST) tests/python/test_examples_playwright.py $(PYTEST_ARGS)
 
 test-one: develop
 	@test -n "$(TEST)" || (printf -- "$(RED)$(CROSS) Set TEST=pattern$(RESET)\n" && exit 1)
@@ -221,7 +239,7 @@ docs-check:
 	@test -f examples/solverforge_hospital/README.md
 	@test -f examples/solverforge_deliveries/README.md
 	@test -f vendor/solverforge-ui/README.md
-	@! rg -n "move_count_limit|bounded scalar assignment fallback|currently contains scaffolding|owner-aware, nearby, swap, sublist, reverse, k-opt, and ruin selectors .*not yet|/home/pvd/dev/solverforge" $(DOC_CHECK_PATHS)
+	@! rg -n "move_count_limit|bounded scalar assignment fallback|currently contains scaffolding|owner-aware, nearby, swap, sublist, reverse, k-opt, and ruin selectors .*not yet|no committed history yet|/home/pvd/dev/solverforge" $(DOC_CHECK_PATHS)
 	@printf -- "$(GREEN)$(CHECK) Documentation surface looks current$(RESET)\n"
 
 release-base-check:
@@ -346,6 +364,8 @@ help: banner
 	@printf -- "  $(GREEN)make rust-test$(RESET)           Run cargo test --locked\n"
 	@printf -- "  $(GREEN)make py-test$(RESET)             Run pytest after release develop install\n"
 	@printf -- "  $(GREEN)make test-hospital$(RESET)       Run hospital model and frontend tests\n"
+	@printf -- "  $(GREEN)make test-deliveries$(RESET)     Run deliveries model and frontend tests\n"
+	@printf -- "  $(GREEN)make test-examples-browser$(RESET) Run both example browser tests\n"
 	@printf -- "  $(GREEN)make test-one TEST=pattern$(RESET) Run one selected Python test\n"
 	@printf -- "  $(GREEN)make rust-test-one TEST=pattern$(RESET) Run one selected Rust test\n\n"
 	@printf -- "$(BOLD)Quality$(RESET)\n"
@@ -362,7 +382,7 @@ help: banner
 	@printf -- "  $(GREEN)make ci-local$(RESET)            Simulate the primary local CI gate\n"
 	@printf -- "  $(GREEN)make audit$(RESET)               Alias for ci-local\n\n"
 	@printf -- "$(BOLD)Release$(RESET)\n"
-	@printf -- "  $(GREEN)make release-base-check$(RESET)   Verify pinned SolverForge git dependency base\n"
+	@printf -- "  $(GREEN)make release-base-check$(RESET)  Verify exact SolverForge release crate base\n"
 	@printf -- "  $(GREEN)make dist-check$(RESET)          Run twine and artifact content checks\n"
 	@printf -- "  $(GREEN)make smoke-wheel$(RESET)         Install the local wheel in a clean venv\n"
 	@printf -- "  $(GREEN)make pre-release$(RESET)         Run ci-local and release artifact checks\n"
