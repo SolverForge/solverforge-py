@@ -1103,6 +1103,28 @@ def test_scalar_assignment_group_construction_solves_python_model() -> None:
     assert plan.score["levels"] == [0, 0]
 
 
+def test_scalar_assignment_group_construction_completes_required_under_expired_limit() -> (
+    None
+):
+    plan = Solver.solve(
+        AssignmentSchedule(),
+        {
+            "phases": [
+                {
+                    "type": "construction_heuristic",
+                    "construction_heuristic_type": "cheapest_insertion",
+                    "group_name": "shift_nurse_assignment",
+                    "termination": {"step_count_limit": 0},
+                }
+            ]
+        },
+    )
+
+    assert sorted(shift.nurse for shift in plan.shifts) == [0, 1]
+    assert plan.score == Solver.analyze(plan)
+    assert plan.score["levels"] == [0, 0]
+
+
 def test_scalar_assignment_group_construction_preserves_solution_context_in_previews() -> (
     None
 ):

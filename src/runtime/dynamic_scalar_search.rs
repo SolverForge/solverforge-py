@@ -46,6 +46,7 @@ use solverforge_solver::{
     ListCheapestInsertionPhase, ListClarkeWrightPhase, ListKOptPhase, ListRegretInsertionPhase,
     ListRuinMoveSelector, ListVariableSlot, LocalSearchPhase, LocalSearchStrategy, Move,
     NearbyKOptMoveSelector, Phase, PhaseSequence, Placement, RuntimeModel,
+    ScalarAssignmentMoveCursor, ScalarAssignmentMoveOptions,
 };
 
 use crate::constraints::PyDynamicConstraintSet;
@@ -326,8 +327,12 @@ fn build_dynamic_list_construction(
                                 slot.descriptor_index(),
                             )
                             .with_element_owner_fn(dynamic_element_owner_for_slot(&slot, schema))
-                            .with_element_order_key(
-                                dynamic_construction_element_order_for_slot(&slot, schema),
+                            .with_element_order_key(dynamic_construction_element_order_for_slot(
+                                &slot, schema,
+                            ))
+                            .with_precedence_hooks(
+                                dynamic_precedence_duration_for_slot(&slot, schema),
+                                dynamic_precedence_successors_for_slot(&slot, schema),
                             ),
                         }
                     }
@@ -345,8 +350,12 @@ fn build_dynamic_list_construction(
                                 slot.descriptor_index(),
                             )
                             .with_element_owner_fn(dynamic_element_owner_for_slot(&slot, schema))
-                            .with_element_order_key(
-                                dynamic_construction_element_order_for_slot(&slot, schema),
+                            .with_element_order_key(dynamic_construction_element_order_for_slot(
+                                &slot, schema,
+                            ))
+                            .with_precedence_hooks(
+                                dynamic_precedence_duration_for_slot(&slot, schema),
+                                dynamic_precedence_successors_for_slot(&slot, schema),
                             ),
                         }
                     }
@@ -459,8 +468,44 @@ fn build_dynamic_assignment_construction(
         scalar_slots: model.dynamic_scalar_variables().cloned().collect(),
         value_candidate_limit: config.value_candidate_limit,
         max_moves_per_step: config.group_candidate_limit,
+        required_only: false,
+        direct_required_cursor: !matches!(
+            config.construction_heuristic_type,
+            ConstructionHeuristicType::FirstFit
+        ),
     };
-    DynamicAssignmentConstructionPhase { placer }
+    let mandatory = build_dynamic_assignment_mandatory_construction(config, placer.required_only());
+    DynamicAssignmentConstructionPhase {
+        mandatory,
+        placer,
+        optional_step_limit: config
+            .termination
+            .as_ref()
+            .and_then(|termination| termination.step_count_limit),
+    }
+}
+
+fn build_dynamic_assignment_mandatory_construction(
+    config: &ConstructionHeuristicConfig,
+    placer: DynamicAssignmentConstructionPlacer,
+) -> DynamicAssignmentMandatoryConstruction {
+    match config.construction_heuristic_type {
+        ConstructionHeuristicType::FirstFit => DynamicAssignmentMandatoryConstruction::FirstFit(
+            ConstructionHeuristicPhase::new(placer, FirstFitForager::new())
+                .with_live_placement_refresh()
+                .with_construction_obligation(config.construction_obligation)
+                .with_mandatory_construction_completion(),
+        ),
+        ConstructionHeuristicType::CheapestInsertion => {
+            DynamicAssignmentMandatoryConstruction::BestFit(
+                ConstructionHeuristicPhase::new(placer, BestFitForager::new())
+                    .with_live_placement_refresh()
+                    .with_construction_obligation(config.construction_obligation)
+                    .with_mandatory_construction_completion(),
+            )
+        }
+        _ => unreachable!("unsupported dynamic assignment construction heuristic"),
+    }
 }
 
 fn can_bind_dynamic(
@@ -565,6 +610,8 @@ pub(crate) struct DynamicAssignmentConstructionPlacer {
     scalar_slots: Vec<DynamicScalarVariableSlot<PyDynamicSolution>>,
     value_candidate_limit: Option<usize>,
     max_moves_per_step: Option<usize>,
+    required_only: bool,
+    direct_required_cursor: bool,
 }
 
 impl Debug for DynamicAssignmentConstructionPlacer {
@@ -574,6 +621,8 @@ impl Debug for DynamicAssignmentConstructionPlacer {
             .field("scalar_slot_count", &self.scalar_slots.len())
             .field("value_candidate_limit", &self.value_candidate_limit)
             .field("max_moves_per_step", &self.max_moves_per_step)
+            .field("required_only", &self.required_only)
+            .field("direct_required_cursor", &self.direct_required_cursor)
             .finish()
     }
 }
@@ -728,7 +777,7 @@ impl EntityPlacer<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>
         &self,
         score_director: &D,
     ) -> Vec<Placement<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>> {
-        self.next_assignment_placement(score_director)
+        self.next_construction_assignment_placement(score_director)
             .map(|placement| vec![placement])
             .unwrap_or_default()
     }
@@ -752,7 +801,7 @@ impl EntityPlacer<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>
             if should_stop() {
                 return None;
             }
-            let placement = self.next_assignment_placement(score_director)?;
+            let placement = self.next_construction_assignment_placement(score_director)?;
             let generated_moves = u64::try_from(placement.moves.len()).unwrap_or(u64::MAX);
             if is_completed(&placement) {
                 continue;
@@ -763,6 +812,46 @@ impl EntityPlacer<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>
 }
 
 impl DynamicAssignmentConstructionPlacer {
+    fn required_only(&self) -> Self {
+        Self {
+            required_only: true,
+            ..self.clone()
+        }
+    }
+
+    fn effective_limits(
+        &self,
+        group: ScalarGroupBinding<PyDynamicSolution>,
+        solution: &PyDynamicSolution,
+    ) -> ScalarGroupLimits {
+        let group_candidate_limit = self
+            .max_moves_per_step
+            .or(group.limits.group_candidate_limit)
+            .or_else(|| match group.kind {
+                ScalarGroupBindingKind::Assignment(assignment) => {
+                    let max_rematch_size = group.limits.max_rematch_size.unwrap_or(4).max(2);
+                    let entity_count = with_dynamic_assignment_group(&self.group_name, || {
+                        assignment.entity_count(solution)
+                    });
+                    Some(
+                        entity_count
+                            .saturating_mul(max_rematch_size)
+                            .clamp(256, 4096),
+                    )
+                }
+                ScalarGroupBindingKind::Candidates { .. } => Some(256),
+            });
+        ScalarGroupLimits {
+            value_candidate_limit: self
+                .value_candidate_limit
+                .or(group.limits.value_candidate_limit),
+            group_candidate_limit,
+            max_moves_per_step: group.limits.max_moves_per_step,
+            max_augmenting_depth: group.limits.max_augmenting_depth,
+            max_rematch_size: group.limits.max_rematch_size,
+        }
+    }
+
     fn assignment_unassigned_count<D: Director<PyDynamicSolution>>(
         &self,
         score_director: &D,
@@ -791,7 +880,7 @@ impl DynamicAssignmentConstructionPlacer {
         }))
     }
 
-    fn next_assignment_move<D: Director<PyDynamicSolution>>(
+    fn next_optional_assignment_move<D: Director<PyDynamicSolution>>(
         &self,
         score_director: &D,
     ) -> Option<DynamicMove> {
@@ -799,16 +888,17 @@ impl DynamicAssignmentConstructionPlacer {
         let group =
             dynamic_assignment_group_binding(solution, &self.group_name, &self.scalar_slots)
                 .unwrap_or_else(|error| panic!("dynamic assignment group binding failed: {error}"));
-        let assignment = group.assignment().copied()?;
+        group.assignment()?;
         let unassigned_before = self.assignment_unassigned_count(score_director)?;
         if unassigned_before == 0 {
             return None;
         }
         let required_before = self.assignment_remaining_required_count(score_director)?;
-        let baseline_score = (required_before == 0).then(|| {
-            let mut preview = DynamicPreviewDirector::from_director(score_director);
-            preview.calculate_score()
-        });
+        if required_before > 0 {
+            return None;
+        }
+        let mut baseline_preview = DynamicPreviewDirector::from_director(score_director);
+        let baseline_score = baseline_preview.calculate_score();
         let selector = GroupedScalarSelector::new(
             group,
             self.value_candidate_limit,
@@ -823,16 +913,6 @@ impl DynamicAssignmentConstructionPlacer {
         {
             let scalar_move =
                 with_dynamic_assignment_group(&self.group_name, || cursor.take_candidate(inner_id));
-            if required_before > 0
-                && !assignment_move_assigns_required_entity(
-                    self.group_name.as_str(),
-                    assignment,
-                    score_director,
-                    &scalar_move,
-                )
-            {
-                continue;
-            }
             let mov = DynamicMove::Scalar(DynamicScalar::Native(scalar_move));
             if !mov.is_doable(score_director) {
                 continue;
@@ -841,15 +921,9 @@ impl DynamicAssignmentConstructionPlacer {
             let _undo = mov.do_move(&mut preview);
             let required_after = self.assignment_remaining_required_count(&preview)?;
             let unassigned_after = self.assignment_unassigned_count(&preview)?;
-            if required_before > 0
-                && required_after < required_before
+            if required_after == 0
                 && unassigned_after < unassigned_before
-            {
-                return Some(mov);
-            }
-            if required_before == 0
-                && unassigned_after < unassigned_before
-                && baseline_score.is_some_and(|score| preview.calculate_score() >= score)
+                && preview.calculate_score() >= baseline_score
             {
                 return Some(mov);
             }
@@ -857,10 +931,13 @@ impl DynamicAssignmentConstructionPlacer {
         None
     }
 
-    fn next_assignment_placement<D: Director<PyDynamicSolution>>(
+    fn next_construction_assignment_placement<D: Director<PyDynamicSolution>>(
         &self,
         score_director: &D,
     ) -> Option<Placement<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>> {
+        if self.required_only {
+            return self.next_required_assignment_placement(score_director);
+        }
         let solution = score_director.working_solution();
         let group =
             dynamic_assignment_group_binding(solution, &self.group_name, &self.scalar_slots)
@@ -898,40 +975,168 @@ impl DynamicAssignmentConstructionPlacer {
             vec![mov],
         ))
     }
-}
 
-fn assignment_move_assigns_required_entity<D: Director<PyDynamicSolution>>(
-    group_name: &str,
-    assignment: ScalarAssignmentBinding<PyDynamicSolution>,
-    score_director: &D,
-    scalar_move: &ScalarMoveUnion<PyDynamicSolution, usize>,
-) -> bool {
-    let solution = score_director.working_solution();
-    match scalar_move {
-        ScalarMoveUnion::CompoundScalar(mov) => mov.edits().iter().any(|edit| {
-            edit.descriptor_index == assignment.target.descriptor_index
-                && edit.to_value.is_some()
-                && assignment
-                    .current_value(solution, edit.entity_index)
-                    .is_none()
-                && with_dynamic_assignment_group(group_name, || {
-                    assignment.is_required(solution, edit.entity_index)
-                })
-        }),
-        _ => false,
+    fn next_required_assignment_placement<D: Director<PyDynamicSolution>>(
+        &self,
+        score_director: &D,
+    ) -> Option<Placement<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>> {
+        if !self.direct_required_cursor {
+            return self.next_required_selector_placement(score_director);
+        }
+        let solution = score_director.working_solution();
+        let group =
+            dynamic_assignment_group_binding(solution, &self.group_name, &self.scalar_slots)
+                .unwrap_or_else(|error| panic!("dynamic assignment group binding failed: {error}"));
+        let assignment = group.assignment().copied()?;
+        let required_remaining = with_dynamic_assignment_group(&self.group_name, || {
+            assignment.remaining_required_count(solution)
+        });
+        if required_remaining == 0 {
+            return None;
+        }
+
+        let options =
+            ScalarAssignmentMoveOptions::for_construction(self.effective_limits(group, solution));
+        let mut cursor = with_dynamic_assignment_group(&self.group_name, || {
+            ScalarAssignmentMoveCursor::required_construction(assignment, solution.clone(), options)
+        });
+        while let Some(mov) = with_dynamic_assignment_group(&self.group_name, || cursor.next_move())
+        {
+            if !mov.is_doable(score_director) {
+                continue;
+            }
+            let edit = mov
+                .edits()
+                .iter()
+                .find(|edit| edit.to_value.is_some())
+                .or_else(|| mov.edits().first())?;
+            return Some(Placement::new(
+                EntityReference::new(edit.descriptor_index, edit.entity_index),
+                vec![mov],
+            ));
+        }
+        None
+    }
+
+    fn next_required_selector_placement<D: Director<PyDynamicSolution>>(
+        &self,
+        score_director: &D,
+    ) -> Option<Placement<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>> {
+        let solution = score_director.working_solution();
+        let group =
+            dynamic_assignment_group_binding(solution, &self.group_name, &self.scalar_slots)
+                .unwrap_or_else(|error| panic!("dynamic assignment group binding failed: {error}"));
+        let assignment = group.assignment().copied()?;
+        let required_before = with_dynamic_assignment_group(&self.group_name, || {
+            assignment.remaining_required_count(solution)
+        });
+        if required_before == 0 {
+            return None;
+        }
+        let selector = GroupedScalarSelector::new(
+            group,
+            self.value_candidate_limit,
+            self.max_moves_per_step,
+            false,
+        );
+        let mut cursor = with_dynamic_assignment_group(&self.group_name, || {
+            selector.open_cursor_with_context(score_director, MoveStreamContext::default())
+        });
+        while let Some(inner_id) =
+            with_dynamic_assignment_group(&self.group_name, || cursor.next_candidate())
+        {
+            let mov = match with_dynamic_assignment_group(&self.group_name, || {
+                cursor.take_candidate(inner_id)
+            }) {
+                ScalarMoveUnion::CompoundScalar(mov) => mov,
+                _ => continue,
+            };
+            if !mov.is_doable(score_director) {
+                continue;
+            }
+            let mut preview = DynamicPreviewDirector::from_director(score_director);
+            let _undo = mov.do_move(&mut preview);
+            let required_after = self.assignment_remaining_required_count(&preview)?;
+            if required_after >= required_before {
+                continue;
+            }
+            let edit = mov
+                .edits()
+                .iter()
+                .find(|edit| edit.to_value.is_some())
+                .or_else(|| mov.edits().first())?;
+            return Some(Placement::new(
+                EntityReference::new(edit.descriptor_index, edit.entity_index),
+                vec![mov],
+            ));
+        }
+        None
     }
 }
 
 type DynamicScalarConstructionMove = solverforge_solver::DynamicScalarChangeMove<PyDynamicSolution>;
 
+type DynamicAssignmentConstructionMove = CompoundScalarMove<PyDynamicSolution>;
+type DynamicAssignmentFirstFitConstruction = ConstructionHeuristicPhase<
+    PyDynamicSolution,
+    DynamicAssignmentConstructionMove,
+    DynamicAssignmentConstructionPlacer,
+    FirstFitForager<PyDynamicSolution, DynamicAssignmentConstructionMove>,
+>;
+type DynamicAssignmentBestFitConstruction = ConstructionHeuristicPhase<
+    PyDynamicSolution,
+    DynamicAssignmentConstructionMove,
+    DynamicAssignmentConstructionPlacer,
+    BestFitForager<PyDynamicSolution, DynamicAssignmentConstructionMove>,
+>;
+
+pub(crate) enum DynamicAssignmentMandatoryConstruction {
+    FirstFit(DynamicAssignmentFirstFitConstruction),
+    BestFit(DynamicAssignmentBestFitConstruction),
+}
+
+impl Debug for DynamicAssignmentMandatoryConstruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FirstFit(phase) => f
+                .debug_tuple("DynamicAssignmentMandatoryConstruction::FirstFit")
+                .field(phase)
+                .finish(),
+            Self::BestFit(phase) => f
+                .debug_tuple("DynamicAssignmentMandatoryConstruction::BestFit")
+                .field(phase)
+                .finish(),
+        }
+    }
+}
+
+impl DynamicAssignmentMandatoryConstruction {
+    fn solve<D, ProgressCb>(
+        &mut self,
+        solver_scope: &mut solverforge_solver::SolverScope<'_, PyDynamicSolution, D, ProgressCb>,
+    ) where
+        D: Director<PyDynamicSolution>,
+        ProgressCb: ProgressCallback<PyDynamicSolution>,
+    {
+        match self {
+            Self::FirstFit(phase) => phase.solve(solver_scope),
+            Self::BestFit(phase) => phase.solve(solver_scope),
+        }
+    }
+}
+
 pub(crate) struct DynamicAssignmentConstructionPhase {
+    mandatory: DynamicAssignmentMandatoryConstruction,
     placer: DynamicAssignmentConstructionPlacer,
+    optional_step_limit: Option<u64>,
 }
 
 impl Debug for DynamicAssignmentConstructionPhase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DynamicAssignmentConstructionPhase")
+            .field("mandatory", &self.mandatory)
             .field("placer", &self.placer)
+            .field("optional_step_limit", &self.optional_step_limit)
             .finish()
     }
 }
@@ -945,13 +1150,21 @@ where
         &mut self,
         solver_scope: &mut solverforge_solver::SolverScope<'_, PyDynamicSolution, D, ProgressCb>,
     ) {
+        self.mandatory.solve(solver_scope);
+        let mut optional_steps = 0_u64;
         loop {
             if solver_scope.should_terminate() {
                 break;
             }
+            if self
+                .optional_step_limit
+                .is_some_and(|limit| optional_steps >= limit)
+            {
+                break;
+            }
             let Some(mov) = self
                 .placer
-                .next_assignment_move(solver_scope.score_director())
+                .next_optional_assignment_move(solver_scope.score_director())
             else {
                 break;
             };
@@ -959,6 +1172,7 @@ where
                 mov.do_move(score_director);
             });
             solver_scope.increment_step_count();
+            optional_steps = optional_steps.saturating_add(1);
         }
         solver_scope.update_best_solution();
     }

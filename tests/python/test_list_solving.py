@@ -274,11 +274,16 @@ def precedence_owner(solution: object, operation_id: int) -> int:
     return int(solution.operation_owners[int(operation_id)])
 
 
+PRECEDENCE_HOOK_CALLS = {"duration": 0, "successors": 0}
+
+
 def precedence_duration(solution: object, operation_id: int) -> int:
+    PRECEDENCE_HOOK_CALLS["duration"] += 1
     return int(solution.operation_durations[int(operation_id)])
 
 
 def precedence_successors(solution: object, operation_id: int) -> list[int]:
+    PRECEDENCE_HOOK_CALLS["successors"] += 1
     return list(solution.operation_successors[int(operation_id)])
 
 
@@ -389,6 +394,44 @@ def test_dynamic_list_precedence_makespan_preserves_soft_score_penalties() -> No
 
     assert score == {"family": "soft", "levels": [-4]}
     assert plan.score == score
+
+
+def test_dynamic_list_regret_construction_passes_precedence_hooks() -> None:
+    PRECEDENCE_HOOK_CALLS["duration"] = 0
+    PRECEDENCE_HOOK_CALLS["successors"] = 0
+
+    plan = Solver.solve(
+        PrecedenceSchedulePlan([[], []]),
+        {
+            "phases": [
+                {
+                    "type": "construction_heuristic",
+                    "construction_heuristic_type": "list_regret_insertion",
+                    "entity_class": "PrecedenceMachine",
+                    "variable_name": "operations",
+                }
+            ]
+        },
+    )
+    duration_calls = PRECEDENCE_HOOK_CALLS["duration"]
+    successor_calls = PRECEDENCE_HOOK_CALLS["successors"]
+
+    assigned = sorted(
+        operation
+        for machine in plan.machine_sequences
+        for operation in machine.operations
+    )
+
+    assert duration_calls > 0
+    assert successor_calls > 0
+    assert assigned == [0, 1, 2, 3]
+    for machine_idx, machine in enumerate(plan.machine_sequences):
+        assert all(
+            plan.operation_owners[operation] == machine_idx
+            for operation in machine.operations
+        )
+    assert plan.score == Solver.analyze(plan)
+    assert plan.score["levels"][0] == 0
 
 
 def test_dynamic_list_precedence_makespan_scores_assignment_penalties() -> None:
