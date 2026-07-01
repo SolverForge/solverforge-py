@@ -14,5 +14,13 @@ Python callbacks are the only constraint authoring surface.
 - Callback exceptions are surfaced as SolverForge Python exceptions with the
   original Python traceback.
 
+Callback solution views include non-private, non-callable solution-level
+attributes from the imported Python solution, such as lookup tables and value
+sets used by hooks. Entity and fact collections in callback views are projected
+from Rust-owned solver state so preview/best-solution clones never share mutable
+Python row objects with the working solution.
+
 Callbacks must be deterministic for a given solution state. The solver may call
 callbacks many times and from multiple worker threads on free-threaded Python.
+Treat solution-level context read by callbacks as immutable for the duration of a
+solve.

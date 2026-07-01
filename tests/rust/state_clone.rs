@@ -55,6 +55,9 @@ fn dynamic_solution_clone_does_not_share_python_callback_view() {
         solution_kwargs
             .set_item("vehicles", PyList::new(py, [row_object.clone()]).unwrap())
             .unwrap();
+        let capacities = PyDict::new(py);
+        capacities.set_item(1, 7).unwrap();
+        solution_kwargs.set_item("capacities", &capacities).unwrap();
         let python_solution = namespace.call((), Some(&solution_kwargs)).unwrap();
         let schema = Arc::new(DynamicSchema {
             solution_type: "Plan".to_string(),
@@ -80,6 +83,8 @@ fn dynamic_solution_clone_does_not_share_python_callback_view() {
         });
         let mut row = DynamicEntityRow::default();
         row.lists.insert("visits".to_string(), Vec::new());
+        let mut root_fields = BTreeMap::new();
+        root_fields.insert("capacities".to_string(), capacities.unbind().into_any());
         let solution = PyDynamicSolution {
             schema,
             state: DynamicState {
@@ -90,6 +95,7 @@ fn dynamic_solution_clone_does_not_share_python_callback_view() {
                 python_solution.unbind(),
                 vec![vec![row_object.clone().unbind()]],
                 Vec::new(),
+                root_fields,
             ),
             score: None,
             solver_config: solverforge_config::SolverConfig::default(),
@@ -99,6 +105,31 @@ fn dynamic_solution_clone_does_not_share_python_callback_view() {
         cloned.state.entities[0][0]
             .lists
             .insert("visits".to_string(), vec![1, 2]);
+        let clone_solution = cloned.to_python_callback_view(py).unwrap();
+        assert_eq!(
+            clone_solution
+                .bind(py)
+                .getattr("capacities")
+                .unwrap()
+                .get_item(1)
+                .unwrap()
+                .extract::<usize>()
+                .unwrap(),
+            7
+        );
+        assert_eq!(
+            clone_solution
+                .bind(py)
+                .getattr("vehicles")
+                .unwrap()
+                .get_item(0)
+                .unwrap()
+                .getattr("visits")
+                .unwrap()
+                .extract::<Vec<usize>>()
+                .unwrap(),
+            vec![1, 2]
+        );
         let clone_row = cloned.entity_callback_view(py, 0, 0).unwrap();
 
         assert_eq!(

@@ -141,7 +141,10 @@ Run `make help` for focused targets such as `make test-hospital`,
 - `scalar_assignment_group(...)` declares assignment-aware scalar groups for
   grouped scalar local search and assignment-group construction. Group metadata
   covers required entities, capacity keys, assignment rules, ordering callbacks,
-  callback synchronization policy, and `ScalarGroupLimits`.
+  callback synchronization policy, and `ScalarGroupLimits`. Assignment callbacks
+  receive a solution view whose entity/fact collections reflect Rust-owned
+  planning state and whose ordinary solution-level attributes remain available
+  for read-only lookup context such as capacity tables.
 - `planning_list_variable(...)` supports `element_owner`,
   `construction_element_order_key`, `precedence_duration`,
   `precedence_successors`, `route_depot`, `route_metric_class`,

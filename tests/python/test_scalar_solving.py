@@ -3,6 +3,7 @@ import pytest
 from solverforge import (
     ConstraintFactory,
     HardSoftScore,
+    ModelValidationError,
     ScalarGroupLimits,
     SoftScore,
     Solver,
@@ -901,8 +902,8 @@ def assignment_shift_required(solution, entity_index):
 
 
 def assignment_shift_capacity_key(solution, entity_index, nurse_index):
-    del solution, entity_index
-    return nurse_index
+    del entity_index
+    return solution.nurse_capacity_key[nurse_index]
 
 
 @constraint_provider
@@ -942,6 +943,7 @@ class AssignmentSchedule:
     def __init__(self) -> None:
         self.shifts = [AssignmentShift(), AssignmentShift()]
         self.nurses = [0, 1]
+        self.nurse_capacity_key = {0: 0, 1: 1}
         self.score = None
 
 
@@ -1013,6 +1015,32 @@ class BadTargetAssignmentSchedule:
     def __init__(self) -> None:
         self.shifts = [AssignmentShift(), AssignmentShift()]
         self.nurses = [0, 1]
+        self.nurse_capacity_key = {0: 0, 1: 1}
+        self.score = None
+
+
+@planning_solution(
+    score=HardSoftScore,
+    constraints=assignment_shift_constraints,
+    scalar_groups=[
+        scalar_assignment_group(
+            "duplicate_shift_nurse_assignment",
+            entity_class="AssignmentShift",
+            variable_name="nurse",
+        ),
+        scalar_assignment_group(
+            "duplicate_shift_nurse_assignment",
+            entity_class="AssignmentShift",
+            variable_name="nurse",
+        ),
+    ],
+)
+class DuplicateAssignmentGroupSchedule:
+    shifts: list[AssignmentShift]
+
+    def __init__(self) -> None:
+        self.shifts = [AssignmentShift(), AssignmentShift()]
+        self.nurses = [0, 1]
         self.score = None
 
 
@@ -1075,6 +1103,26 @@ def test_scalar_assignment_group_construction_solves_python_model() -> None:
     assert plan.score["levels"] == [0, 0]
 
 
+def test_scalar_assignment_group_construction_preserves_solution_context_in_previews() -> (
+    None
+):
+    plan = Solver.solve(
+        AssignmentSchedule(),
+        {
+            "phases": [
+                {
+                    "type": "construction_heuristic",
+                    "construction_heuristic_type": "cheapest_insertion",
+                    "group_name": "shift_nurse_assignment",
+                }
+            ]
+        },
+    )
+
+    assert sorted(shift.nurse for shift in plan.shifts) == [0, 1]
+    assert plan.nurse_capacity_key == {0: 0, 1: 1}
+
+
 def test_scalar_assignment_group_construction_skips_soft_worse_optional_rows() -> None:
     plan = Solver.solve(
         OptionalAssignmentSchedule(),
@@ -1125,6 +1173,11 @@ def test_scalar_assignment_group_construction_reports_unknown_target() -> None:
                 ]
             },
         )
+
+
+def test_scalar_assignment_group_duplicate_names_fail_schema_build() -> None:
+    with pytest.raises(ModelValidationError, match="declared more than once"):
+        build_schema(DuplicateAssignmentGroupSchedule())
 
 
 def test_grouped_scalar_assignment_selector_composes_in_union() -> None:

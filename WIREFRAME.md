@@ -44,6 +44,9 @@ classes, `joiner`, `console`, `ui`, and decorators/helpers for model authoring:
 Solutions are normal Python objects. Entity and fact collections are inferred
 from type hints where available, then from instance lists. The native module
 mutates Rust-owned dynamic state and exports the solved state back to Python.
+Python callback solution views preserve ordinary solution-level lookup context
+while projecting entity/fact collections from Rust-owned state, so preview clones
+do not share mutable row objects with the working solution.
 List variables may declare element-owner and route callbacks for owner-aware
 list moves, list precedence/makespan scoring, and CVRP-style construction.
 Field-backed route metadata can supply depot, metric-class, distance-matrix,
