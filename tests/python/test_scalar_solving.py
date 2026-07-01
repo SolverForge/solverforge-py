@@ -1103,16 +1103,19 @@ def test_scalar_assignment_group_construction_solves_python_model() -> None:
     assert plan.score["levels"] == [0, 0]
 
 
-def test_scalar_assignment_group_construction_completes_required_under_expired_limit() -> (
-    None
-):
+@pytest.mark.parametrize(
+    "construction_heuristic_type", ["first_fit", "cheapest_insertion"]
+)
+def test_scalar_assignment_group_construction_completes_required_under_expired_limit(
+    construction_heuristic_type: str,
+) -> None:
     plan = Solver.solve(
         AssignmentSchedule(),
         {
             "phases": [
                 {
                     "type": "construction_heuristic",
-                    "construction_heuristic_type": "cheapest_insertion",
+                    "construction_heuristic_type": construction_heuristic_type,
                     "group_name": "shift_nurse_assignment",
                     "termination": {"step_count_limit": 0},
                 }

@@ -469,10 +469,7 @@ fn build_dynamic_assignment_construction(
         value_candidate_limit: config.value_candidate_limit,
         max_moves_per_step: config.group_candidate_limit,
         required_only: false,
-        direct_required_cursor: !matches!(
-            config.construction_heuristic_type,
-            ConstructionHeuristicType::FirstFit
-        ),
+        direct_required_cursor: true,
     };
     let mandatory = build_dynamic_assignment_mandatory_construction(config, placer.required_only());
     DynamicAssignmentConstructionPhase {
