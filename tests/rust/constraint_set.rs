@@ -31,6 +31,7 @@ fn dynamic_constraint_set_reports_constraint_count() {
             callback_view: PythonCallbackView::default(),
             score: Some(DynamicScore::ZERO),
             solver_config: solverforge_config::SolverConfig::default(),
+            revision: 0,
         };
         assert_eq!(set.evaluate_all(&solution), DynamicScore::ZERO);
     });

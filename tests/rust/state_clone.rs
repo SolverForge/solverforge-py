@@ -31,6 +31,7 @@ fn dynamic_solution_clone_keeps_independent_state() {
             callback_view: PythonCallbackView::default(),
             score: None,
             solver_config: solverforge_config::SolverConfig::default(),
+            revision: 0,
         };
         let cloned = solution.clone();
         assert_eq!(cloned.state.entities.len(), 0);
@@ -99,6 +100,7 @@ fn dynamic_solution_clone_does_not_share_python_callback_view() {
             ),
             score: None,
             solver_config: solverforge_config::SolverConfig::default(),
+            revision: 0,
         };
 
         let mut cloned = solution.clone();
@@ -204,6 +206,7 @@ fn dynamic_solution_implements_upstream_backend_contract() {
             callback_view: PythonCallbackView::default(),
             score: None,
             solver_config: solverforge_config::SolverConfig::default(),
+            revision: 0,
         };
 
         let vehicle = EntityClassId(0);

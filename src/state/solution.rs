@@ -19,9 +19,18 @@ pub struct PyDynamicSolution {
     pub callback_view: PythonCallbackView,
     pub score: Option<DynamicScore>,
     pub solver_config: SolverConfig,
+    pub revision: u64,
 }
 
 impl PyDynamicSolution {
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    fn bump_revision(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
+    }
+
     pub fn entity_count(&self, descriptor_index: usize) -> usize {
         self.state
             .entities
@@ -244,6 +253,7 @@ impl Clone for PyDynamicSolution {
             callback_view: self.callback_view.clone(),
             score: self.score,
             solver_config: self.solver_config.clone(),
+            revision: self.revision,
         }
     }
 }
@@ -309,7 +319,10 @@ impl DynamicModelBackend for PyDynamicSolution {
             .get_mut(entity.0)
             .and_then(|rows| rows.get_mut(row))
         {
-            entity_row.set_scalar(&name, value);
+            if entity_row.scalar(&name) != value {
+                entity_row.set_scalar(&name, value);
+                self.bump_revision();
+            }
         }
     }
 
@@ -363,6 +376,7 @@ impl DynamicModelBackend for PyDynamicSolution {
             .and_then(|row| row.lists.get_mut(&name))
         {
             list.insert(pos.min(list.len()), value);
+            self.bump_revision();
         }
     }
 
@@ -382,7 +396,9 @@ impl DynamicModelBackend for PyDynamicSolution {
             .lists
             .get_mut(&name)?;
         if pos < list.len() {
-            Some(list.remove(pos))
+            let removed = list.remove(pos);
+            self.bump_revision();
+            Some(removed)
         } else {
             None
         }

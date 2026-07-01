@@ -50,6 +50,7 @@ fn dynamic_descriptor_extracts_multiple_logical_classes_from_one_row_type() {
             callback_view: PythonCallbackView::default(),
             score: None,
             solver_config: solverforge_config::SolverConfig::default(),
+            revision: 0,
         };
 
         assert_eq!(descriptor.entity_descriptor_count(), 2);

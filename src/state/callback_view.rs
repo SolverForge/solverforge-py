@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -25,9 +25,16 @@ struct AttachedPythonObjects {
 }
 
 #[derive(Debug)]
+struct DetachedSolutionCache {
+    revision: u64,
+    python_solution: Py<PyAny>,
+}
+
+#[derive(Debug)]
 pub struct PythonCallbackView {
     root_context: Arc<CallbackRootContext>,
     attached: Option<AttachedPythonObjects>,
+    detached_cache: Mutex<Option<DetachedSolutionCache>>,
 }
 
 impl Default for PythonCallbackView {
@@ -35,6 +42,7 @@ impl Default for PythonCallbackView {
         Self {
             root_context: Arc::new(CallbackRootContext::default()),
             attached: None,
+            detached_cache: Mutex::new(None),
         }
     }
 }
@@ -44,6 +52,7 @@ impl Clone for PythonCallbackView {
         Self {
             root_context: Arc::clone(&self.root_context),
             attached: None,
+            detached_cache: Mutex::new(None),
         }
     }
 }
@@ -62,6 +71,7 @@ impl PythonCallbackView {
                 entity_objects,
                 fact_objects,
             }),
+            detached_cache: Mutex::new(None),
         }
     }
 
@@ -74,7 +84,7 @@ impl PythonCallbackView {
             self.sync_all_python_objects(py, solution)?;
             return Ok(attached.python_solution.clone_ref(py));
         }
-        self.materialize_detached_solution(py, solution)
+        self.cached_detached_solution(py, solution)
     }
 
     pub fn unsynced_solution_view(
@@ -85,7 +95,7 @@ impl PythonCallbackView {
         if let Some(attached) = self.attached.as_ref() {
             return Ok(attached.python_solution.clone_ref(py));
         }
-        self.materialize_detached_solution(py, solution)
+        self.cached_detached_solution(py, solution)
     }
 
     pub fn entity_view(
@@ -150,6 +160,28 @@ impl PythonCallbackView {
         let types = py.import("types")?;
         let namespace = types.getattr("SimpleNamespace")?;
         namespace.call((), Some(&kwargs)).map(Bound::unbind)
+    }
+
+    fn cached_detached_solution(
+        &self,
+        py: Python<'_>,
+        solution: &PyDynamicSolution,
+    ) -> PyResult<Py<PyAny>> {
+        let mut cache = self
+            .detached_cache
+            .lock()
+            .expect("dynamic callback detached cache mutex poisoned");
+        if let Some(cache) = cache.as_ref() {
+            if cache.revision == solution.revision() {
+                return Ok(cache.python_solution.clone_ref(py));
+            }
+        }
+        let python_solution = self.materialize_detached_solution(py, solution)?;
+        *cache = Some(DetachedSolutionCache {
+            revision: solution.revision(),
+            python_solution: python_solution.clone_ref(py),
+        });
+        Ok(python_solution)
     }
 
     fn sync_all_python_objects(

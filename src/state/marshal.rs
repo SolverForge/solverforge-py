@@ -135,6 +135,7 @@ pub fn import_solution(
         ),
         score: None,
         solver_config: SolverConfig::default(),
+        revision: 0,
     };
     solution.refresh_all_shadows()?;
     Ok(solution)

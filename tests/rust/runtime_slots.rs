@@ -70,6 +70,7 @@ fn dynamic_runtime_slots_are_built_from_schema_and_drive_state() {
             callback_view: PythonCallbackView::default(),
             score: None,
             solver_config: solverforge_config::SolverConfig::default(),
+            revision: 0,
         };
 
         let scalar = scalar_slots(&schema).remove(0);
