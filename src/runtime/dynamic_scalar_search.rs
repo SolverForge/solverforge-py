@@ -11,9 +11,9 @@ use solverforge_bridge::{
 };
 use solverforge_config::{
     AcceptedCountForagerConfig, AcceptorConfig, ConstructionHeuristicConfig,
-    ConstructionHeuristicType, DiversifiedLateAcceptanceConfig, ForagerConfig,
-    LateAcceptanceConfig, LocalSearchConfig, LocalSearchType, MoveSelectorConfig, PhaseConfig,
-    SimulatedAnnealingConfig, SolverConfig, VariableTargetConfig,
+    ConstructionHeuristicType, ConstructionObligation, DiversifiedLateAcceptanceConfig,
+    ForagerConfig, LateAcceptanceConfig, LocalSearchConfig, LocalSearchType, MoveSelectorConfig,
+    PhaseConfig, SimulatedAnnealingConfig, SolverConfig, VariableTargetConfig,
 };
 use solverforge_core::domain::{PlanningSolution, SolutionDescriptor};
 use solverforge_scoring::{ConstraintMetadata, ConstraintSet, Director, DirectorScoreState};
@@ -468,6 +468,7 @@ fn build_dynamic_assignment_construction(
         scalar_slots: model.dynamic_scalar_variables().cloned().collect(),
         value_candidate_limit: config.value_candidate_limit,
         max_moves_per_step: config.group_candidate_limit,
+        construction_heuristic_type: config.construction_heuristic_type,
         required_only: false,
         direct_required_cursor: true,
     };
@@ -490,14 +491,14 @@ fn build_dynamic_assignment_mandatory_construction(
         ConstructionHeuristicType::FirstFit => DynamicAssignmentMandatoryConstruction::FirstFit(
             ConstructionHeuristicPhase::new(placer, FirstFitForager::new())
                 .with_live_placement_refresh()
-                .with_construction_obligation(config.construction_obligation)
+                .with_construction_obligation(ConstructionObligation::AssignWhenCandidateExists)
                 .with_mandatory_construction_completion(),
         ),
         ConstructionHeuristicType::CheapestInsertion => {
             DynamicAssignmentMandatoryConstruction::BestFit(
                 ConstructionHeuristicPhase::new(placer, BestFitForager::new())
                     .with_live_placement_refresh()
-                    .with_construction_obligation(config.construction_obligation)
+                    .with_construction_obligation(ConstructionObligation::AssignWhenCandidateExists)
                     .with_mandatory_construction_completion(),
             )
         }
@@ -607,6 +608,7 @@ pub(crate) struct DynamicAssignmentConstructionPlacer {
     scalar_slots: Vec<DynamicScalarVariableSlot<PyDynamicSolution>>,
     value_candidate_limit: Option<usize>,
     max_moves_per_step: Option<usize>,
+    construction_heuristic_type: ConstructionHeuristicType,
     required_only: bool,
     direct_required_cursor: bool,
 }
@@ -618,6 +620,10 @@ impl Debug for DynamicAssignmentConstructionPlacer {
             .field("scalar_slot_count", &self.scalar_slots.len())
             .field("value_candidate_limit", &self.value_candidate_limit)
             .field("max_moves_per_step", &self.max_moves_per_step)
+            .field(
+                "construction_heuristic_type",
+                &self.construction_heuristic_type,
+            )
             .field("required_only", &self.required_only)
             .field("direct_required_cursor", &self.direct_required_cursor)
             .finish()
@@ -849,6 +855,24 @@ impl DynamicAssignmentConstructionPlacer {
         }
     }
 
+    fn required_construction_options(
+        &self,
+        group: ScalarGroupBinding<PyDynamicSolution>,
+        solution: &PyDynamicSolution,
+    ) -> ScalarAssignmentMoveOptions {
+        let limits = self.effective_limits(group, solution);
+        let max_moves = if self.required_only
+            && matches!(
+                self.construction_heuristic_type,
+                ConstructionHeuristicType::FirstFit
+            ) {
+            limits.group_candidate_limit.unwrap_or(usize::MAX).min(1)
+        } else {
+            limits.group_candidate_limit.unwrap_or(usize::MAX)
+        };
+        ScalarAssignmentMoveOptions::for_construction(limits).with_max_moves(max_moves)
+    }
+
     fn assignment_unassigned_count<D: Director<PyDynamicSolution>>(
         &self,
         score_director: &D,
@@ -992,8 +1016,7 @@ impl DynamicAssignmentConstructionPlacer {
             return None;
         }
 
-        let options =
-            ScalarAssignmentMoveOptions::for_construction(self.effective_limits(group, solution));
+        let options = self.required_construction_options(group, solution);
         let mut cursor = with_dynamic_assignment_group(&self.group_name, || {
             ScalarAssignmentMoveCursor::required_construction(assignment, solution.clone(), options)
         });
