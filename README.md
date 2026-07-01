@@ -99,7 +99,7 @@ current checkout.
 
 ```sh
 make develop          # release native extension installed into .venv
-make test             # cargo test plus pytest
+make test             # Rust tests with Python link setup, then pytest
 make lint             # rustfmt check, ruff, mypy, and clippy
 make ci-local         # local CI simulation
 make pre-release      # ci-local plus release sdist/wheel checks
@@ -131,8 +131,8 @@ Run `make help` for focused targets such as `make test-hospital`,
 - Synchronous and retained scalar/list construction solves use upstream
   SolverForge. Dynamic scalar construction binds first-fit, cheapest insertion,
   and assignment-group cheapest insertion phases; dynamic list construction
-  binds list cheapest insertion, list Clarke-Wright, and list k-opt phases where
-  the model supplies the required list or route hooks.
+  binds list cheapest insertion, list regret insertion, list Clarke-Wright, and
+  list k-opt phases where the model supplies the required list or route hooks.
 - `SolverManager` is backed by upstream retained jobs, statuses, events, and
   snapshots, including pause, resume, cancel, delete, and exact snapshot reads.
 - `planning_variable(...)` supports row candidate callbacks and nearby value or
@@ -183,7 +183,7 @@ Run `make help` for focused targets such as `make test-hospital`,
   `list_swap_move_selector`, `nearby_list_swap_move_selector`,
   `sublist_change_move_selector`, `sublist_swap_move_selector`,
   `list_reverse_move_selector`, `list_permute_move_selector`,
-  `k_opt_move_selector`, and
+  `list_precedence_move_selector`, `k_opt_move_selector`, and
   `list_ruin_move_selector` phases.
 - `limited_neighborhood`, `union_move_selector`, and two-child
   `cartesian_product_move_selector` compose supported dynamic scalar and list
@@ -207,8 +207,13 @@ Run `make help` for focused targets such as `make test-hospital`,
 
 - `WIREFRAME.md` is the as-built public API, runtime, and example UI/API map.
 - `AGENTS.md` is the contributor guide and agent scope contract.
+- `docs/callback-contract.md` records callback solution-view semantics,
+  determinism expectations, and traceback behavior.
 - `docs/upstream-contract.md` records the public SolverForge bridge assumptions.
 - `docs/dynamic-move-parity-plan.md` tracks implemented dynamic selector parity.
+- `docs/threading.md`, `docs/release.md`, `docs/goal.md`, and
+  `docs/non-goals.md` cover runtime threading, release gates, product goals, and
+  explicit non-goals.
 
 Rust macro-generated SolverForge models remain the performance ceiling. The
 Python path preserves the Rust solver engine and Rust-owned state while paying

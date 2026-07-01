@@ -11,13 +11,13 @@ FastAPI apps, app-specific static UI, generated UI models, and seed data under
 `examples/solverforge_hospital/` and `examples/solverforge_deliveries/`;
 shared `/sf/*` assets are served from the `solverforge-ui` crate through the
 native binding.
-`WIREFRAME.md` is the as-built API/UI map; `docs/` contains bridge and callback
-contracts.
+`WIREFRAME.md` is the as-built API/UI map; `docs/` contains callback, upstream
+bridge, threading, release, goal/non-goal, and dynamic move parity contracts.
 
 ## Build, Test, and Development Commands
 
 - `make develop`: create `.venv`, install tools, and install the release native extension.
-- `make test`: run `cargo test --locked` plus pytest.
+- `make test`: run Rust tests with the local Python link setup, then pytest.
 - `make test-quick`: run fast Python regressions without the example app tests.
 - `make test-hospital`: run the hospital model, FastAPI/frontend lifecycle, and
   hospital Playwright browser test.

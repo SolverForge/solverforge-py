@@ -25,8 +25,8 @@ shape, and source-checkout example UI/API surfaces.
   retained job lifecycle, and insertion recommendations.
 - Shared `/sf/*` frontend assets are embedded by the `solverforge-ui` Rust crate
   and exposed to Python through `solverforge.ui`, not copied into each example.
-- `docs/`: upstream bridge, callback, threading, non-goal, and dynamic move
-  parity contracts.
+- `docs/`: callback, upstream bridge, threading, release, goal/non-goal, and
+  dynamic move parity contracts.
 
 ## Python Package API
 
@@ -108,7 +108,7 @@ Dynamic construction phases:
 - scalar `first_fit` and `cheapest_insertion`
 - scalar assignment-group `cheapest_insertion` when a construction phase declares
   `group_name`
-- list `list_cheapest_insertion`
+- list `list_cheapest_insertion` and `list_regret_insertion`
 - route-aware list `list_clarke_wright` and `list_k_opt`
 
 Dynamic scalar selectors:
@@ -127,7 +127,7 @@ Dynamic list selectors:
 - `list_swap_move_selector`, `nearby_list_swap_move_selector`
 - `sublist_change_move_selector`, `sublist_swap_move_selector`
 - `list_reverse_move_selector`, `list_permute_move_selector`,
-  `k_opt_move_selector`
+  `list_precedence_move_selector`, `k_opt_move_selector`
 - `list_ruin_move_selector`
 
 Selector combinators `limited_neighborhood`, `union_move_selector`, and
