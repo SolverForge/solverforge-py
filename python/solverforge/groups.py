@@ -4,9 +4,17 @@ from dataclasses import dataclass
 from collections.abc import Callable
 from typing import Any
 
+__all__ = [
+    "ScalarAssignmentGroup",
+    "ScalarGroupLimits",
+    "scalar_assignment_group",
+]
+
 
 @dataclass(frozen=True)
 class ScalarGroupLimits:
+    """Limits used by grouped scalar and assignment-aware scalar move selectors."""
+
     value_candidate_limit: int | None = None
     group_candidate_limit: int | None = None
     max_moves_per_step: int | None = None
@@ -25,6 +33,8 @@ class ScalarGroupLimits:
 
 @dataclass(frozen=True)
 class ScalarAssignmentGroup:
+    """Assignment-aware scalar group configuration for scalar construction and local search."""
+
     name: str
     entity_class: str
     variable_name: str
@@ -71,6 +81,8 @@ def scalar_assignment_group(
     sync_solution_before_callbacks: bool = True,
     limits: ScalarGroupLimits | None = None,
 ) -> ScalarAssignmentGroup:
+    """Declare an assignment-aware scalar group without changing the schema wire shape."""
+
     return ScalarAssignmentGroup(
         name=name,
         entity_class=entity_class,

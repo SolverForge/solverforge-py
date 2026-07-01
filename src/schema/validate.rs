@@ -16,9 +16,16 @@ pub fn validate_dynamic_schema(schema: &DynamicSchema) -> Result<(), pyo3::PyErr
             )));
         }
     }
+    let mut assignment_group_names = std::collections::BTreeSet::new();
     for group in &schema.assignment_scalar_groups {
         if group.name.is_empty() {
             return Err(py_err("assignment scalar group has an empty name"));
+        }
+        if !assignment_group_names.insert(group.name.as_str()) {
+            return Err(py_err(format!(
+                "assignment scalar group `{}` is declared more than once",
+                group.name
+            )));
         }
         if group.assignment_rule.is_some() && group.sequence_key.is_none() {
             return Err(py_err(format!(

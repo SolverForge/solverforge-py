@@ -86,6 +86,7 @@ def _constraint_plans(
 
 def _scalar_groups(callbacks: object) -> list[dict[str, object]]:
     groups: list[dict[str, object]] = []
+    names: set[str] = set()
     for item in cast(Iterable[object], callbacks or []):
         if isinstance(item, ScalarAssignmentGroup):
             if not item.name:
@@ -97,6 +98,10 @@ def _scalar_groups(callbacks: object) -> list[dict[str, object]]:
                     "assignment-rule groups need sequence metadata"
                 )
                 raise ModelValidationError(msg)
+            if item.name in names:
+                msg = f"scalar group name `{item.name}` is declared more than once"
+                raise ModelValidationError(msg)
+            names.add(item.name)
             groups.append(item.to_native())
             continue
         callback = cast(Callable[..., object], item)
@@ -111,6 +116,10 @@ def _scalar_groups(callbacks: object) -> list[dict[str, object]]:
         if not isinstance(name, str) or not name:
             msg = f"{callback!r} has an invalid scalar group name"
             raise ModelValidationError(msg)
+        if name in names:
+            msg = f"scalar group name `{name}` is declared more than once"
+            raise ModelValidationError(msg)
+        names.add(name)
         groups.append({"kind": "callback", "name": name, "callback": callback})
     return groups
 
