@@ -1,17 +1,50 @@
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyList};
 
 use crate::state::PyDynamicSolution;
 
 #[derive(Debug, Default)]
-pub struct PythonCallbackView {
-    python_solution: Option<Py<PyAny>>,
+pub struct CallbackRootContext {
+    fields: BTreeMap<String, Py<PyAny>>,
+}
+
+impl CallbackRootContext {
+    pub fn new(fields: BTreeMap<String, Py<PyAny>>) -> Self {
+        Self { fields }
+    }
+}
+
+#[derive(Debug)]
+struct AttachedPythonObjects {
+    python_solution: Py<PyAny>,
     entity_objects: Vec<Vec<Py<PyAny>>>,
     fact_objects: Vec<Vec<Py<PyAny>>>,
 }
 
+#[derive(Debug)]
+pub struct PythonCallbackView {
+    root_context: Arc<CallbackRootContext>,
+    attached: Option<AttachedPythonObjects>,
+}
+
+impl Default for PythonCallbackView {
+    fn default() -> Self {
+        Self {
+            root_context: Arc::new(CallbackRootContext::default()),
+            attached: None,
+        }
+    }
+}
+
 impl Clone for PythonCallbackView {
     fn clone(&self) -> Self {
-        Self::default()
+        Self {
+            root_context: Arc::clone(&self.root_context),
+            attached: None,
+        }
     }
 }
 
@@ -20,11 +53,15 @@ impl PythonCallbackView {
         python_solution: Py<PyAny>,
         entity_objects: Vec<Vec<Py<PyAny>>>,
         fact_objects: Vec<Vec<Py<PyAny>>>,
+        root_fields: BTreeMap<String, Py<PyAny>>,
     ) -> Self {
         Self {
-            python_solution: Some(python_solution),
-            entity_objects,
-            fact_objects,
+            root_context: Arc::new(CallbackRootContext::new(root_fields)),
+            attached: Some(AttachedPythonObjects {
+                python_solution,
+                entity_objects,
+                fact_objects,
+            }),
         }
     }
 
@@ -33,11 +70,11 @@ impl PythonCallbackView {
         py: Python<'_>,
         solution: &PyDynamicSolution,
     ) -> PyResult<Py<PyAny>> {
-        if let Some(py_solution) = self.python_solution.as_ref() {
+        if let Some(attached) = self.attached.as_ref() {
             self.sync_all_python_objects(py, solution)?;
-            return Ok(py_solution.clone_ref(py));
+            return Ok(attached.python_solution.clone_ref(py));
         }
-        solution.to_python_snapshot(py)
+        self.materialize_detached_solution(py, solution)
     }
 
     pub fn unsynced_solution_view(
@@ -45,10 +82,10 @@ impl PythonCallbackView {
         py: Python<'_>,
         solution: &PyDynamicSolution,
     ) -> PyResult<Py<PyAny>> {
-        if let Some(py_solution) = self.python_solution.as_ref() {
-            return Ok(py_solution.clone_ref(py));
+        if let Some(attached) = self.attached.as_ref() {
+            return Ok(attached.python_solution.clone_ref(py));
         }
-        solution.to_python_snapshot(py)
+        self.materialize_detached_solution(py, solution)
     }
 
     pub fn entity_view(
@@ -72,6 +109,47 @@ impl PythonCallbackView {
                 ))
             })?;
         solution.entity_row_snapshot(py, entity_index, row_index, row)
+    }
+
+    fn materialize_detached_solution(
+        &self,
+        py: Python<'_>,
+        solution: &PyDynamicSolution,
+    ) -> PyResult<Py<PyAny>> {
+        let kwargs = PyDict::new(py);
+        for (name, value) in &self.root_context.fields {
+            kwargs.set_item(name.as_str(), value.bind(py))?;
+        }
+        for (name, value) in &solution.state.solution_fields {
+            let value = value.to_python(py)?;
+            kwargs.set_item(name.as_str(), value.bind(py))?;
+        }
+        for (entity_index, entity_schema) in solution.schema.entities.iter().enumerate() {
+            let mut rows = Vec::new();
+            if let Some(entity_rows) = solution.state.entities.get(entity_index) {
+                for (row_index, row) in entity_rows.iter().enumerate() {
+                    rows.push(solution.entity_row_snapshot(py, entity_index, row_index, row)?);
+                }
+            }
+            kwargs.set_item(entity_schema.collection.as_str(), PyList::new(py, rows)?)?;
+        }
+        for (fact_index, fact_schema) in solution.schema.facts.iter().enumerate() {
+            let mut rows = Vec::new();
+            if let Some(fact_rows) = solution.state.facts.get(fact_index) {
+                for (row_index, row) in fact_rows.iter().enumerate() {
+                    rows.push(solution.fact_row_snapshot(
+                        py,
+                        fact_schema.type_name.as_str(),
+                        row_index,
+                        row,
+                    )?);
+                }
+            }
+            kwargs.set_item(fact_schema.collection.as_str(), PyList::new(py, rows)?)?;
+        }
+        let types = py.import("types")?;
+        let namespace = types.getattr("SimpleNamespace")?;
+        namespace.call((), Some(&kwargs)).map(Bound::unbind)
     }
 
     fn sync_all_python_objects(
@@ -99,7 +177,10 @@ impl PythonCallbackView {
         entity_index: usize,
         row_index: usize,
     ) -> PyResult<Option<Py<PyAny>>> {
-        let Some(object) = self
+        let Some(attached) = self.attached.as_ref() else {
+            return Ok(None);
+        };
+        let Some(object) = attached
             .entity_objects
             .get(entity_index)
             .and_then(|rows| rows.get(row_index))
@@ -160,7 +241,10 @@ impl PythonCallbackView {
         fact_index: usize,
         row_index: usize,
     ) -> PyResult<()> {
-        let Some(object) = self
+        let Some(attached) = self.attached.as_ref() else {
+            return Ok(());
+        };
+        let Some(object) = attached
             .fact_objects
             .get(fact_index)
             .and_then(|rows| rows.get(row_index))

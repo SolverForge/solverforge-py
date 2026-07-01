@@ -16,6 +16,7 @@ pub fn import_solution(
     schema: Arc<DynamicSchema>,
 ) -> PyResult<PyDynamicSolution> {
     let solution_fields = import_shared_solution_fields(py_solution, schema.as_ref())?;
+    let callback_root_fields = import_callback_root_context(py_solution, schema.as_ref())?;
     let shared_field_names = solution_fields.keys().cloned().collect::<BTreeSet<_>>();
     let route_field_names = route_field_names(schema.as_ref());
     let mut entity_tables = Vec::new();
@@ -130,6 +131,7 @@ pub fn import_solution(
             py_solution.clone().unbind(),
             entity_objects,
             fact_objects,
+            callback_root_fields,
         ),
         score: None,
         solver_config: SolverConfig::default(),
@@ -174,6 +176,61 @@ fn import_shared_solution_fields(
         fields.insert(name, DynamicValue::from_python(&value)?);
     }
     Ok(fields)
+}
+
+fn import_callback_root_context(
+    py_solution: &Bound<'_, PyAny>,
+    schema: &DynamicSchema,
+) -> PyResult<BTreeMap<String, Py<PyAny>>> {
+    let skip_names = callback_root_skip_names(schema);
+    let mut fields = BTreeMap::new();
+    import_callback_root_dict_fields(py_solution, &skip_names, &mut fields)?;
+    for attr in py_solution.dir()?.iter() {
+        let name = attr.extract::<String>()?;
+        if name.starts_with('_') || skip_names.contains(name.as_str()) {
+            continue;
+        }
+        let Ok(value) = py_solution.getattr(name.as_str()) else {
+            continue;
+        };
+        if value.is_callable() {
+            continue;
+        }
+        fields.insert(name, value.unbind());
+    }
+    Ok(fields)
+}
+
+fn callback_root_skip_names(schema: &DynamicSchema) -> BTreeSet<String> {
+    let mut skip_names = BTreeSet::new();
+    for entity in &schema.entities {
+        skip_names.insert(entity.collection.clone());
+    }
+    for fact in &schema.facts {
+        skip_names.insert(fact.collection.clone());
+    }
+    skip_names
+}
+
+fn import_callback_root_dict_fields(
+    py_solution: &Bound<'_, PyAny>,
+    skip_names: &BTreeSet<String>,
+    fields: &mut BTreeMap<String, Py<PyAny>>,
+) -> PyResult<()> {
+    let Ok(dict_any) = py_solution.getattr("__dict__") else {
+        return Ok(());
+    };
+    let Ok(dict) = dict_any.cast::<PyDict>() else {
+        return Ok(());
+    };
+    for (key, value) in dict.iter() {
+        let name = key.extract::<String>()?;
+        if name.starts_with('_') || skip_names.contains(name.as_str()) || value.is_callable() {
+            continue;
+        }
+        fields.insert(name, value.unbind());
+    }
+    Ok(())
 }
 
 fn route_field_names(schema: &DynamicSchema) -> BTreeSet<String> {
