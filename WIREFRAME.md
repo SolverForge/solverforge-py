@@ -32,20 +32,24 @@ shape, and source-checkout example UI/API surfaces.
 
 The package exports `Solver`, `SolverManager`, `SolverConfig`,
 `TerminationConfig`, `ConstraintFactory`, score classes, stable package error
-classes, `joiner`, `console`, `ui`, and decorators/fields for model authoring:
+classes, `joiner`, `console`, `ui`, and decorators/helpers for model authoring:
 
 - `@planning_solution`, `@planning_entity`, `@problem_fact`
 - `planning_id`, `planning_variable`, `planning_list_variable`
 - `@constraint_provider`, `@scalar_group`, `@conflict_repair`
+- `scalar_assignment_group(...)`, `ScalarAssignmentGroup`, `ScalarGroupLimits`
 - `shadow_variable_updates(...)`
+- `indexed_presence(...)`
 
 Solutions are normal Python objects. Entity and fact collections are inferred
 from type hints where available, then from instance lists. The native module
 mutates Rust-owned dynamic state and exports the solved state back to Python.
 List variables may declare element-owner and route callbacks for owner-aware
-list moves and CVRP-style construction. Shadow update listeners refresh
-native-owned derived fields and those fields are exported back to Python objects
-after solve, analyze, and retained snapshot export.
+list moves, list precedence/makespan scoring, and CVRP-style construction.
+Field-backed route metadata can supply depot, metric-class, distance-matrix,
+capacity, and demand data without per-query Python callbacks. Shadow update
+listeners refresh native-owned derived fields and those fields are exported back
+to Python objects after solve, analyze, and retained snapshot export.
 
 ## Constraint Surface
 
@@ -57,8 +61,15 @@ Supported stream shapes:
 - balance `for_each(...).balance(...).filter(...).penalize/reward(...).named(...)`
 - list-unassigned element
   `for_each_unassigned_element(owner_entity_type, variable_name).filter(...).penalize/reward(...).named(...)`
+- list precedence/makespan
+  `list_precedence_makespan(owner_entity_type, variable_name).named(...)`
 
-Weights may be score objects, integer/sequence values, or Python callbacks.
+Ordinary penalize/reward stream weights may be score objects, integer/sequence
+values, or Python callbacks. List precedence/makespan scoring is computed
+natively from owner, duration, and successor callbacks on the planning list
+variable.
+Grouped streams support the default count collector and `indexed_presence(...)`
+for run/range presence analysis.
 `joiner.equal(...)` and `joiner.equal_bi(...)` use Python equality rather than
 string representations. Top-level `ConstraintFactory.join`, `group_by`,
 `if_exists`, `if_not_exists`, and `flattened` remain explicit unsupported
@@ -78,8 +89,9 @@ calculated score to `solution.score`.
 
 `SolverManager(config=None)` wraps upstream retained jobs. It exposes
 `solve`, `get_status`, `events`, `wait`, `snapshot`, `pause`, `resume`,
-`cancel`, and `delete`. Snapshots are deep-copied Python solutions exported from
-Rust-owned retained state.
+`cancel`, and `delete`. Submitted Python solutions are deep-copied before import
+so retained jobs do not mutate the caller's object. Snapshots are deep-copied
+Python solutions exported from Rust-owned retained state.
 
 Config may be a `SolverConfig`, a dict, or `None`. When `None`, `solver.toml` in
 the current directory is loaded if present. Termination fields are accepted at
@@ -91,6 +103,8 @@ handoff.
 Dynamic construction phases:
 
 - scalar `first_fit` and `cheapest_insertion`
+- scalar assignment-group `cheapest_insertion` when a construction phase declares
+  `group_name`
 - list `list_cheapest_insertion`
 - route-aware list `list_clarke_wright` and `list_k_opt`
 
@@ -109,7 +123,8 @@ Dynamic list selectors:
 - `list_change_move_selector`, `nearby_list_change_move_selector`
 - `list_swap_move_selector`, `nearby_list_swap_move_selector`
 - `sublist_change_move_selector`, `sublist_swap_move_selector`
-- `list_reverse_move_selector`, `k_opt_move_selector`
+- `list_reverse_move_selector`, `list_permute_move_selector`,
+  `k_opt_move_selector`
 - `list_ruin_move_selector`
 
 Selector combinators `limited_neighborhood`, `union_move_selector`, and
@@ -194,6 +209,7 @@ The root Makefile is the maintainer entry point:
 - `make test`: Rust plus Python tests
 - `make lint`: rustfmt check, ruff, mypy, clippy
 - `make ci-local`: local CI simulation
+- `make test-examples-browser`: Playwright browser tests for both example apps
 - `make build-dist`: release source distribution plus local wheel
 - `make dist-check`: metadata and artifact-content checks
 - `make pre-release`: CI simulation plus release artifact checks

@@ -8,9 +8,9 @@ The native extension owns the working solution state in Rust so SolverForge can
 clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
-The package targets CPython 3.14 and Rust 1.95.0. The PyPI package starts at
-`solverforge` `0.4.1` for this architecture and intentionally supersedes the
-older incompatible `0.2.x` and `0.3.0` artifacts in the same PyPI namespace.
+The package targets CPython 3.14 and Rust 1.95.0. The `solverforge` `0.5.x`
+line is the current dynamic binding architecture and intentionally supersedes
+the older incompatible `0.2.x` and `0.3.0` artifacts in the same PyPI namespace.
 Those older artifacts exposed `SolverFactory`, `PlanningVariable`, Java service
 requirements, and other APIs that are not part of this package.
 
@@ -35,7 +35,7 @@ or an editable local checkout.
 ```sh
 python3.14 -m venv .venv-examples
 . .venv-examples/bin/activate
-python -m pip install "solverforge[examples]==0.4.1"
+python -m pip install "solverforge[examples]==0.5.0"
 python examples/nqueens.py
 python -m examples.solverforge_hospital
 python -m examples.solverforge_deliveries
@@ -106,8 +106,9 @@ make pre-release      # ci-local plus release sdist/wheel checks
 ```
 
 Run `make help` for focused targets such as `make test-hospital`,
-`make test-deliveries`, `make test-one TEST=pattern`, `make hospital-run`,
-`make hospital-solve`, `make deliveries-run`, and `make deliveries-solve`.
+`make test-deliveries`, `make test-examples-browser`,
+`make test-one TEST=pattern`, `make hospital-run`, `make hospital-solve`,
+`make deliveries-run`, and `make deliveries-solve`.
 
 ## Boundaries
 
@@ -128,15 +129,30 @@ Run `make help` for focused targets such as `make test-hospital`,
   `step_count_limit`, `unimproved_step_count_limit`, and
   `unimproved_seconds_spent_limit`.
 - Synchronous and retained scalar/list construction solves use upstream
-  SolverForge. Dynamic scalar construction binds first-fit and cheapest
-  insertion phases; dynamic list construction binds list cheapest insertion,
-  list Clarke-Wright, and list k-opt phases where the model supplies the
-  required list or route hooks.
+  SolverForge. Dynamic scalar construction binds first-fit, cheapest insertion,
+  and assignment-group cheapest insertion phases; dynamic list construction
+  binds list cheapest insertion, list Clarke-Wright, and list k-opt phases where
+  the model supplies the required list or route hooks.
 - `SolverManager` is backed by upstream retained jobs, statuses, events, and
   snapshots, including pause, resume, cancel, delete, and exact snapshot reads.
-- `planning_list_variable(...)` supports `element_owner`, `route_depot`,
-  `route_metric_class`, `route_distance`, and `route_feasible` callbacks for
-  owner-aware list moves and CVRP-style route construction.
+- `planning_variable(...)` supports row candidate callbacks and nearby value or
+  entity candidate/distance callbacks for dynamic scalar construction and nearby
+  scalar local search.
+- `scalar_assignment_group(...)` declares assignment-aware scalar groups for
+  grouped scalar local search and assignment-group construction. Group metadata
+  covers required entities, capacity keys, assignment rules, ordering callbacks,
+  callback synchronization policy, and `ScalarGroupLimits`.
+- `planning_list_variable(...)` supports `element_owner`,
+  `construction_element_order_key`, `precedence_duration`,
+  `precedence_successors`, `route_depot`, `route_metric_class`,
+  `route_distance`, and `route_feasible` callbacks for owner-aware list moves,
+  JSSP-style precedence/makespan scoring, and CVRP-style route construction.
+  CVRP-style models with immutable row data can avoid per-query Python callbacks
+  by passing
+  `route_depot_field`, `route_metric_class_field`,
+  `route_distance_matrix_field`, `route_capacity_field`, and
+  `route_demand_field`; the Rust route phases read those fields through the
+  active cursor and keep the callback options as fallbacks.
   `shadow_variable_updates(...)` registers post-update listeners whose
   native-owned fields are refreshed during solve/analyze and exported back to
   Python objects.
@@ -145,9 +161,13 @@ Run `make help` for focused targets such as `make test-hospital`,
 - Python callback constraints are evaluated from Rust-owned dynamic state.
   Supported stream shapes are unary `for_each(...).filter(...)`, binary
   `for_each(...).join(...).filter(...)`, and grouped-count
-  `for_each(...).group_by(...)`, plus `for_each(...).balance(...)` and
-  `for_each_unassigned_element(owner_entity_type, variable_name)`, with fixed
-  or callback-computed score weights. `joiner.equal(...)` and
+  `for_each(...).group_by(...)`, plus `for_each(...).balance(...)`,
+  `for_each_unassigned_element(owner_entity_type, variable_name)`, and
+  `list_precedence_makespan(owner_entity_type, variable_name)`. Ordinary
+  penalize/reward streams support fixed or callback-computed score weights; list
+  precedence/makespan scoring is computed natively from owner, duration, and
+  successor callbacks. `indexed_presence(...)` is available as a grouped
+  collector for run/range presence scoring. `joiner.equal(...)` and
   `joiner.equal_bi(...)` preserve Python equality semantics.
 - Dynamic scalar local search is available through upstream-style dynamic
   `change_move_selector`, `swap_move_selector`, `nearby_change_move_selector`,
@@ -159,7 +179,8 @@ Run `make help` for focused targets such as `make test-hospital`,
   `list_change_move_selector`, `nearby_list_change_move_selector`,
   `list_swap_move_selector`, `nearby_list_swap_move_selector`,
   `sublist_change_move_selector`, `sublist_swap_move_selector`,
-  `list_reverse_move_selector`, `k_opt_move_selector`, and
+  `list_reverse_move_selector`, `list_permute_move_selector`,
+  `k_opt_move_selector`, and
   `list_ruin_move_selector` phases.
 - `limited_neighborhood`, `union_move_selector`, and two-child
   `cartesian_product_move_selector` compose supported dynamic scalar and list

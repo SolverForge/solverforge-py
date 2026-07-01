@@ -19,12 +19,16 @@ contracts.
 - `make develop`: create `.venv`, install tools, and install the release native extension.
 - `make test`: run `cargo test --locked` plus pytest.
 - `make test-quick`: run fast Python regressions without the example app tests.
-- `make test-hospital`: run the hospital model and FastAPI/frontend lifecycle tests.
-- `make test-deliveries`: run the deliveries model and FastAPI/frontend lifecycle tests.
+- `make test-hospital`: run the hospital model, FastAPI/frontend lifecycle, and
+  hospital Playwright browser test.
+- `make test-deliveries`: run the deliveries model, FastAPI/frontend lifecycle,
+  and deliveries Playwright browser test.
+- `make test-examples-browser`: run the Playwright browser tests for both example apps.
 - `make lint`: run rustfmt check, ruff, strict mypy, and clippy with warnings denied.
 - `make docs-check`: verify the tracked documentation surface exists and avoids known stale claims.
 - `make ci-local` or `make audit`: run the local CI simulation.
-- `make pre-release`: run `ci-local` and build the release wheel.
+- `make pre-release`: run `release-base-check`, `ci-local`, release
+  distribution build/checks, and clean-wheel smoke test.
 - `make hospital-run`: serve the hospital app on `APP_HOST=127.0.0.1 PORT=7860`.
 - `make deliveries-run`: serve the deliveries app on `APP_HOST=127.0.0.1 PORT=7860`
   unless `PORT` is overridden.
@@ -54,8 +58,7 @@ behavior changes directly.
 
 ## Commit & Pull Request Guidelines
 
-This checkout has no committed history yet, so no project-specific convention can
-be inferred from Git. Use concise Conventional Commit-style subjects such as
+The history uses concise Conventional Commit-style subjects such as
 `fix(runtime): preserve scalar snapshots` or `test(manager): cover retained jobs`.
 Pull requests should include the motivation, user-visible behavior, tests run,
 and any linked issue. Include screenshots or short recordings for changes under

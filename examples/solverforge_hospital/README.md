@@ -29,7 +29,7 @@ Install the published package and run the source-checkout example:
 ```sh
 python3.14 -m venv .venv-hospital
 . .venv-hospital/bin/activate
-python -m pip install "solverforge[examples]==0.4.1"
+python -m pip install "solverforge[examples]==0.5.0"
 python -m examples.solverforge_hospital
 ```
 
@@ -64,5 +64,5 @@ The Python example mirrors the Rust `uc-hospital/src` ownership tree:
 - `DELETE /jobs/{id}` after a job reaches a terminal state
 
 Run `make test-hospital` to validate the model, tree shape, static app, shared
-UI asset route, retained snapshots, SSE stream, analysis payloads, and async
-controls.
+UI asset route, retained snapshots, SSE stream, analysis payloads, async
+controls, and Playwright browser solve/analysis workflow.
