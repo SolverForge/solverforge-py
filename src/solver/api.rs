@@ -10,7 +10,9 @@ use crate::config::config_from_python;
 use crate::constraints::PyDynamicConstraintSet;
 use crate::error::py_err;
 use crate::runtime::dynamic_runtime_model;
-use crate::runtime::dynamic_scalar_search::build_dynamic_phases;
+use crate::runtime::dynamic_scalar_search::{
+    build_dynamic_phases, validate_dynamic_runtime_bindings,
+};
 use crate::schema::build::solution_descriptor;
 use crate::schema::{parse_schema, validate::validate_dynamic_schema};
 use crate::score::{scoped_dynamic_score_family, score_family_from_name, DynamicScorePythonExt};
@@ -58,6 +60,7 @@ pub fn solve(
         .map_err(|err| py_err(format!("failed to resolve dynamic runtime model: {err}")))?;
     let constraints = PyDynamicConstraintSet::new(parsed.constraints.clone_ref(py));
     let solver_config = config_from_python(config)?;
+    validate_dynamic_runtime_bindings(&solver_config, &parsed, &model)?;
     imported.solver_config = solver_config.clone();
     let score_family = score_family_from_name(&parsed.score_family)?;
     let phase_schema = Arc::clone(&parsed);

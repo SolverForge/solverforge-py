@@ -1,6 +1,9 @@
+import pytest
+
 from solverforge import (
     ConstraintFactory,
     HardSoftScore,
+    ScalarGroupLimits,
     SoftScore,
     Solver,
     conflict_repair,
@@ -9,8 +12,10 @@ from solverforge import (
     planning_entity,
     planning_solution,
     planning_variable,
+    scalar_assignment_group,
     scalar_group,
 )
+from solverforge.model import build_schema
 
 
 @planning_entity
@@ -45,6 +50,115 @@ def test_dynamic_scalar_assignment_solves_python_model() -> None:
     schedule = Solver.solve(Schedule())
     assert [shift.nurse for shift in schedule.shifts] == [0, 0]
     assert schedule.score["levels"][0] == 0
+
+
+def filtered_worker_candidates(task: object) -> list[int]:
+    return list(task.allowed_workers)
+
+
+@planning_entity
+class FilteredTask:
+    worker = planning_variable(
+        value_range_provider="filtered_workers",
+        candidate_values=filtered_worker_candidates,
+    )
+
+    def __init__(self, allowed_workers: list[int]) -> None:
+        self.allowed_workers = allowed_workers
+        self.worker: int | None = None
+
+
+@planning_solution(score=SoftScore)
+class FilteredWorkerPlan:
+    filtered_tasks: list[FilteredTask]
+
+    def __init__(self) -> None:
+        self.filtered_workers = [0, 1]
+        self.filtered_tasks = [FilteredTask([1])]
+        self.score = None
+
+
+def test_dynamic_scalar_assignment_uses_row_candidate_values() -> None:
+    schema = build_schema(FilteredWorkerPlan())
+    field = schema["entities"][0]["fields"][0]
+    assert callable(field["candidate_values"])
+
+    plan = Solver.solve(
+        FilteredWorkerPlan(), {"phases": [{"type": "construction_heuristic"}]}
+    )
+    assert plan.filtered_tasks[0].worker == 1
+
+
+def nearby_worker_values(task: object) -> list[int]:
+    return [1, 2]
+
+
+def nearby_worker_distance(task: object, worker: int) -> float:
+    return 0.0 if worker == task.target else 100.0
+
+
+@planning_entity
+class NearbyTask:
+    worker = planning_variable(
+        value_range_provider="workers",
+        nearby_value_candidates=nearby_worker_values,
+        nearby_value_distance_meter=nearby_worker_distance,
+    )
+
+    def __init__(self, target: int, worker: int) -> None:
+        self.target = target
+        self.worker = worker
+
+
+@constraint_provider
+def prefer_nearby_target(factory: ConstraintFactory):
+    return [
+        factory.for_each(NearbyTask)
+        .filter(lambda task: task.worker != task.target)
+        .penalize(SoftScore.of(10))
+        .named("nearby target")
+    ]
+
+
+@planning_solution(score=SoftScore, constraints=prefer_nearby_target)
+class NearbyChangePlan:
+    tasks: list[NearbyTask]
+
+    def __init__(self) -> None:
+        self.tasks = [NearbyTask(target=2, worker=0)]
+        self.workers = [0, 1, 2]
+        self.score = None
+
+
+def test_dynamic_nearby_change_uses_python_candidates_and_distance() -> None:
+    schema = build_schema(NearbyChangePlan())
+    field = schema["entities"][0]["fields"][0]
+    assert callable(field["nearby_value_candidates"])
+    assert callable(field["nearby_value_distance_meter"])
+
+    plan = Solver.solve(
+        NearbyChangePlan(),
+        {
+            "phases": [
+                {
+                    "type": "local_search",
+                    "local_search_type": "acceptor_forager",
+                    "move_selector": {
+                        "type": "nearby_change_move_selector",
+                        "max_nearby": 1,
+                        "entity_class": "NearbyTask",
+                        "variable_name": "worker",
+                    },
+                    "acceptor": {"type": "hill_climbing"},
+                    "forager": {"type": "best_score"},
+                    "termination": {"step_count_limit": 1},
+                }
+            ]
+        },
+    )
+
+    assert plan.tasks[0].worker == 2
+    assert plan.score == Solver.analyze(plan)
 
 
 @planning_entity
@@ -262,6 +376,129 @@ def test_dynamic_scalar_swap_keeps_binary_constraint_score_consistent() -> None:
     assert plan.score["levels"] == [0]
 
 
+def nearby_task_indices(task: object) -> list[int]:
+    return list(task.nearby_indices)
+
+
+def nearby_task_distance(left: object, right: object) -> float:
+    return 0.0 if right.name == "target" else 100.0
+
+
+@planning_entity
+class NearbySwapTask:
+    worker = planning_variable(
+        value_range_provider="workers",
+        nearby_entity_candidates=nearby_task_indices,
+        nearby_entity_distance_meter=nearby_task_distance,
+    )
+
+    def __init__(
+        self, name: str, worker: int, nearby_indices: list[int] | None = None
+    ) -> None:
+        self.name = name
+        self.worker = worker
+        self.nearby_indices = list(nearby_indices or [])
+
+
+@constraint_provider
+def prefer_nearby_swap(factory: ConstraintFactory):
+    return [
+        factory.for_each(NearbySwapTask)
+        .filter(lambda task: task.name == "left" and task.worker != 1)
+        .penalize(SoftScore.of(10))
+        .named("nearby left"),
+        factory.for_each(NearbySwapTask)
+        .filter(lambda task: task.name == "target" and task.worker != 0)
+        .penalize(SoftScore.of(10))
+        .named("nearby target"),
+    ]
+
+
+@planning_solution(score=SoftScore, constraints=prefer_nearby_swap)
+class NearbySwapPlan:
+    tasks: list[NearbySwapTask]
+
+    def __init__(self) -> None:
+        self.tasks = [
+            NearbySwapTask("left", 0, [1, 2]),
+            NearbySwapTask("decoy", 2),
+            NearbySwapTask("target", 1),
+        ]
+        self.workers = [0, 1, 2]
+        self.score = None
+
+
+@planning_solution(score=SoftScore, constraints=prefer_nearby_swap)
+class LowerIndexNearbySwapPlan:
+    tasks: list[NearbySwapTask]
+
+    def __init__(self) -> None:
+        self.tasks = [
+            NearbySwapTask("target", 1),
+            NearbySwapTask("decoy", 2),
+            NearbySwapTask("left", 0, [0]),
+        ]
+        self.workers = [0, 1, 2]
+        self.score = None
+
+
+def test_dynamic_nearby_swap_uses_python_candidates_and_distance() -> None:
+    schema = build_schema(NearbySwapPlan())
+    field = schema["entities"][0]["fields"][0]
+    assert callable(field["nearby_entity_candidates"])
+    assert callable(field["nearby_entity_distance_meter"])
+
+    plan = Solver.solve(
+        NearbySwapPlan(),
+        {
+            "phases": [
+                {
+                    "type": "local_search",
+                    "local_search_type": "acceptor_forager",
+                    "move_selector": {
+                        "type": "nearby_swap_move_selector",
+                        "max_nearby": 1,
+                        "entity_class": "NearbySwapTask",
+                        "variable_name": "worker",
+                    },
+                    "acceptor": {"type": "hill_climbing"},
+                    "forager": {"type": "best_score"},
+                    "termination": {"step_count_limit": 1},
+                }
+            ]
+        },
+    )
+
+    assert [task.worker for task in plan.tasks] == [1, 2, 0]
+    assert plan.score == Solver.analyze(plan)
+
+
+def test_dynamic_nearby_swap_accepts_asymmetric_lower_index_candidate() -> None:
+    plan = Solver.solve(
+        LowerIndexNearbySwapPlan(),
+        {
+            "phases": [
+                {
+                    "type": "local_search",
+                    "local_search_type": "acceptor_forager",
+                    "move_selector": {
+                        "type": "nearby_swap_move_selector",
+                        "max_nearby": 1,
+                        "entity_class": "NearbySwapTask",
+                        "variable_name": "worker",
+                    },
+                    "acceptor": {"type": "hill_climbing"},
+                    "forager": {"type": "best_score"},
+                    "termination": {"step_count_limit": 1},
+                }
+            ]
+        },
+    )
+
+    assert [task.worker for task in plan.tasks] == [0, 2, 1]
+    assert plan.score == Solver.analyze(plan)
+
+
 @planning_entity
 class AsymmetricJoinTask:
     worker = planning_variable(value_range_provider="workers")
@@ -299,7 +536,9 @@ class AsymmetricSelfJoinPlan:
         self.score = None
 
 
-def test_dynamic_equal_self_join_delta_keeps_score_consistent_when_left_has_no_match() -> None:
+def test_dynamic_equal_self_join_delta_keeps_score_consistent_when_left_has_no_match() -> (
+    None
+):
     plan = Solver.solve(
         AsymmetricSelfJoinPlan(),
         {
@@ -438,7 +677,9 @@ class GroupedDeltaPlan:
         self.score = None
 
 
-def test_dynamic_grouped_constraint_delta_keeps_score_consistent_for_pillar_change() -> None:
+def test_dynamic_grouped_constraint_delta_keeps_score_consistent_for_pillar_change() -> (
+    None
+):
     plan = Solver.solve(
         GroupedDeltaPlan(),
         {
@@ -648,6 +889,281 @@ def test_dynamic_grouped_scalar_selector_solves_python_model() -> None:
 
 
 @planning_entity
+class AssignmentShift:
+    nurse = planning_variable(value_range_provider="nurses", allows_unassigned=True)
+
+    def __init__(self) -> None:
+        self.nurse: int | None = None
+
+
+def assignment_shift_required(solution, entity_index):
+    return solution.shifts[entity_index].nurse is None
+
+
+def assignment_shift_capacity_key(solution, entity_index, nurse_index):
+    del solution, entity_index
+    return nurse_index
+
+
+@constraint_provider
+def assignment_shift_constraints(factory: ConstraintFactory):
+    return [
+        factory.for_each(AssignmentShift)
+        .filter(lambda shift: shift.nurse is None)
+        .penalize(HardSoftScore.ONE_HARD)
+        .named("assignment shift unassigned"),
+        factory.for_each(AssignmentShift)
+        .filter(lambda shift: shift.nurse is not None)
+        .group_by(lambda shift: shift.nurse)
+        .filter(lambda _nurse, count: count > 1)
+        .penalize(lambda _nurse, count: HardSoftScore.of_hard(count - 1))
+        .named("assignment shift duplicate nurse"),
+    ]
+
+
+@planning_solution(
+    score=HardSoftScore,
+    constraints=assignment_shift_constraints,
+    scalar_groups=[
+        scalar_assignment_group(
+            "shift_nurse_assignment",
+            entity_class="AssignmentShift",
+            variable_name="nurse",
+            required_entity=assignment_shift_required,
+            capacity_key=assignment_shift_capacity_key,
+            sync_solution_before_callbacks=False,
+            limits=ScalarGroupLimits(max_moves_per_step=8),
+        )
+    ],
+)
+class AssignmentSchedule:
+    shifts: list[AssignmentShift]
+
+    def __init__(self) -> None:
+        self.shifts = [AssignmentShift(), AssignmentShift()]
+        self.nurses = [0, 1]
+        self.score = None
+
+
+@planning_entity
+class OptionalAssignmentShift:
+    nurse = planning_variable(value_range_provider="nurses", allows_unassigned=True)
+
+    def __init__(self, required: bool) -> None:
+        self.required = required
+        self.nurse: int | None = None
+
+
+def optional_assignment_required(solution, entity_index):
+    return bool(solution.shifts[entity_index].required)
+
+
+@constraint_provider
+def optional_assignment_constraints(factory: ConstraintFactory):
+    return [
+        factory.for_each(OptionalAssignmentShift)
+        .filter(lambda shift: shift.required and shift.nurse is None)
+        .penalize(HardSoftScore.ONE_HARD)
+        .named("required assignment shift unassigned"),
+        factory.for_each(OptionalAssignmentShift)
+        .filter(lambda shift: not shift.required and shift.nurse is not None)
+        .penalize(HardSoftScore.ONE_SOFT)
+        .named("optional assignment shift assigned"),
+    ]
+
+
+@planning_solution(
+    score=HardSoftScore,
+    constraints=optional_assignment_constraints,
+    scalar_groups=[
+        scalar_assignment_group(
+            "optional_shift_nurse_assignment",
+            entity_class="OptionalAssignmentShift",
+            variable_name="nurse",
+            required_entity=optional_assignment_required,
+            sync_solution_before_callbacks=False,
+            limits=ScalarGroupLimits(max_moves_per_step=8),
+        )
+    ],
+)
+class OptionalAssignmentSchedule:
+    shifts: list[OptionalAssignmentShift]
+
+    def __init__(self) -> None:
+        self.shifts = [OptionalAssignmentShift(True), OptionalAssignmentShift(False)]
+        self.nurses = [0, 1]
+        self.score = None
+
+
+@planning_solution(
+    score=HardSoftScore,
+    constraints=assignment_shift_constraints,
+    scalar_groups=[
+        scalar_assignment_group(
+            "bad_shift_nurse_assignment",
+            entity_class="AssignmentShift",
+            variable_name="missing_nurse",
+            required_entity=assignment_shift_required,
+        )
+    ],
+)
+class BadTargetAssignmentSchedule:
+    shifts: list[AssignmentShift]
+
+    def __init__(self) -> None:
+        self.shifts = [AssignmentShift(), AssignmentShift()]
+        self.nurses = [0, 1]
+        self.score = None
+
+
+def test_scalar_assignment_group_schema_exposes_public_contract() -> None:
+    schema = build_schema(AssignmentSchedule())
+    group = schema["scalar_groups"][0]
+
+    assert group["kind"] == "assignment"
+    assert group["name"] == "shift_nurse_assignment"
+    assert group["entity_class"] == "AssignmentShift"
+    assert group["variable_name"] == "nurse"
+    assert callable(group["required_entity"])
+    assert callable(group["capacity_key"])
+    assert group["sync_solution_before_callbacks"] is False
+    assert group["limits"]["max_moves_per_step"] == 8
+
+
+def test_grouped_scalar_assignment_selector_solves_python_model() -> None:
+    plan = Solver.solve(
+        AssignmentSchedule(),
+        {
+            "phases": [
+                {
+                    "type": "local_search",
+                    "local_search_type": "acceptor_forager",
+                    "move_selector": {
+                        "type": "grouped_scalar_move_selector",
+                        "group_name": "shift_nurse_assignment",
+                        "max_moves_per_step": 8,
+                    },
+                    "acceptor": {"type": "hill_climbing"},
+                    "forager": {"type": "best_score"},
+                    "termination": {"step_count_limit": 2},
+                }
+            ]
+        },
+    )
+
+    assert sorted(shift.nurse for shift in plan.shifts) == [0, 1]
+    assert plan.score == Solver.analyze(plan)
+    assert plan.score["levels"] == [0, 0]
+
+
+def test_scalar_assignment_group_construction_solves_python_model() -> None:
+    plan = Solver.solve(
+        AssignmentSchedule(),
+        {
+            "phases": [
+                {
+                    "type": "construction_heuristic",
+                    "construction_heuristic_type": "cheapest_insertion",
+                    "group_name": "shift_nurse_assignment",
+                }
+            ]
+        },
+    )
+
+    assert sorted(shift.nurse for shift in plan.shifts) == [0, 1]
+    assert plan.score == Solver.analyze(plan)
+    assert plan.score["levels"] == [0, 0]
+
+
+def test_scalar_assignment_group_construction_skips_soft_worse_optional_rows() -> None:
+    plan = Solver.solve(
+        OptionalAssignmentSchedule(),
+        {
+            "phases": [
+                {
+                    "type": "construction_heuristic",
+                    "construction_heuristic_type": "cheapest_insertion",
+                    "group_name": "optional_shift_nurse_assignment",
+                }
+            ]
+        },
+    )
+
+    assert plan.shifts[0].nurse is not None
+    assert plan.shifts[1].nurse is None
+    assert plan.score == Solver.analyze(plan)
+    assert plan.score["levels"] == [0, 0]
+
+
+def test_scalar_assignment_group_construction_reports_unknown_group() -> None:
+    with pytest.raises(RuntimeError, match="no matching assignment scalar group"):
+        Solver.solve(
+            AssignmentSchedule(),
+            {
+                "phases": [
+                    {
+                        "type": "construction_heuristic",
+                        "construction_heuristic_type": "cheapest_insertion",
+                        "group_name": "missing_shift_nurse_assignment",
+                    }
+                ]
+            },
+        )
+
+
+def test_scalar_assignment_group_construction_reports_unknown_target() -> None:
+    with pytest.raises(RuntimeError, match="targets unknown scalar variable"):
+        Solver.solve(
+            BadTargetAssignmentSchedule(),
+            {
+                "phases": [
+                    {
+                        "type": "construction_heuristic",
+                        "construction_heuristic_type": "cheapest_insertion",
+                        "group_name": "bad_shift_nurse_assignment",
+                    }
+                ]
+            },
+        )
+
+
+def test_grouped_scalar_assignment_selector_composes_in_union() -> None:
+    plan = Solver.solve(
+        AssignmentSchedule(),
+        {
+            "phases": [
+                {
+                    "type": "local_search",
+                    "local_search_type": "acceptor_forager",
+                    "move_selector": {
+                        "type": "union_move_selector",
+                        "selectors": [
+                            {
+                                "type": "grouped_scalar_move_selector",
+                                "group_name": "shift_nurse_assignment",
+                                "max_moves_per_step": 8,
+                            },
+                            {
+                                "type": "change_move_selector",
+                                "entity_class": "AssignmentShift",
+                                "variable_name": "nurse",
+                            },
+                        ],
+                    },
+                    "acceptor": {"type": "hill_climbing"},
+                    "forager": {"type": "best_score"},
+                    "termination": {"step_count_limit": 2},
+                }
+            ]
+        },
+    )
+
+    assert sorted(shift.nurse for shift in plan.shifts) == [0, 1]
+    assert plan.score == Solver.analyze(plan)
+    assert plan.score["levels"] == [0, 0]
+
+
+@planning_entity
 class RepairTask:
     worker = planning_variable(value_range_provider="workers")
 
@@ -801,7 +1317,9 @@ def test_dynamic_conflict_repair_selector_solves_python_model() -> None:
     assert plan.score["levels"][0] == 0
 
 
-def test_dynamic_conflict_repair_selector_accepts_callback_weighted_hard_constraint() -> None:
+def test_dynamic_conflict_repair_selector_accepts_callback_weighted_hard_constraint() -> (
+    None
+):
     plan = Solver.solve(
         CallbackHardConflictRepairPlan(),
         {

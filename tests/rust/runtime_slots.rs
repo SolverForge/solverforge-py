@@ -8,6 +8,7 @@ use solverforge_py::runtime::list_slots::list_slots;
 use solverforge_py::runtime::scalar_slots::scalar_slots;
 use solverforge_py::schema::build::solution_descriptor;
 use solverforge_py::schema::{DynamicSchema, EntitySchema, VariableSchema};
+use solverforge_py::state::callback_view::PythonCallbackView;
 use solverforge_py::state::entity_table::{DynamicEntityRow, DynamicState};
 use solverforge_py::state::PyDynamicSolution;
 use solverforge_solver::CrossEntityDistanceMeter;
@@ -31,33 +32,25 @@ fn dynamic_runtime_slots_are_built_from_schema_and_drive_state() {
                 variables: vec![
                     VariableSchema {
                         name: "worker".to_string(),
+                        storage_name: "__solverforge_worker".to_string(),
                         kind: "planning_variable".to_string(),
-                        value_range_provider: None,
                         allows_unassigned: true,
-                        element_collection: None,
-                        element_owner: None,
-                        route_depot: None,
-                        route_metric_class: None,
-                        route_distance: None,
-                        route_feasible: None,
+                        ..Default::default()
                     },
                     VariableSchema {
                         name: "visits".to_string(),
+                        storage_name: "__solverforge_visits".to_string(),
                         kind: "planning_list_variable".to_string(),
-                        value_range_provider: None,
                         allows_unassigned: false,
                         element_collection: Some("visits".to_string()),
-                        element_owner: None,
-                        route_depot: None,
-                        route_metric_class: None,
-                        route_distance: None,
-                        route_feasible: None,
+                        ..Default::default()
                     },
                 ],
             }],
             facts: Vec::new(),
             constraints: py.None(),
             scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
+            assignment_scalar_groups: Vec::new(),
             conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
             shadow_updates: Vec::new(),
         });
@@ -72,7 +65,9 @@ fn dynamic_runtime_slots_are_built_from_schema_and_drive_state() {
                 entities: vec![vec![row]],
                 facts: Vec::new(),
                 list_elements: vec![elements],
+                ..DynamicState::default()
             },
+            callback_view: PythonCallbackView::default(),
             score: None,
             solver_config: solverforge_config::SolverConfig::default(),
         };

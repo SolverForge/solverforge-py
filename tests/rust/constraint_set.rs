@@ -2,6 +2,7 @@ use pyo3::Python;
 use solverforge_py::constraints::PyDynamicConstraintSet;
 use solverforge_py::schema::DynamicSchema;
 use solverforge_py::score::DynamicScore;
+use solverforge_py::state::callback_view::PythonCallbackView;
 use solverforge_py::state::entity_table::DynamicState;
 use solverforge_py::state::PyDynamicSolution;
 use solverforge_scoring::ConstraintSet;
@@ -22,10 +23,12 @@ fn dynamic_constraint_set_reports_constraint_count() {
                 facts: Vec::new(),
                 constraints: py.None(),
                 scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
+                assignment_scalar_groups: Vec::new(),
                 conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
                 shadow_updates: Vec::new(),
             }),
             state: DynamicState::default(),
+            callback_view: PythonCallbackView::default(),
             score: Some(DynamicScore::ZERO),
             solver_config: solverforge_config::SolverConfig::default(),
         };

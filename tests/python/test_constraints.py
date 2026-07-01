@@ -6,6 +6,7 @@ from solverforge import (
     SoftScore,
     Solver,
     constraint_provider,
+    indexed_presence,
     joiner,
     planning_entity,
     planning_list_variable,
@@ -23,6 +24,31 @@ class Item:
 @planning_entity
 class ListOwnerItem:
     values = planning_list_variable(element_collection="value_ids")
+
+    def __init__(self) -> None:
+        self.values = []
+
+
+def precedence_owner(solution: object, element: int) -> int:
+    return int(solution.owner_by_value[int(element)])
+
+
+def precedence_duration(solution: object, element: int) -> int:
+    return int(solution.duration_by_value[int(element)])
+
+
+def precedence_successors(solution: object, element: int) -> list[int]:
+    return list(solution.successors_by_value[int(element)])
+
+
+@planning_entity
+class PrecedenceRoute:
+    values = planning_list_variable(
+        element_collection="precedence_value_ids",
+        element_owner=precedence_owner,
+        precedence_duration=precedence_duration,
+        precedence_successors=precedence_successors,
+    )
 
     def __init__(self) -> None:
         self.values = []
@@ -78,6 +104,23 @@ def test_grouped_constraint_plan_uses_callback_group_key_and_weight() -> None:
     assert callable(native["weight_callback"])
 
 
+def test_indexed_presence_group_collector_plan_uses_callback_index() -> None:
+    constraint = (
+        ConstraintFactory()
+        .for_each(Item)
+        .group_by(lambda item: item.key, indexed_presence(lambda item: item.day))
+        .penalize(lambda key, presence: HardSoftScore.of_soft(presence.count()))
+        .named("presence")
+    )
+
+    native = constraint.to_native()
+
+    assert callable(native["group_key"])
+    assert native["group_collector"]["type"] == "indexed_presence"
+    assert callable(native["group_collector"]["index"])
+    assert callable(native["weight_callback"])
+
+
 def test_callback_weight_placeholder_uses_factory_score_family() -> None:
     constraint = (
         ConstraintFactory(score_family="hard_soft")
@@ -122,6 +165,25 @@ def test_unassigned_list_element_plan_uses_owner_list_variable_metadata() -> Non
     assert native["element_collection"] == "value_ids"
     assert callable(native["filters"][0])
     assert native["weight"] == {"family": "hard_soft", "levels": [1, 0]}
+
+
+def test_list_precedence_makespan_plan_uses_owner_list_variable_metadata() -> None:
+    constraint = (
+        ConstraintFactory(score_family="hard_soft")
+        .list_precedence_makespan(PrecedenceRoute, "values")
+        .named("precedence makespan")
+    )
+
+    native = constraint.to_native()
+
+    assert native["constraint_type"] == "list_precedence_makespan"
+    assert native["entity_type"] == "PrecedenceRoute"
+    assert native["variable_name"] == "values"
+    assert native["element_collection"] == "precedence_value_ids"
+    assert callable(native["element_owner"])
+    assert callable(native["precedence_duration"])
+    assert callable(native["precedence_successors"])
+    assert native["weight"] == {"family": "hard_soft", "levels": [0, 0]}
 
 
 @pytest.mark.parametrize(
@@ -173,6 +235,60 @@ def test_group_by_preserves_python_key_equality_not_repr() -> None:
     score = Solver.analyze(plan)
 
     assert score == {"family": "hard_soft", "levels": [0, 0]}
+    assert plan.score == score
+
+
+@planning_entity
+class PresenceShift:
+    nurse = planning_variable(value_range_provider="nurses", allows_unassigned=True)
+
+    def __init__(self, nurse: int | None, day: int) -> None:
+        self.nurse = nurse
+        self.day = day
+
+
+@constraint_provider
+def indexed_presence_constraints(factory: ConstraintFactory):
+    return [
+        factory.for_each(PresenceShift)
+        .filter(lambda shift: shift.nurse is not None)
+        .group_by(
+            lambda shift: shift.nurse,
+            indexed_presence(lambda shift: shift.day),
+        )
+        .penalize(
+            lambda _nurse, presence: HardSoftScore.of_soft(
+                sum(max(0, run.point_count() - 2) for run in presence.runs().runs())
+                + presence.complement_runs(0, 7).len()
+                + (1 if presence.any_in(5, 7) else 0)
+            )
+        )
+        .named("indexed presence")
+    ]
+
+
+@planning_solution(score=HardSoftScore, constraints=indexed_presence_constraints)
+class IndexedPresencePlan:
+    shifts: list[PresenceShift]
+
+    def __init__(self) -> None:
+        self.shifts = [
+            PresenceShift(1, 0),
+            PresenceShift(1, 1),
+            PresenceShift(1, 2),
+            PresenceShift(1, 5),
+            PresenceShift(None, 6),
+        ]
+        self.nurses = [0, 1]
+        self.score = None
+
+
+def test_indexed_presence_group_collector_scores_runs_and_ranges() -> None:
+    plan = IndexedPresencePlan()
+
+    score = Solver.analyze(plan)
+
+    assert score == {"family": "hard_soft", "levels": [0, -4]}
     assert plan.score == score
 
 

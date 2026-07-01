@@ -91,7 +91,7 @@ def test_solverforge_rust_dependency_base_is_manifest_owned() -> None:
     solverforge = cargo["package"]["metadata"]["solverforge"]
     dependencies = cargo["dependencies"]
 
-    assert solverforge["version"] == "0.15.1"
+    assert solverforge["version"] == "0.17.1"
     assert "git" not in solverforge
     assert "rev" not in solverforge
     assert "path" not in solverforge
@@ -127,10 +127,24 @@ def test_release_workflow_validates_only_tagged_pypi_publish() -> None:
     testpypi_job = workflow_job(workflow, "publish-testpypi")
     pypi_job = workflow_job(workflow, "publish-pypi")
 
+    assert "github.event.inputs.repository" not in workflow
+    assert "PYPI_API_TOKEN" not in workflow
+    assert "TEST_PYPI_API_TOKEN" not in workflow
+
     assert "Validate tag version" not in testpypi_job
+    assert "repository-url: https://test.pypi.org/legacy/" in testpypi_job
+    assert "id-token: write" in testpypi_job
+    assert "password:" not in testpypi_job
+
     assert "Validate tag version" in pypi_job
+    assert "workflow_dispatch" not in pypi_job
+    assert "github.event_name == 'push'" in pypi_job
+    assert "startsWith(github.ref, 'refs/tags/v')" in pypi_job
     assert "GITHUB_REF_NAME" in pypi_job
+    assert "GITHUB_EVENT_NAME" not in pypi_job
     assert "pyproject.toml" in pypi_job
+    assert "id-token: write" in pypi_job
+    assert "password:" not in pypi_job
     assert pypi_job.index("Validate tag version") < pypi_job.index("Publish to PyPI")
 
 
@@ -164,7 +178,7 @@ def test_latest_sdist_carries_locked_project_sources_when_present() -> None:
 def test_release_artifact_verifier_accepts_vendored_ui_sdist(
     tmp_path: Path,
 ) -> None:
-    version = "0.4.1"
+    version = str(load_toml(ROOT / "pyproject.toml")["project"]["version"])
     prefix = f"solverforge-{version}"
     sdist = tmp_path / f"{prefix}.tar.gz"
     write_tgz(

@@ -1,24 +1,28 @@
 # PyPI Release Plan
 
-This repository publishes the `solverforge` package on PyPI. The first release
-from this architecture is `0.4.1`.
+This repository publishes the `solverforge` package on PyPI. The next release
+from this checkout is `0.5.0`, carrying the SolverForge Rust dependency base
+forward to `0.17.1`.
 
 ## Current Index State
 
-As of 2026-05-31:
+As of 2026-06-30:
 
-- PyPI latest for `solverforge` is `0.3.0`, published on 2026-01-02.
+- PyPI latest for `solverforge` is `0.4.0`.
 - Published PyPI versions are `0.2.2`, `0.2.3`, `0.2.4`, `0.2.5`, `0.2.6`,
-  and `0.3.0`.
+  `0.3.0`, and `0.4.0`.
+- Git tag `v0.4.1` exists and its GitHub release workflow built and verified
+  artifacts, but the PyPI publish job is still waiting on the `pypi`
+  environment. Do not approve that old queued publish for the current checkout.
 - The old PyPI artifacts describe a different API and architecture, including
   `SolverFactory`, `PlanningVariable`, and Java-service requirements.
 - TestPyPI has no `solverforge` project visible through its JSON API.
 
 ## Course Of Action
 
-1. Publish a final `0.4.1`, not a prerelease. A prerelease would not become the
+1. Publish a final `0.5.0`, not a prerelease. A prerelease would not become the
    default `pip install solverforge` candidate.
-2. Keep `requires-python = ">=3.14"` for the new package. After `0.4.1` is
+2. Keep `requires-python = ">=3.14"` for the new package. After `0.5.0` is
    published and smoke-tested, yank the old `0.2.x` and `0.3.0` files so Python
    3.13 users do not silently install the incompatible old architecture.
 3. Build wheels and the source distribution from this repository, with the
@@ -28,7 +32,7 @@ As of 2026-05-31:
 5. Publish to PyPI from a tagged release through the reviewed `pypi`
    environment.
 6. After PyPI publication, verify `python3.14 -m pip install solverforge`
-   resolves to `0.4.1`.
+   resolves to `0.5.0`.
 
 ## File Responsibilities
 
@@ -81,10 +85,10 @@ local CI, builds the release source distribution and local wheel, runs
 ## Publish Sequence
 
 1. Run `make pre-release` locally.
-2. Trigger the release workflow manually with `repository=testpypi`.
+2. Trigger the release workflow manually to publish to TestPyPI.
 3. Create a clean Python 3.14 environment and install from TestPyPI.
-4. Tag this repository with `v0.4.1` and push the tag.
+4. Tag this repository with `v0.5.0` and push the tag.
 5. Approve the `pypi` environment in GitHub Actions.
 6. Verify PyPI JSON and a clean `pip install solverforge`.
 7. Yank PyPI `0.2.2` through `0.3.0` with the reason:
-   `Superseded by solverforge 0.4.1 dynamic Python binding architecture.`
+   `Superseded by solverforge 0.5.0 dynamic Python binding architecture.`

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Self
+from typing import Any, Self, cast
 
 from .score import score_to_native
 
@@ -24,12 +24,17 @@ class ConstraintPlan:
     right_entity_type: type[object] | None = None
     joiners: tuple[object, ...] = ()
     group_key: Callable[..., object] | None = None
+    group_collector: object | None = None
     balance_key: Callable[..., object] | None = None
+    precedence_duration: Callable[..., object] | None = None
+    precedence_successors: Callable[..., object] | None = None
+    element_owner: Callable[..., object] | None = None
 
     def to_native(self) -> dict[str, object]:
         plan: dict[str, object] = {
             "arity": self.arity,
             "entity_type": self.entity_type.__name__,
+            "score_family": self.score_family,
             "left_filters": list(self.left_filters),
             "right_filters": list(self.right_filters),
             "filters": list(self.filters),
@@ -51,8 +56,16 @@ class ConstraintPlan:
             plan["joiners"] = [joiner_to_native(joiner) for joiner in self.joiners]
         if self.group_key is not None:
             plan["group_key"] = self.group_key
+        if self.group_collector is not None:
+            plan["group_collector"] = collector_to_native(self.group_collector)
         if self.balance_key is not None:
             plan["balance_key"] = self.balance_key
+        if self.precedence_duration is not None:
+            plan["precedence_duration"] = self.precedence_duration
+        if self.precedence_successors is not None:
+            plan["precedence_successors"] = self.precedence_successors
+        if self.element_owner is not None:
+            plan["element_owner"] = self.element_owner
         if callable(self.weight):
             plan["weight"] = _callback_weight_placeholder(self.score_family)
             plan["weight_callback"] = self.weight
@@ -94,6 +107,43 @@ class UnassignedListElementConstraintStream:
             impact=self.impact or "penalty",
             weight=self.weight if self.weight is not None else 1,
             name=name,
+        )
+
+
+@dataclass
+class ListPrecedenceMakespanConstraintStream:
+    entity_type: type[object]
+    variable_name: str
+    score_family: str = "hard_soft"
+
+    def named(self, name: str) -> ConstraintPlan:
+        metadata = _list_variable_metadata(self.entity_type, self.variable_name)
+        return ConstraintPlan(
+            entity_type=self.entity_type,
+            score_family=self.score_family,
+            constraint_type="list_precedence_makespan",
+            variable_name=self.variable_name,
+            impact="penalty",
+            weight=_zero_weight(self.score_family),
+            name=name,
+            precedence_duration=_required_list_variable_callback(
+                metadata,
+                "precedence_duration",
+                self.entity_type,
+                self.variable_name,
+            ),
+            precedence_successors=_required_list_variable_callback(
+                metadata,
+                "precedence_successors",
+                self.entity_type,
+                self.variable_name,
+            ),
+            element_owner=_required_list_variable_callback(
+                metadata,
+                "element_owner",
+                self.entity_type,
+                self.variable_name,
+            ),
         )
 
 
@@ -152,12 +202,15 @@ class UniConstraintStream:
             joiners=list(joiners),
         )
 
-    def group_by(self, key: Callable[[object], object]) -> GroupedConstraintStream:
+    def group_by(
+        self, key: Callable[[object], object], collector: object | None = None
+    ) -> GroupedConstraintStream:
         return GroupedConstraintStream(
             entity_type=self.entity_type,
             score_family=self.score_family,
             pre_filters=list(self.filters),
             group_key=key,
+            group_collector=collector,
         )
 
     def balance(self, key: Callable[[object], object]) -> BalanceConstraintStream:
@@ -226,6 +279,7 @@ class GroupedConstraintStream:
     entity_type: type[object]
     score_family: str
     group_key: Callable[[object], object]
+    group_collector: object | None = None
     pre_filters: list[Callable[..., bool]] = field(default_factory=list)
     filters: list[Callable[..., bool]] = field(default_factory=list)
     impact: str | None = None
@@ -255,6 +309,7 @@ class GroupedConstraintStream:
             weight=self.weight if self.weight is not None else 1,
             name=name,
             group_key=self.group_key,
+            group_collector=self.group_collector,
         )
 
 
@@ -314,6 +369,17 @@ class ConstraintFactory:
             score_family=self.score_family,
         )
 
+    def list_precedence_makespan(
+        self,
+        owner_entity_type: type[object],
+        variable_name: str,
+    ) -> ListPrecedenceMakespanConstraintStream:
+        return ListPrecedenceMakespanConstraintStream(
+            entity_type=owner_entity_type,
+            variable_name=variable_name,
+            score_family=self.score_family,
+        )
+
     def join(self, *_args: Any, **_kwargs: Any) -> None:
         raise NotImplementedError(
             "dynamic join is implemented in the native stream planner"
@@ -348,9 +414,40 @@ def joiner_to_native(joiner: object) -> object:
     return joiner
 
 
+@dataclass(frozen=True)
+class IndexedPresenceCollector:
+    index: Callable[[object], int]
+
+    def to_native(self) -> dict[str, object]:
+        return {"type": "indexed_presence", "index": self.index}
+
+
+def indexed_presence(index: Callable[[object], int]) -> IndexedPresenceCollector:
+    return IndexedPresenceCollector(index=index)
+
+
+def collector_to_native(collector: object) -> object:
+    if hasattr(collector, "to_native"):
+        native = collector.to_native()
+        if isinstance(native, dict):
+            return native
+    return collector
+
+
 def _list_variable_element_collection(
     entity_type: type[object], variable_name: str
 ) -> str:
+    field_info = _list_variable_metadata(entity_type, variable_name)
+    collection = field_info.get("element_collection")
+    if isinstance(collection, str) and collection:
+        return collection
+    msg = f"{entity_type.__name__}.{variable_name} has no element collection"
+    raise TypeError(msg)
+
+
+def _list_variable_metadata(
+    entity_type: type[object], variable_name: str
+) -> dict[str, object]:
     metadata = getattr(entity_type, "__solverforge_entity__", None)
     if not isinstance(metadata, dict):
         msg = f"{entity_type.__name__} is not marked with @planning_entity"
@@ -362,11 +459,22 @@ def _list_variable_element_collection(
             field_info.get("name") == variable_name
             and field_info.get("kind") == "planning_list_variable"
         ):
-            collection = field_info.get("element_collection")
-            if isinstance(collection, str) and collection:
-                return collection
+            return field_info
     msg = f"{entity_type.__name__}.{variable_name} is not a planning list variable"
     raise TypeError(msg)
+
+
+def _required_list_variable_callback(
+    metadata: dict[str, object],
+    field_name: str,
+    entity_type: type[object],
+    variable_name: str,
+) -> Callable[..., object]:
+    value = metadata.get(field_name)
+    if not callable(value):
+        msg = f"{entity_type.__name__}.{variable_name} requires {field_name}"
+        raise TypeError(msg)
+    return cast(Callable[..., object], value)
 
 
 def _callback_weight_placeholder(score_family: str) -> dict[str, object]:
@@ -381,3 +489,17 @@ def _callback_weight_placeholder(score_family: str) -> dict[str, object]:
             return {"family": "hard_medium_soft", "levels": [1, 0, 0]}
         case _:
             return score_to_native(1)
+
+
+def _zero_weight(score_family: str) -> object:
+    match score_family:
+        case "soft":
+            return [0]
+        case "hard_soft":
+            return [0, 0]
+        case "hard_soft_decimal":
+            return [0, 0]
+        case "hard_medium_soft":
+            return [0, 0, 0]
+        case _:
+            return [0]

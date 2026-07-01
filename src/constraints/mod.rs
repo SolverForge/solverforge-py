@@ -1,5 +1,6 @@
 pub mod evaluate;
 pub mod incremental;
+pub mod list_precedence;
 pub mod matches;
 pub mod state;
 pub mod stream_plan;

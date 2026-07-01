@@ -10,6 +10,9 @@ use tokio::sync::mpsc;
 use super::events::{event_to_python, status_to_python};
 use crate::config::config_from_python;
 use crate::error::py_err;
+use crate::runtime::dynamic_runtime_model;
+use crate::runtime::dynamic_scalar_search::validate_dynamic_runtime_bindings;
+use crate::schema::build::solution_descriptor;
 use crate::schema::{parse_schema, validate::validate_dynamic_schema};
 use crate::score::DynamicScorePythonExt;
 use crate::state::marshal::{export_solution, import_solution};
@@ -50,7 +53,16 @@ impl NativeSolverManager {
     ) -> PyResult<usize> {
         let parsed = std::sync::Arc::new(parse_schema(schema)?);
         validate_dynamic_schema(&parsed)?;
-        let mut dynamic_solution = import_solution(solution.bind(py), parsed)?;
+        let descriptor = solution_descriptor(&parsed);
+        let model = dynamic_runtime_model(&parsed, &descriptor)
+            .map_err(|err| py_err(format!("failed to resolve dynamic runtime model: {err}")))?;
+        validate_dynamic_runtime_bindings(&self.config, &parsed, &model)?;
+        let copy_module = py.import("copy")?;
+        let working_solution = copy_module
+            .getattr("deepcopy")?
+            .call1((solution.bind(py),))?
+            .unbind();
+        let mut dynamic_solution = import_solution(working_solution.bind(py), parsed)?;
         dynamic_solution.solver_config = self.config.clone();
         let score_family = dynamic_solution.schema.score_family.clone();
         let (job_id, receiver) = self

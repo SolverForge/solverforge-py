@@ -5,6 +5,7 @@ from typing import Any, cast, get_args, get_origin, get_type_hints
 
 from .constraints import ConstraintFactory, ConstraintPlan
 from .errors import ModelValidationError
+from .groups import ScalarAssignmentGroup
 
 
 def _entity_metadata(entity_type: type[object]) -> dict[str, object]:
@@ -85,16 +86,32 @@ def _constraint_plans(
 
 def _scalar_groups(callbacks: object) -> list[dict[str, object]]:
     groups: list[dict[str, object]] = []
-    for callback in cast(Iterable[Callable[..., object]], callbacks or []):
+    for item in cast(Iterable[object], callbacks or []):
+        if isinstance(item, ScalarAssignmentGroup):
+            if not item.name:
+                msg = f"{item!r} has an invalid scalar group name"
+                raise ModelValidationError(msg)
+            if item.assignment_rule is not None and item.sequence_key is None:
+                msg = (
+                    f"{item!r} declares an assignment_rule but no sequence_key; "
+                    "assignment-rule groups need sequence metadata"
+                )
+                raise ModelValidationError(msg)
+            groups.append(item.to_native())
+            continue
+        callback = cast(Callable[..., object], item)
         metadata = getattr(callback, "__solverforge_scalar_group__", None)
         if not isinstance(metadata, dict):
-            msg = f"{callback!r} is not marked with @scalar_group"
+            msg = (
+                f"{callback!r} is not marked with @scalar_group and is not a "
+                "ScalarAssignmentGroup"
+            )
             raise ModelValidationError(msg)
         name = metadata.get("name")
         if not isinstance(name, str) or not name:
             msg = f"{callback!r} has an invalid scalar group name"
             raise ModelValidationError(msg)
-        groups.append({"name": name, "callback": callback})
+        groups.append({"kind": "callback", "name": name, "callback": callback})
     return groups
 
 

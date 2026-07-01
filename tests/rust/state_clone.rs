@@ -1,10 +1,12 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use pyo3::types::{PyAnyMethods, PyDict, PyDictMethods, PyList};
 use pyo3::Python;
 use solverforge_bridge::{DynamicModelBackend, EntityClassId, VariableId};
 use solverforge_py::schema::DynamicSchema;
 use solverforge_py::schema::{EntitySchema, VariableSchema};
+use solverforge_py::state::callback_view::PythonCallbackView;
 use solverforge_py::state::entity_table::{DynamicEntityRow, DynamicState};
 use solverforge_py::state::PyDynamicSolution;
 
@@ -19,17 +21,104 @@ fn dynamic_solution_clone_keeps_independent_state() {
             facts: Vec::new(),
             constraints: py.None(),
             scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
+            assignment_scalar_groups: Vec::new(),
             conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
             shadow_updates: Vec::new(),
         });
         let solution = PyDynamicSolution {
             schema,
             state: DynamicState::default(),
+            callback_view: PythonCallbackView::default(),
             score: None,
             solver_config: solverforge_config::SolverConfig::default(),
         };
         let cloned = solution.clone();
         assert_eq!(cloned.state.entities.len(), 0);
+    });
+}
+
+#[test]
+fn dynamic_solution_clone_does_not_share_python_callback_view() {
+    crate::initialize_python();
+    Python::attach(|py| {
+        let namespace = py
+            .import("types")
+            .unwrap()
+            .getattr("SimpleNamespace")
+            .unwrap();
+        let row_kwargs = PyDict::new(py);
+        row_kwargs
+            .set_item("__solverforge_visits", Vec::<usize>::new())
+            .unwrap();
+        let row_object = namespace.call((), Some(&row_kwargs)).unwrap();
+        let solution_kwargs = PyDict::new(py);
+        solution_kwargs
+            .set_item("vehicles", PyList::new(py, [row_object.clone()]).unwrap())
+            .unwrap();
+        let python_solution = namespace.call((), Some(&solution_kwargs)).unwrap();
+        let schema = Arc::new(DynamicSchema {
+            solution_type: "Plan".to_string(),
+            score_family: "hard_soft".to_string(),
+            entities: vec![EntitySchema {
+                type_name: "Vehicle".to_string(),
+                collection: "vehicles".to_string(),
+                variables: vec![VariableSchema {
+                    name: "visits".to_string(),
+                    storage_name: "__solverforge_visits".to_string(),
+                    kind: "planning_list_variable".to_string(),
+                    allows_unassigned: false,
+                    element_collection: Some("visits".to_string()),
+                    ..Default::default()
+                }],
+            }],
+            facts: Vec::new(),
+            constraints: py.None(),
+            scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
+            assignment_scalar_groups: Vec::new(),
+            conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
+            shadow_updates: Vec::new(),
+        });
+        let mut row = DynamicEntityRow::default();
+        row.lists.insert("visits".to_string(), Vec::new());
+        let solution = PyDynamicSolution {
+            schema,
+            state: DynamicState {
+                entities: vec![vec![row]],
+                ..DynamicState::default()
+            },
+            callback_view: PythonCallbackView::from_import(
+                python_solution.unbind(),
+                vec![vec![row_object.clone().unbind()]],
+                Vec::new(),
+            ),
+            score: None,
+            solver_config: solverforge_config::SolverConfig::default(),
+        };
+
+        let mut cloned = solution.clone();
+        cloned.state.entities[0][0]
+            .lists
+            .insert("visits".to_string(), vec![1, 2]);
+        let clone_row = cloned.entity_callback_view(py, 0, 0).unwrap();
+
+        assert_eq!(
+            clone_row
+                .bind(py)
+                .getattr("visits")
+                .unwrap()
+                .extract::<Vec<usize>>()
+                .unwrap(),
+            vec![1, 2]
+        );
+        assert_eq!(
+            row_object
+                .getattr("__solverforge_visits")
+                .unwrap()
+                .extract::<Vec<usize>>()
+                .unwrap(),
+            Vec::<usize>::new()
+        );
+        assert!(row_object.getattr("_solverforge_entity_index").is_err());
     });
 }
 
@@ -46,33 +135,25 @@ fn dynamic_solution_implements_upstream_backend_contract() {
                 variables: vec![
                     VariableSchema {
                         name: "depot".to_string(),
+                        storage_name: "__solverforge_depot".to_string(),
                         kind: "planning_variable".to_string(),
-                        value_range_provider: None,
                         allows_unassigned: true,
-                        element_collection: None,
-                        element_owner: None,
-                        route_depot: None,
-                        route_metric_class: None,
-                        route_distance: None,
-                        route_feasible: None,
+                        ..Default::default()
                     },
                     VariableSchema {
                         name: "visits".to_string(),
+                        storage_name: "__solverforge_visits".to_string(),
                         kind: "planning_list_variable".to_string(),
-                        value_range_provider: None,
                         allows_unassigned: false,
                         element_collection: Some("visits".to_string()),
-                        element_owner: None,
-                        route_depot: None,
-                        route_metric_class: None,
-                        route_distance: None,
-                        route_feasible: None,
+                        ..Default::default()
                     },
                 ],
             }],
             facts: Vec::new(),
             constraints: py.None(),
             scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
+            assignment_scalar_groups: Vec::new(),
             conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
             shadow_updates: Vec::new(),
         });
@@ -87,7 +168,9 @@ fn dynamic_solution_implements_upstream_backend_contract() {
                 entities: vec![vec![row]],
                 facts: Vec::new(),
                 list_elements: vec![elements],
+                ..DynamicState::default()
             },
+            callback_view: PythonCallbackView::default(),
             score: None,
             solver_config: solverforge_config::SolverConfig::default(),
         };

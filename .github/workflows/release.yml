@@ -1,16 +1,7 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      repository:
-        description: Publish target
-        required: true
-        default: testpypi
-        type: choice
-        options:
-          - testpypi
-          - pypi
+  workflow_dispatch: {}
   push:
     tags:
       - "v*.*.*"
@@ -145,11 +136,11 @@ jobs:
     needs: verify
     if: >-
       github.server_url == 'https://github.com' &&
-      github.event_name == 'workflow_dispatch' &&
-      github.event.inputs.repository == 'testpypi'
+      github.event_name == 'workflow_dispatch'
     environment: testpypi
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Download verified distributions
         uses: actions/download-artifact@v8
@@ -161,7 +152,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
 
   publish-pypi:
     name: publish to PyPI
@@ -169,13 +159,12 @@ jobs:
     needs: verify
     if: >-
       github.server_url == 'https://github.com' &&
-      (
-        (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.repository == 'pypi')
-      )
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v')
     environment: pypi
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Checkout solverforge-py
         uses: actions/checkout@v6
@@ -196,8 +185,6 @@ jobs:
 
           expected = f"v{version}"
           actual = os.environ["GITHUB_REF_NAME"]
-          if os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch":
-              raise SystemExit(0)
           if actual != expected:
               raise SystemExit(f"tag {actual} does not match package version {expected}")
           PY
@@ -210,5 +197,3 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}

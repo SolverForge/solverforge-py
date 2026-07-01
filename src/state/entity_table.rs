@@ -7,6 +7,7 @@ pub struct DynamicState {
     pub entities: Vec<Vec<DynamicEntityRow>>,
     pub facts: Vec<Vec<DynamicEntityRow>>,
     pub list_elements: Vec<BTreeMap<String, Vec<usize>>>,
+    pub solution_fields: BTreeMap<String, DynamicValue>,
 }
 
 impl DynamicState {

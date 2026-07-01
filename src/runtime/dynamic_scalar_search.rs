@@ -5,42 +5,55 @@ use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
-use solverforge_bridge::{DynamicListVariableSlot, DynamicScalarVariableSlot};
+use solverforge_bridge::{
+    DynamicListVariableSlot, DynamicModelBackend, DynamicScalarVariableSlot, EntityClassId,
+    VariableId,
+};
 use solverforge_config::{
-    AcceptorConfig, ConstructionHeuristicConfig, ConstructionHeuristicType,
-    DiversifiedLateAcceptanceConfig, LateAcceptanceConfig, LocalSearchConfig, LocalSearchType,
-    MoveSelectorConfig, PhaseConfig, SimulatedAnnealingConfig, SolverConfig, VariableTargetConfig,
+    AcceptedCountForagerConfig, AcceptorConfig, ConstructionHeuristicConfig,
+    ConstructionHeuristicType, DiversifiedLateAcceptanceConfig, ForagerConfig,
+    LateAcceptanceConfig, LocalSearchConfig, LocalSearchType, MoveSelectorConfig, PhaseConfig,
+    SimulatedAnnealingConfig, SolverConfig, VariableTargetConfig,
 };
 use solverforge_core::domain::{PlanningSolution, SolutionDescriptor};
 use solverforge_scoring::{ConstraintMetadata, ConstraintSet, Director, DirectorScoreState};
+use solverforge_solver::builder::selector::{GroupedScalarCursor, GroupedScalarSelector};
+use solverforge_solver::builder::{
+    ScalarAssignmentBinding, ScalarGroupBinding, ScalarGroupBindingKind, ScalarGroupLimits,
+    ScalarGroupMemberBinding, ValueSource,
+};
 use solverforge_solver::heuristic::r#move::{
-    KOptMove, ListChangeMove, ListMoveUnion, ListMultiSwapMove, ListPermuteMove, ListReverseMove,
-    ListRuinMove, ListSwapMove, MoveTabuSignature, PillarChangeMove, PillarSwapMove,
-    RuinRecreateMove, ScalarRecreateValueSource, SublistChangeMove, SublistSwapMove, SwapMove,
+    CompoundScalarMove, KOptMove, ListChangeMove, ListMoveUnion, ListMultiSwapMove,
+    ListPermuteMove, ListReverseMove, ListRuinMove, ListSwapMove, MoveTabuSignature,
+    PillarChangeMove, PillarSwapMove, RuinRecreateMove, ScalarMoveUnion, ScalarRecreateValueSource,
+    SublistChangeMove, SublistSwapMove, SwapMove,
 };
 use solverforge_solver::heuristic::selector::move_selector::{
-    ArenaMoveCursor, MoveCursor, MoveSelector, MoveStreamContext,
+    ArenaMoveCursor, CandidateId, CandidateStore, MoveCandidateRef, MoveCursor, MoveSelector,
+    MoveStreamContext,
 };
 use solverforge_solver::heuristic::MoveArena;
 use solverforge_solver::heuristic::{
-    ListChangeMoveSelector, ListReverseMoveSelector, ListSwapMoveSelector,
-    NearbyListChangeMoveSelector, NearbyListSwapMoveSelector, SublistChangeMoveSelector,
-    SublistSwapMoveSelector,
+    ListChangeMoveSelector, ListPermuteMoveSelector, ListPrecedenceMoveSelector,
+    ListReverseMoveSelector, ListSwapMoveSelector, NearbyListChangeMoveSelector,
+    NearbyListSwapMoveSelector, SublistChangeMoveSelector, SublistSwapMoveSelector,
 };
 use solverforge_solver::scope::ProgressCallback;
 use solverforge_solver::{
     AcceptorBuilder, AnyAcceptor, AnyForager, BestFitForager, ConstructionHeuristicPhase,
-    EntityPlacer, EntityReference, FirstFitForager, ForagerBuilder, FromSolutionEntitySelector,
-    IntraDistanceAdapter, KOptConfig, KOptMoveSelector, ListCheapestInsertionPhase,
-    ListClarkeWrightPhase, ListKOptPhase, ListRuinMoveSelector, ListVariableSlot, LocalSearchPhase,
-    LocalSearchStrategy, Move, NearbyKOptMoveSelector, Phase, PhaseSequence, Placement,
-    RuntimeModel,
+    EntityPlacer, EntityReference, FirstFitForager, FirstLastStepScoreImprovingForager,
+    ForagerBuilder, FromSolutionEntitySelector, IntraDistanceAdapter, KOptConfig, KOptMoveSelector,
+    ListCheapestInsertionPhase, ListClarkeWrightPhase, ListKOptPhase, ListRegretInsertionPhase,
+    ListRuinMoveSelector, ListVariableSlot, LocalSearchPhase, LocalSearchStrategy, Move,
+    NearbyKOptMoveSelector, Phase, PhaseSequence, Placement, RuntimeModel,
 };
 
 use crate::constraints::PyDynamicConstraintSet;
+use crate::intern::intern;
 use crate::runtime::distance::PyDistanceMeter;
 use crate::schema::{DynamicSchema, VariableSchema};
 use crate::score::DynamicScore;
+use crate::state::entity_table::DynamicEntityRow;
 use crate::state::PyDynamicSolution;
 use crate::value::DynamicValue;
 
@@ -63,6 +76,7 @@ type DynamicLocalSearch = LocalSearchPhase<
 >;
 
 const DEFAULT_LOCAL_SEARCH_LATE_ACCEPTANCE_SIZE: usize = 400;
+const DEFAULT_LOCAL_SEARCH_ACCEPTED_COUNT: usize = 256;
 const DEFAULT_SIMULATED_ANNEALING_DECAY_RATE: f64 = 0.999985;
 
 pub(crate) enum PyDynamicRuntimePhase {
@@ -72,6 +86,10 @@ pub(crate) enum PyDynamicRuntimePhase {
         slot: DynamicListVariableSlot<PyDynamicSolution>,
         phase: ListCheapestInsertionPhase<PyDynamicSolution, usize>,
     },
+    DynamicListRegretInsertion {
+        slot: DynamicListVariableSlot<PyDynamicSolution>,
+        phase: ListRegretInsertionPhase<PyDynamicSolution, usize>,
+    },
     DynamicListClarkeWright {
         slot: DynamicListVariableSlot<PyDynamicSolution>,
         phase: ListClarkeWrightPhase<PyDynamicSolution, usize>,
@@ -80,6 +98,7 @@ pub(crate) enum PyDynamicRuntimePhase {
         slot: DynamicListVariableSlot<PyDynamicSolution>,
         phase: ListKOptPhase<PyDynamicSolution, usize>,
     },
+    DynamicAssignmentConstruction(DynamicAssignmentConstructionPhase),
     DynamicLocalSearch(Box<DynamicLocalSearch>),
 }
 
@@ -98,12 +117,20 @@ impl Debug for PyDynamicRuntimePhase {
                 .debug_tuple("PyDynamicRuntimePhase::DynamicListCheapestInsertion")
                 .field(phase)
                 .finish(),
+            Self::DynamicListRegretInsertion { phase, .. } => f
+                .debug_tuple("PyDynamicRuntimePhase::DynamicListRegretInsertion")
+                .field(phase)
+                .finish(),
             Self::DynamicListClarkeWright { phase, .. } => f
                 .debug_tuple("PyDynamicRuntimePhase::DynamicListClarkeWright")
                 .field(phase)
                 .finish(),
             Self::DynamicListKOpt { phase, .. } => f
                 .debug_tuple("PyDynamicRuntimePhase::DynamicListKOpt")
+                .field(phase)
+                .finish(),
+            Self::DynamicAssignmentConstruction(phase) => f
+                .debug_tuple("PyDynamicRuntimePhase::DynamicAssignmentConstruction")
                 .field(phase)
                 .finish(),
             Self::DynamicLocalSearch(phase) => f
@@ -130,6 +157,10 @@ where
                 with_dynamic_list_slot(slot, || phase.solve(solver_scope));
                 publish_current_list_solution_if_not_worse(solver_scope);
             }
+            Self::DynamicListRegretInsertion { slot, phase } => {
+                with_dynamic_list_slot(slot, || phase.solve(solver_scope));
+                publish_current_list_solution_if_not_worse(solver_scope);
+            }
             Self::DynamicListClarkeWright { slot, phase } => {
                 with_dynamic_list_slot(slot, || phase.solve(solver_scope));
                 publish_current_list_solution_if_not_worse(solver_scope);
@@ -138,6 +169,7 @@ where
                 with_dynamic_list_slot(slot, || phase.solve(solver_scope));
                 publish_current_list_solution_if_not_worse(solver_scope);
             }
+            Self::DynamicAssignmentConstruction(phase) => phase.solve(solver_scope),
             Self::DynamicLocalSearch(phase) => phase.solve(solver_scope),
         }
     }
@@ -162,6 +194,13 @@ pub(crate) fn build_dynamic_phases(
     let mut phases = Vec::new();
     for phase in &config.phases {
         match phase {
+            PhaseConfig::ConstructionHeuristic(construction)
+                if can_bind_dynamic_assignment_construction(construction, model) =>
+            {
+                phases.push(PyDynamicRuntimePhase::DynamicAssignmentConstruction(
+                    build_dynamic_assignment_construction(construction, model),
+                ));
+            }
             PhaseConfig::ConstructionHeuristic(construction)
                 if can_bind_dynamic_scalar_construction(construction, model) =>
             {
@@ -191,13 +230,68 @@ pub(crate) fn build_dynamic_phases(
     PhaseSequence::new(phases)
 }
 
+pub(crate) fn validate_dynamic_runtime_bindings(
+    config: &SolverConfig,
+    schema: &DynamicSchema,
+    model: &RuntimeModel<PyDynamicSolution, usize, PyDistanceMeter, PyDistanceMeter>,
+) -> PyResult<()> {
+    let scalar_slots = all_dynamic_scalar_slots(model);
+    for phase in &config.phases {
+        if let PhaseConfig::ConstructionHeuristic(construction) = phase {
+            if matches!(
+                construction.construction_heuristic_type,
+                ConstructionHeuristicType::FirstFit | ConstructionHeuristicType::CheapestInsertion
+            ) {
+                if let Some(group_name) = construction.group_name.as_deref() {
+                    validate_dynamic_assignment_group(schema, group_name, &scalar_slots)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_dynamic_assignment_group(
+    schema: &DynamicSchema,
+    group_name: &str,
+    scalar_slots: &[DynamicScalarVariableSlot<PyDynamicSolution>],
+) -> PyResult<()> {
+    let group = schema.assignment_scalar_group(group_name).ok_or_else(|| {
+        crate::error::py_err(format!(
+            "dynamic assignment construction configured for `{group_name}`, but no matching assignment scalar group was declared"
+        ))
+    })?;
+    let slot = scalar_slots
+        .iter()
+        .find(|slot| {
+            slot.matches_target(
+                Some(group.entity_class.as_str()),
+                Some(group.variable_name.as_str()),
+            )
+        })
+        .ok_or_else(|| {
+            crate::error::py_err(format!(
+                "assignment scalar group `{}` targets unknown scalar variable `{}.{}`",
+                group.name, group.entity_class, group.variable_name
+            ))
+        })?;
+    if !slot.allows_unassigned {
+        return Err(crate::error::py_err(format!(
+            "assignment scalar group `{}` target `{}.{}` must allow unassigned values",
+            group.name, group.entity_class, group.variable_name
+        )));
+    }
+    Ok(())
+}
+
 fn can_bind_dynamic_list_construction(
     config: &ConstructionHeuristicConfig,
     model: &RuntimeModel<PyDynamicSolution, usize, PyDistanceMeter, PyDistanceMeter>,
     schema: &DynamicSchema,
 ) -> bool {
     match config.construction_heuristic_type {
-        ConstructionHeuristicType::ListCheapestInsertion => {
+        ConstructionHeuristicType::ListCheapestInsertion
+        | ConstructionHeuristicType::ListRegretInsertion => {
             !matching_list_slots(model, &config.target).is_empty()
         }
         ConstructionHeuristicType::ListClarkeWright | ConstructionHeuristicType::ListKOpt => {
@@ -213,22 +307,50 @@ fn build_dynamic_list_construction(
     schema: &DynamicSchema,
 ) -> Vec<PyDynamicRuntimePhase> {
     match config.construction_heuristic_type {
-        ConstructionHeuristicType::ListCheapestInsertion => {
+        ConstructionHeuristicType::ListCheapestInsertion
+        | ConstructionHeuristicType::ListRegretInsertion => {
             matching_list_slots(model, &config.target)
                 .into_iter()
-                .map(|slot| PyDynamicRuntimePhase::DynamicListCheapestInsertion {
-                    slot: slot.clone(),
-                    phase: ListCheapestInsertionPhase::new(
-                        dynamic_list_element_count,
-                        dynamic_list_assigned_elements,
-                        dynamic_list_entity_count,
-                        dynamic_list_len,
-                        dynamic_list_insert,
-                        dynamic_list_construction_remove,
-                        dynamic_list_index_to_element,
-                        slot.descriptor_index(),
-                    )
-                    .with_element_owner_fn(dynamic_element_owner_for_slot(&slot, schema)),
+                .map(|slot| match config.construction_heuristic_type {
+                    ConstructionHeuristicType::ListCheapestInsertion => {
+                        PyDynamicRuntimePhase::DynamicListCheapestInsertion {
+                            slot: slot.clone(),
+                            phase: ListCheapestInsertionPhase::new(
+                                dynamic_list_element_count,
+                                dynamic_list_assigned_elements,
+                                dynamic_list_entity_count,
+                                dynamic_list_len,
+                                dynamic_list_insert,
+                                dynamic_list_construction_remove,
+                                dynamic_list_index_to_element,
+                                slot.descriptor_index(),
+                            )
+                            .with_element_owner_fn(dynamic_element_owner_for_slot(&slot, schema))
+                            .with_element_order_key(
+                                dynamic_construction_element_order_for_slot(&slot, schema),
+                            ),
+                        }
+                    }
+                    ConstructionHeuristicType::ListRegretInsertion => {
+                        PyDynamicRuntimePhase::DynamicListRegretInsertion {
+                            slot: slot.clone(),
+                            phase: ListRegretInsertionPhase::new(
+                                dynamic_list_element_count,
+                                dynamic_list_assigned_elements,
+                                dynamic_list_entity_count,
+                                dynamic_list_len,
+                                dynamic_list_insert,
+                                dynamic_list_construction_remove,
+                                dynamic_list_index_to_element,
+                                slot.descriptor_index(),
+                            )
+                            .with_element_owner_fn(dynamic_element_owner_for_slot(&slot, schema))
+                            .with_element_order_key(
+                                dynamic_construction_element_order_for_slot(&slot, schema),
+                            ),
+                        }
+                    }
+                    _ => unreachable!("list construction branch checked"),
                 })
                 .collect()
         }
@@ -291,6 +413,17 @@ fn can_bind_dynamic_scalar_construction(
         })
 }
 
+fn can_bind_dynamic_assignment_construction(
+    config: &ConstructionHeuristicConfig,
+    model: &RuntimeModel<PyDynamicSolution, usize, PyDistanceMeter, PyDistanceMeter>,
+) -> bool {
+    matches!(
+        config.construction_heuristic_type,
+        ConstructionHeuristicType::FirstFit | ConstructionHeuristicType::CheapestInsertion
+    ) && config.group_name.is_some()
+        && model.dynamic_scalar_variables().next().is_some()
+}
+
 fn build_dynamic_scalar_construction(
     config: &ConstructionHeuristicConfig,
     model: &RuntimeModel<PyDynamicSolution, usize, PyDistanceMeter, PyDistanceMeter>,
@@ -302,14 +435,32 @@ fn build_dynamic_scalar_construction(
     match config.construction_heuristic_type {
         ConstructionHeuristicType::FirstFit => DynamicScalarConstructionPhase::FirstFit(
             ConstructionHeuristicPhase::new(placer, FirstFitForager::new())
+                .with_live_placement_refresh()
                 .with_construction_obligation(config.construction_obligation),
         ),
         ConstructionHeuristicType::CheapestInsertion => DynamicScalarConstructionPhase::BestFit(
             ConstructionHeuristicPhase::new(placer, BestFitForager::new())
+                .with_live_placement_refresh()
                 .with_construction_obligation(config.construction_obligation),
         ),
         _ => unreachable!("unsupported dynamic scalar construction heuristic"),
     }
+}
+
+fn build_dynamic_assignment_construction(
+    config: &ConstructionHeuristicConfig,
+    model: &RuntimeModel<PyDynamicSolution, usize, PyDistanceMeter, PyDistanceMeter>,
+) -> DynamicAssignmentConstructionPhase {
+    let placer = DynamicAssignmentConstructionPlacer {
+        group_name: config
+            .group_name
+            .clone()
+            .expect("dynamic assignment construction requires group_name"),
+        scalar_slots: model.dynamic_scalar_variables().cloned().collect(),
+        value_candidate_limit: config.value_candidate_limit,
+        max_moves_per_step: config.group_candidate_limit,
+    };
+    DynamicAssignmentConstructionPhase { placer }
 }
 
 fn can_bind_dynamic(
@@ -337,7 +488,7 @@ fn build_dynamic_local_search(
 ) -> DynamicLocalSearch {
     let selector = DynamicMoveSelector::new(config.move_selector.as_ref(), model, random_seed);
     let acceptor = build_dynamic_acceptor(config.acceptor.as_ref(), model, random_seed);
-    let forager = ForagerBuilder::build::<PyDynamicSolution>(config.forager.as_ref());
+    let forager = build_dynamic_forager(config.forager.as_ref(), model);
     let step_limit = config
         .termination
         .as_ref()
@@ -372,10 +523,59 @@ fn build_dynamic_acceptor(
     AcceptorBuilder::build_with_seed::<PyDynamicSolution>(&default_config, random_seed)
 }
 
+fn build_dynamic_forager(
+    config: Option<&ForagerConfig>,
+    model: &RuntimeModel<PyDynamicSolution, usize, PyDistanceMeter, PyDistanceMeter>,
+) -> AnyForager<PyDynamicSolution> {
+    if let Some(config) = config {
+        return ForagerBuilder::build::<PyDynamicSolution>(Some(config));
+    }
+
+    if model.has_scalar_groups() && !model.has_list_variables() {
+        return AnyForager::LastStepScoreImproving(FirstLastStepScoreImprovingForager::new());
+    }
+
+    if model.has_list_precedence_variables() {
+        return AnyForager::LastStepScoreImproving(FirstLastStepScoreImprovingForager::new());
+    }
+
+    let limit = if model.has_list_variables()
+        || model.has_nearby_scalar_change_variables()
+        || model.has_nearby_scalar_swap_variables()
+        || model.has_conflict_repairs()
+    {
+        DEFAULT_LOCAL_SEARCH_ACCEPTED_COUNT
+    } else {
+        1
+    };
+    ForagerBuilder::build::<PyDynamicSolution>(Some(&ForagerConfig::AcceptedCount(
+        AcceptedCountForagerConfig { limit: Some(limit) },
+    )))
+}
+
 #[derive(Clone)]
 pub(crate) struct DynamicScalarEntityPlacer {
     slots: Vec<DynamicScalarVariableSlot<PyDynamicSolution>>,
     value_candidate_limit: Option<usize>,
+}
+
+#[derive(Clone)]
+pub(crate) struct DynamicAssignmentConstructionPlacer {
+    group_name: String,
+    scalar_slots: Vec<DynamicScalarVariableSlot<PyDynamicSolution>>,
+    value_candidate_limit: Option<usize>,
+    max_moves_per_step: Option<usize>,
+}
+
+impl Debug for DynamicAssignmentConstructionPlacer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DynamicAssignmentConstructionPlacer")
+            .field("group_name", &self.group_name)
+            .field("scalar_slot_count", &self.scalar_slots.len())
+            .field("value_candidate_limit", &self.value_candidate_limit)
+            .field("max_moves_per_step", &self.max_moves_per_step)
+            .finish()
+    }
 }
 
 impl Debug for DynamicScalarEntityPlacer {
@@ -434,9 +634,340 @@ impl EntityPlacer<PyDynamicSolution, solverforge_solver::DynamicScalarChangeMove
         }
         placements
     }
+
+    fn get_next_placement<D, IsCompleted, ShouldStop>(
+        &self,
+        score_director: &D,
+        mut is_completed: IsCompleted,
+        mut should_stop: ShouldStop,
+    ) -> Option<(
+        Placement<
+            PyDynamicSolution,
+            solverforge_solver::DynamicScalarChangeMove<PyDynamicSolution>,
+        >,
+        u64,
+    )>
+    where
+        D: Director<PyDynamicSolution>,
+        IsCompleted: FnMut(
+            &Placement<
+                PyDynamicSolution,
+                solverforge_solver::DynamicScalarChangeMove<PyDynamicSolution>,
+            >,
+        ) -> bool,
+        ShouldStop: FnMut() -> bool,
+    {
+        let solution = score_director.working_solution();
+        let mut generated_moves = 0u64;
+        for slot in &self.slots {
+            let entity_count = slot.entity_count(solution);
+            for entity_index in 0..entity_count {
+                if should_stop() {
+                    return None;
+                }
+                if slot.current_value(solution, entity_index).is_some() {
+                    continue;
+                }
+                let Some(placement) = dynamic_scalar_placement(
+                    slot,
+                    solution,
+                    entity_index,
+                    self.value_candidate_limit,
+                ) else {
+                    continue;
+                };
+                generated_moves = generated_moves
+                    .saturating_add(u64::try_from(placement.moves.len()).unwrap_or(u64::MAX));
+                if is_completed(&placement) {
+                    continue;
+                }
+                return Some((placement, generated_moves));
+            }
+        }
+        None
+    }
+}
+
+fn dynamic_scalar_placement(
+    slot: &DynamicScalarVariableSlot<PyDynamicSolution>,
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    value_candidate_limit: Option<usize>,
+) -> Option<
+    Placement<PyDynamicSolution, solverforge_solver::DynamicScalarChangeMove<PyDynamicSolution>>,
+> {
+    let moves = slot
+        .candidate_values(solution, entity_index)
+        .iter()
+        .copied()
+        .take(value_candidate_limit.unwrap_or(usize::MAX))
+        .map(|value| {
+            solverforge_solver::DynamicScalarChangeMove::new(
+                slot.clone(),
+                entity_index,
+                Some(value),
+            )
+        })
+        .collect::<Vec<_>>();
+    if moves.is_empty() {
+        return None;
+    }
+    Some(
+        Placement::new(
+            EntityReference::new(slot.descriptor_index(), entity_index),
+            moves,
+        )
+        .with_keep_current_legal(slot.allows_unassigned),
+    )
+}
+
+impl EntityPlacer<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>
+    for DynamicAssignmentConstructionPlacer
+{
+    fn get_placements<D: Director<PyDynamicSolution>>(
+        &self,
+        score_director: &D,
+    ) -> Vec<Placement<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>> {
+        self.next_assignment_placement(score_director)
+            .map(|placement| vec![placement])
+            .unwrap_or_default()
+    }
+
+    fn get_next_placement<D, IsCompleted, ShouldStop>(
+        &self,
+        score_director: &D,
+        mut is_completed: IsCompleted,
+        mut should_stop: ShouldStop,
+    ) -> Option<(
+        Placement<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>,
+        u64,
+    )>
+    where
+        D: Director<PyDynamicSolution>,
+        IsCompleted:
+            FnMut(&Placement<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>) -> bool,
+        ShouldStop: FnMut() -> bool,
+    {
+        loop {
+            if should_stop() {
+                return None;
+            }
+            let placement = self.next_assignment_placement(score_director)?;
+            let generated_moves = u64::try_from(placement.moves.len()).unwrap_or(u64::MAX);
+            if is_completed(&placement) {
+                continue;
+            }
+            return Some((placement, generated_moves));
+        }
+    }
+}
+
+impl DynamicAssignmentConstructionPlacer {
+    fn assignment_unassigned_count<D: Director<PyDynamicSolution>>(
+        &self,
+        score_director: &D,
+    ) -> Option<u64> {
+        let solution = score_director.working_solution();
+        let group =
+            dynamic_assignment_group_binding(solution, &self.group_name, &self.scalar_slots)
+                .unwrap_or_else(|error| panic!("dynamic assignment group binding failed: {error}"));
+        let assignment = group.assignment().copied()?;
+        Some(with_dynamic_assignment_group(&self.group_name, || {
+            assignment.unassigned_count(solution)
+        }))
+    }
+
+    fn assignment_remaining_required_count<D: Director<PyDynamicSolution>>(
+        &self,
+        score_director: &D,
+    ) -> Option<u64> {
+        let solution = score_director.working_solution();
+        let group =
+            dynamic_assignment_group_binding(solution, &self.group_name, &self.scalar_slots)
+                .unwrap_or_else(|error| panic!("dynamic assignment group binding failed: {error}"));
+        let assignment = group.assignment().copied()?;
+        Some(with_dynamic_assignment_group(&self.group_name, || {
+            assignment.remaining_required_count(solution)
+        }))
+    }
+
+    fn next_assignment_move<D: Director<PyDynamicSolution>>(
+        &self,
+        score_director: &D,
+    ) -> Option<DynamicMove> {
+        let solution = score_director.working_solution();
+        let group =
+            dynamic_assignment_group_binding(solution, &self.group_name, &self.scalar_slots)
+                .unwrap_or_else(|error| panic!("dynamic assignment group binding failed: {error}"));
+        let assignment = group.assignment().copied()?;
+        let unassigned_before = self.assignment_unassigned_count(score_director)?;
+        if unassigned_before == 0 {
+            return None;
+        }
+        let required_before = self.assignment_remaining_required_count(score_director)?;
+        let baseline_score = (required_before == 0).then(|| {
+            let mut preview = DynamicPreviewDirector::from_director(score_director);
+            preview.calculate_score()
+        });
+        let selector = GroupedScalarSelector::new(
+            group,
+            self.value_candidate_limit,
+            self.max_moves_per_step,
+            false,
+        );
+        let mut cursor = with_dynamic_assignment_group(&self.group_name, || {
+            selector.open_cursor_with_context(score_director, MoveStreamContext::default())
+        });
+        while let Some(inner_id) =
+            with_dynamic_assignment_group(&self.group_name, || cursor.next_candidate())
+        {
+            let scalar_move =
+                with_dynamic_assignment_group(&self.group_name, || cursor.take_candidate(inner_id));
+            if required_before > 0
+                && !assignment_move_assigns_required_entity(
+                    self.group_name.as_str(),
+                    assignment,
+                    score_director,
+                    &scalar_move,
+                )
+            {
+                continue;
+            }
+            let mov = DynamicMove::Scalar(DynamicScalar::Native(scalar_move));
+            if !mov.is_doable(score_director) {
+                continue;
+            }
+            let mut preview = DynamicPreviewDirector::from_director(score_director);
+            let _undo = mov.do_move(&mut preview);
+            let required_after = self.assignment_remaining_required_count(&preview)?;
+            let unassigned_after = self.assignment_unassigned_count(&preview)?;
+            if required_before > 0
+                && required_after < required_before
+                && unassigned_after < unassigned_before
+            {
+                return Some(mov);
+            }
+            if required_before == 0
+                && unassigned_after < unassigned_before
+                && baseline_score.is_some_and(|score| preview.calculate_score() >= score)
+            {
+                return Some(mov);
+            }
+        }
+        None
+    }
+
+    fn next_assignment_placement<D: Director<PyDynamicSolution>>(
+        &self,
+        score_director: &D,
+    ) -> Option<Placement<PyDynamicSolution, CompoundScalarMove<PyDynamicSolution>>> {
+        let solution = score_director.working_solution();
+        let group =
+            dynamic_assignment_group_binding(solution, &self.group_name, &self.scalar_slots)
+                .unwrap_or_else(|error| panic!("dynamic assignment group binding failed: {error}"));
+        let assignment = group.assignment().copied()?;
+        let required_remaining = with_dynamic_assignment_group(&self.group_name, || {
+            assignment.remaining_required_count(solution)
+        });
+        if required_remaining == 0
+            && with_dynamic_assignment_group(&self.group_name, || {
+                assignment.unassigned_count(solution)
+            }) == 0
+        {
+            return None;
+        }
+        let selector = GroupedScalarSelector::new(
+            group,
+            self.value_candidate_limit,
+            self.max_moves_per_step,
+            false,
+        );
+        let mut cursor = with_dynamic_assignment_group(&self.group_name, || {
+            selector.open_cursor_with_context(score_director, MoveStreamContext::default())
+        });
+        let inner_id = with_dynamic_assignment_group(&self.group_name, || cursor.next_candidate())?;
+        let mov = match with_dynamic_assignment_group(&self.group_name, || {
+            cursor.take_candidate(inner_id)
+        }) {
+            ScalarMoveUnion::CompoundScalar(mov) => mov,
+            _ => return None,
+        };
+        let edit = mov.edits().first()?;
+        Some(Placement::new(
+            EntityReference::new(edit.descriptor_index, edit.entity_index),
+            vec![mov],
+        ))
+    }
+}
+
+fn assignment_move_assigns_required_entity<D: Director<PyDynamicSolution>>(
+    group_name: &str,
+    assignment: ScalarAssignmentBinding<PyDynamicSolution>,
+    score_director: &D,
+    scalar_move: &ScalarMoveUnion<PyDynamicSolution, usize>,
+) -> bool {
+    let solution = score_director.working_solution();
+    match scalar_move {
+        ScalarMoveUnion::CompoundScalar(mov) => mov.edits().iter().any(|edit| {
+            edit.descriptor_index == assignment.target.descriptor_index
+                && edit.to_value.is_some()
+                && assignment
+                    .current_value(solution, edit.entity_index)
+                    .is_none()
+                && with_dynamic_assignment_group(group_name, || {
+                    assignment.is_required(solution, edit.entity_index)
+                })
+        }),
+        _ => false,
+    }
 }
 
 type DynamicScalarConstructionMove = solverforge_solver::DynamicScalarChangeMove<PyDynamicSolution>;
+
+pub(crate) struct DynamicAssignmentConstructionPhase {
+    placer: DynamicAssignmentConstructionPlacer,
+}
+
+impl Debug for DynamicAssignmentConstructionPhase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DynamicAssignmentConstructionPhase")
+            .field("placer", &self.placer)
+            .finish()
+    }
+}
+
+impl<D, ProgressCb> Phase<PyDynamicSolution, D, ProgressCb> for DynamicAssignmentConstructionPhase
+where
+    D: Director<PyDynamicSolution>,
+    ProgressCb: ProgressCallback<PyDynamicSolution>,
+{
+    fn solve(
+        &mut self,
+        solver_scope: &mut solverforge_solver::SolverScope<'_, PyDynamicSolution, D, ProgressCb>,
+    ) {
+        loop {
+            if solver_scope.should_terminate() {
+                break;
+            }
+            let Some(mov) = self
+                .placer
+                .next_assignment_move(solver_scope.score_director())
+            else {
+                break;
+            };
+            solver_scope.mutate(|score_director| {
+                mov.do_move(score_director);
+            });
+            solver_scope.increment_step_count();
+        }
+        solver_scope.update_best_solution();
+    }
+
+    fn phase_type_name(&self) -> &'static str {
+        "DynamicAssignmentConstruction"
+    }
+}
+
 type DynamicScalarFirstFitConstruction = ConstructionHeuristicPhase<
     PyDynamicSolution,
     DynamicScalarConstructionMove,
@@ -737,6 +1268,7 @@ fn unique_dynamic_compound_entities(edits: &[DynamicCompoundScalarEdit]) -> Vec<
 
 #[derive(Clone)]
 pub enum DynamicScalar {
+    Native(ScalarMoveUnion<PyDynamicSolution, usize>),
     Change(solverforge_solver::DynamicScalarChangeMove<PyDynamicSolution>),
     Swap(DynamicScalarSwapMove),
     PillarChange {
@@ -759,6 +1291,7 @@ pub enum DynamicScalar {
 impl Debug for DynamicScalar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Native(mov) => Debug::fmt(mov, f),
             Self::Change(change) => Debug::fmt(change, f),
             Self::Swap(swap) => Debug::fmt(swap, f),
             Self::PillarChange { mov, .. } => Debug::fmt(mov, f),
@@ -772,6 +1305,7 @@ impl Debug for DynamicScalar {
 }
 
 pub enum DynamicScalarUndo {
+    Native(<ScalarMoveUnion<PyDynamicSolution, usize> as solverforge_solver::Move<PyDynamicSolution>>::Undo),
     Change(<solverforge_solver::DynamicScalarChangeMove<PyDynamicSolution> as solverforge_solver::Move<PyDynamicSolution>>::Undo),
     Swap(<DynamicScalarSwapMove as solverforge_solver::Move<PyDynamicSolution>>::Undo),
     PillarChange(<PillarChangeMove<PyDynamicSolution, usize> as solverforge_solver::Move<PyDynamicSolution>>::Undo),
@@ -787,6 +1321,7 @@ impl solverforge_solver::Move<PyDynamicSolution> for DynamicScalar {
 
     fn is_doable<D: Director<PyDynamicSolution>>(&self, score_director: &D) -> bool {
         match self {
+            Self::Native(mov) => mov.is_doable(score_director),
             Self::Change(change) => change.is_doable(score_director),
             Self::Swap(swap) => swap.is_doable(score_director),
             Self::PillarChange { slot, mov } => {
@@ -806,6 +1341,7 @@ impl solverforge_solver::Move<PyDynamicSolution> for DynamicScalar {
 
     fn do_move<D: Director<PyDynamicSolution>>(&self, score_director: &mut D) -> Self::Undo {
         match self {
+            Self::Native(mov) => DynamicScalarUndo::Native(mov.do_move(score_director)),
             Self::Change(change) => DynamicScalarUndo::Change(change.do_move(score_director)),
             Self::Swap(swap) => DynamicScalarUndo::Swap(swap.do_move(score_director)),
             Self::PillarChange { slot, mov } => with_dynamic_scalar_slot(slot, || {
@@ -829,6 +1365,9 @@ impl solverforge_solver::Move<PyDynamicSolution> for DynamicScalar {
 
     fn undo_move<D: Director<PyDynamicSolution>>(&self, score_director: &mut D, undo: Self::Undo) {
         match (self, undo) {
+            (Self::Native(mov), DynamicScalarUndo::Native(undo)) => {
+                mov.undo_move(score_director, undo);
+            }
             (Self::Change(change), DynamicScalarUndo::Change(undo)) => {
                 change.undo_move(score_director, undo);
             }
@@ -862,6 +1401,7 @@ impl solverforge_solver::Move<PyDynamicSolution> for DynamicScalar {
 
     fn descriptor_index(&self) -> usize {
         match self {
+            Self::Native(mov) => mov.descriptor_index(),
             Self::Change(change) => change.descriptor_index(),
             Self::Swap(swap) => swap.descriptor_index(),
             Self::PillarChange { mov, .. } => mov.descriptor_index(),
@@ -875,6 +1415,7 @@ impl solverforge_solver::Move<PyDynamicSolution> for DynamicScalar {
 
     fn entity_indices(&self) -> &[usize] {
         match self {
+            Self::Native(mov) => mov.entity_indices(),
             Self::Change(change) => change.entity_indices(),
             Self::Swap(swap) => swap.entity_indices(),
             Self::PillarChange { mov, .. } => mov.entity_indices(),
@@ -888,6 +1429,7 @@ impl solverforge_solver::Move<PyDynamicSolution> for DynamicScalar {
 
     fn variable_name(&self) -> &str {
         match self {
+            Self::Native(mov) => mov.variable_name(),
             Self::Change(change) => change.variable_name(),
             Self::Swap(swap) => swap.variable_name(),
             Self::PillarChange { mov, .. } => mov.variable_name(),
@@ -901,6 +1443,7 @@ impl solverforge_solver::Move<PyDynamicSolution> for DynamicScalar {
 
     fn telemetry_label(&self) -> &'static str {
         match self {
+            Self::Native(mov) => mov.telemetry_label(),
             Self::Change(change) => change.telemetry_label(),
             Self::Swap(swap) => swap.telemetry_label(),
             Self::PillarChange { .. } => "dynamic_scalar_pillar_change",
@@ -917,6 +1460,7 @@ impl solverforge_solver::Move<PyDynamicSolution> for DynamicScalar {
         score_director: &D,
     ) -> MoveTabuSignature {
         match self {
+            Self::Native(mov) => mov.tabu_signature(score_director),
             Self::Change(change) => change.tabu_signature(score_director),
             Self::Swap(swap) => swap.tabu_signature(score_director),
             Self::PillarChange { slot, mov } => {
@@ -936,6 +1480,7 @@ impl solverforge_solver::Move<PyDynamicSolution> for DynamicScalar {
 
     fn requires_hard_improvement(&self) -> bool {
         match self {
+            Self::Native(mov) => mov.requires_hard_improvement(),
             Self::Change(change) => change.requires_hard_improvement(),
             Self::Swap(swap) => swap.requires_hard_improvement(),
             Self::PillarChange { mov, .. } => mov.requires_hard_improvement(),
@@ -1272,6 +1817,8 @@ impl DynamicScalarSwapMove {
 thread_local! {
     static ACTIVE_DYNAMIC_SCALAR_SLOT: RefCell<Vec<DynamicScalarVariableSlot<PyDynamicSolution>>> =
         const { RefCell::new(Vec::new()) };
+    static ACTIVE_DYNAMIC_ASSIGNMENT_GROUP: RefCell<Vec<String>> =
+        const { RefCell::new(Vec::new()) };
 }
 
 fn with_dynamic_scalar_slot<R>(
@@ -1300,6 +1847,32 @@ fn active_dynamic_scalar_slot() -> DynamicScalarVariableSlot<PyDynamicSolution> 
     })
 }
 
+fn with_dynamic_assignment_group<T>(group_name: &str, f: impl FnOnce() -> T) -> T {
+    ACTIVE_DYNAMIC_ASSIGNMENT_GROUP.with(|stack| stack.borrow_mut().push(group_name.to_string()));
+    let result = catch_unwind(AssertUnwindSafe(f));
+    ACTIVE_DYNAMIC_ASSIGNMENT_GROUP.with(|stack| {
+        let popped = stack.borrow_mut().pop();
+        assert!(
+            popped.as_deref() == Some(group_name),
+            "dynamic assignment group stack imbalance"
+        );
+    });
+    match result {
+        Ok(value) => value,
+        Err(payload) => resume_unwind(payload),
+    }
+}
+
+fn active_dynamic_assignment_group() -> String {
+    ACTIVE_DYNAMIC_ASSIGNMENT_GROUP.with(|stack| {
+        stack
+            .borrow()
+            .last()
+            .cloned()
+            .expect("dynamic assignment hook used outside an active assignment group")
+    })
+}
+
 fn dynamic_scalar_get(
     solution: &PyDynamicSolution,
     entity_index: usize,
@@ -1323,6 +1896,139 @@ fn dynamic_scalar_candidate_values(
     _variable_index: usize,
 ) -> &[usize] {
     active_dynamic_scalar_slot().candidate_values(solution, entity_index)
+}
+
+const DYNAMIC_SCALAR_KEY_SHIFT: usize = 32;
+const DYNAMIC_SCALAR_KEY_MASK: usize = (1usize << DYNAMIC_SCALAR_KEY_SHIFT) - 1;
+
+fn dynamic_scalar_key(entity: EntityClassId, variable: VariableId) -> usize {
+    (entity.0 << DYNAMIC_SCALAR_KEY_SHIFT) | variable.0
+}
+
+fn decode_dynamic_scalar_key(key: usize) -> (EntityClassId, VariableId) {
+    (
+        EntityClassId(key >> DYNAMIC_SCALAR_KEY_SHIFT),
+        VariableId(key & DYNAMIC_SCALAR_KEY_MASK),
+    )
+}
+
+fn dynamic_scalar_get_by_key(
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    variable_key: usize,
+) -> Option<usize> {
+    let (entity, variable) = decode_dynamic_scalar_key(variable_key);
+    solution.get_scalar(entity, entity_index, variable)
+}
+
+fn dynamic_scalar_set_by_key(
+    solution: &mut PyDynamicSolution,
+    entity_index: usize,
+    variable_key: usize,
+    value: Option<usize>,
+) {
+    let (entity, variable) = decode_dynamic_scalar_key(variable_key);
+    solution.set_scalar(entity, entity_index, variable, value);
+}
+
+fn dynamic_scalar_candidate_values_by_key(
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    variable_key: usize,
+) -> &[usize] {
+    let (entity, variable) = decode_dynamic_scalar_key(variable_key);
+    solution.candidate_values(entity, entity_index, variable)
+}
+
+fn dynamic_assignment_entity_count(solution: &PyDynamicSolution) -> usize {
+    let group_name = active_dynamic_assignment_group();
+    let Some(group) = solution.schema.assignment_scalar_group(&group_name) else {
+        return 0;
+    };
+    solution
+        .schema
+        .entities
+        .iter()
+        .position(|entity| entity.type_name == group.entity_class)
+        .map(|entity_index| solution.entity_count(entity_index))
+        .unwrap_or(0)
+}
+
+fn dynamic_assignment_required_entity(solution: &PyDynamicSolution, entity_index: usize) -> bool {
+    Python::attach(|py| -> PyResult<Option<bool>> {
+        dynamic_assignment_bool_hook(py, solution, "required_entity", &[entity_index])
+    })
+    .unwrap_or_else(|error| panic!("dynamic assignment required_entity failed: {error}"))
+    .unwrap_or(false)
+}
+
+fn dynamic_assignment_capacity_key(
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    value: usize,
+) -> Option<usize> {
+    Python::attach(|py| -> PyResult<Option<usize>> {
+        dynamic_assignment_optional_usize_hook(py, solution, "capacity_key", &[entity_index, value])
+    })
+    .unwrap_or_else(|error| panic!("dynamic assignment capacity_key failed: {error}"))
+}
+
+fn dynamic_assignment_position_key(solution: &PyDynamicSolution, entity_index: usize) -> i64 {
+    Python::attach(|py| -> PyResult<Option<i64>> {
+        dynamic_assignment_optional_i64_hook(py, solution, "position_key", &[entity_index])
+    })
+    .unwrap_or_else(|error| panic!("dynamic assignment position_key failed: {error}"))
+    .unwrap_or(0)
+}
+
+fn dynamic_assignment_sequence_key(
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    value: usize,
+) -> Option<usize> {
+    Python::attach(|py| -> PyResult<Option<usize>> {
+        dynamic_assignment_optional_usize_hook(py, solution, "sequence_key", &[entity_index, value])
+    })
+    .unwrap_or_else(|error| panic!("dynamic assignment sequence_key failed: {error}"))
+}
+
+fn dynamic_assignment_entity_order(solution: &PyDynamicSolution, entity_index: usize) -> i64 {
+    Python::attach(|py| -> PyResult<Option<i64>> {
+        dynamic_assignment_optional_i64_hook(py, solution, "entity_order", &[entity_index])
+    })
+    .unwrap_or_else(|error| panic!("dynamic assignment entity_order failed: {error}"))
+    .unwrap_or(0)
+}
+
+fn dynamic_assignment_value_order(
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    value: usize,
+) -> i64 {
+    Python::attach(|py| -> PyResult<Option<i64>> {
+        dynamic_assignment_optional_i64_hook(py, solution, "value_order", &[entity_index, value])
+    })
+    .unwrap_or_else(|error| panic!("dynamic assignment value_order failed: {error}"))
+    .unwrap_or(0)
+}
+
+fn dynamic_assignment_rule(
+    solution: &PyDynamicSolution,
+    left_entity: usize,
+    left_value: usize,
+    right_entity: usize,
+    right_value: usize,
+) -> bool {
+    Python::attach(|py| -> PyResult<Option<bool>> {
+        dynamic_assignment_bool_hook(
+            py,
+            solution,
+            "assignment_rule",
+            &[left_entity, left_value, right_entity, right_value],
+        )
+    })
+    .unwrap_or_else(|error| panic!("dynamic assignment assignment_rule failed: {error}"))
+    .unwrap_or(true)
 }
 
 impl Debug for DynamicScalarSwapMove {
@@ -1457,6 +2163,37 @@ impl DynamicScalarMoveSelector {
             .flat_map(|selector| selector.moves(solution, context))
             .collect()
     }
+
+    fn assignment_cursor<D: Director<PyDynamicSolution>>(
+        &self,
+        score_director: &D,
+        context: MoveStreamContext,
+    ) -> Option<DynamicAssignmentMoveCursor> {
+        if self.selectors.len() != 1 {
+            return None;
+        }
+        let DynamicScalarSelector::Grouped {
+            group_name,
+            scalar_slots,
+            value_candidate_limit,
+            max_moves_per_step,
+            require_hard_improvement,
+        } = &self.selectors[0]
+        else {
+            return None;
+        };
+        let solution = score_director.working_solution();
+        solution.schema.assignment_scalar_group(group_name)?;
+        DynamicAssignmentMoveCursor::try_new(
+            score_director,
+            context,
+            group_name,
+            scalar_slots,
+            *value_candidate_limit,
+            *max_moves_per_step,
+            *require_hard_improvement,
+        )
+    }
 }
 
 impl Debug for DynamicScalarMoveSelector {
@@ -1492,7 +2229,7 @@ impl Debug for DynamicMoveSelector {
 
 impl MoveSelector<PyDynamicSolution, DynamicMove> for DynamicMoveSelector {
     type Cursor<'a>
-        = ArenaMoveCursor<PyDynamicSolution, DynamicMove>
+        = DynamicMoveCursor
     where
         Self: 'a;
 
@@ -1508,11 +2245,21 @@ impl MoveSelector<PyDynamicSolution, DynamicMove> for DynamicMoveSelector {
         score_director: &D,
         context: MoveStreamContext,
     ) -> Self::Cursor<'a> {
-        ArenaMoveCursor::from_moves(self.selector.moves(score_director, context))
+        if let Some(cursor) = self.selector.assignment_cursor(score_director, context) {
+            return DynamicMoveCursor::Assignment(cursor);
+        }
+        DynamicMoveCursor::Arena(ArenaMoveCursor::from_moves(
+            self.selector.moves(score_director, context),
+        ))
     }
 
     fn size<D: Director<PyDynamicSolution>>(&self, score_director: &D) -> usize {
-        self.open_cursor(score_director).count()
+        let mut cursor = self.open_cursor(score_director);
+        let mut count = 0;
+        while cursor.next_candidate().is_some() {
+            count += 1;
+        }
+        count
     }
 
     fn append_moves<D: Director<PyDynamicSolution>>(
@@ -1523,6 +2270,236 @@ impl MoveSelector<PyDynamicSolution, DynamicMove> for DynamicMoveSelector {
         let mut cursor = self.open_cursor(score_director);
         while let Some(id) = cursor.next_candidate() {
             arena.push(cursor.take_candidate(id));
+        }
+    }
+}
+
+#[derive(Debug)]
+struct DynamicAssignmentGroupConfig {
+    name: String,
+    entity_class: String,
+    variable_name: String,
+    has_required_entity: bool,
+    has_capacity_key: bool,
+    has_assignment_rule: bool,
+    has_position_key: bool,
+    has_sequence_key: bool,
+    has_entity_order: bool,
+    has_value_order: bool,
+    limits: ScalarGroupLimits,
+}
+
+fn dynamic_assignment_group_binding(
+    solution: &PyDynamicSolution,
+    group_name: &str,
+    scalar_slots: &[DynamicScalarVariableSlot<PyDynamicSolution>],
+) -> PyResult<ScalarGroupBinding<PyDynamicSolution>> {
+    let config = load_dynamic_assignment_group_config(solution, group_name)?;
+    if config.has_assignment_rule && !config.has_sequence_key {
+        return Err(crate::error::py_err(format!(
+            "assignment scalar group `{}` declares assignment_rule but no sequence_key",
+            config.name
+        )));
+    }
+    let slot = scalar_slots
+        .iter()
+        .find(|slot| {
+            slot.matches_target(
+                Some(config.entity_class.as_str()),
+                Some(config.variable_name.as_str()),
+            )
+        })
+        .ok_or_else(|| {
+            crate::error::py_err(format!(
+                "assignment scalar group `{}` targets unknown scalar variable `{}.{}`",
+                config.name, config.entity_class, config.variable_name
+            ))
+        })?;
+    if !slot.allows_unassigned {
+        return Err(crate::error::py_err(format!(
+            "assignment scalar group `{}` target `{}.{}` must allow unassigned values",
+            config.name, config.entity_class, config.variable_name
+        )));
+    }
+
+    let variable_key = dynamic_scalar_key(slot.entity, slot.variable);
+    let member = ScalarGroupMemberBinding {
+        descriptor_index: slot.descriptor_index(),
+        variable_index: variable_key,
+        entity_type_name: slot.entity_type_name,
+        variable_name: slot.variable_name,
+        getter: dynamic_scalar_get_by_key,
+        setter: dynamic_scalar_set_by_key,
+        value_source: ValueSource::EntitySlice {
+            values_for_entity: dynamic_scalar_candidate_values_by_key,
+        },
+        entity_count: dynamic_assignment_entity_count,
+        candidate_values: None,
+        allows_unassigned: slot.allows_unassigned,
+    };
+    let assignment = ScalarAssignmentBinding {
+        target: member,
+        required_entity: config
+            .has_required_entity
+            .then_some(dynamic_assignment_required_entity as fn(&PyDynamicSolution, usize) -> bool),
+        capacity_key: config.has_capacity_key.then_some(
+            dynamic_assignment_capacity_key
+                as fn(&PyDynamicSolution, usize, usize) -> Option<usize>,
+        ),
+        position_key: config
+            .has_position_key
+            .then_some(dynamic_assignment_position_key as fn(&PyDynamicSolution, usize) -> i64),
+        sequence_key: config.has_sequence_key.then_some(
+            dynamic_assignment_sequence_key
+                as fn(&PyDynamicSolution, usize, usize) -> Option<usize>,
+        ),
+        entity_order: config
+            .has_entity_order
+            .then_some(dynamic_assignment_entity_order as fn(&PyDynamicSolution, usize) -> i64),
+        value_order: config.has_value_order.then_some(
+            dynamic_assignment_value_order as fn(&PyDynamicSolution, usize, usize) -> i64,
+        ),
+        assignment_rule: config.has_assignment_rule.then_some(
+            dynamic_assignment_rule as fn(&PyDynamicSolution, usize, usize, usize, usize) -> bool,
+        ),
+    };
+    Ok(ScalarGroupBinding {
+        group_name: intern(config.name),
+        members: vec![member],
+        kind: ScalarGroupBindingKind::Assignment(assignment),
+        limits: config.limits,
+    })
+}
+
+fn load_dynamic_assignment_group_config(
+    solution: &PyDynamicSolution,
+    group_name: &str,
+) -> PyResult<DynamicAssignmentGroupConfig> {
+    let group = solution.schema.assignment_scalar_group(group_name).ok_or_else(|| {
+        crate::error::py_err(format!(
+            "grouped_scalar_move_selector configured for `{group_name}`, but no matching assignment scalar group was declared"
+        ))
+    })?;
+    Ok(DynamicAssignmentGroupConfig {
+        name: group.name.clone(),
+        entity_class: group.entity_class.clone(),
+        variable_name: group.variable_name.clone(),
+        has_required_entity: group.required_entity.is_some(),
+        has_capacity_key: group.capacity_key.is_some(),
+        has_assignment_rule: group.assignment_rule.is_some(),
+        has_position_key: group.position_key.is_some(),
+        has_sequence_key: group.sequence_key.is_some(),
+        has_entity_order: group.entity_order.is_some(),
+        has_value_order: group.value_order.is_some(),
+        limits: ScalarGroupLimits {
+            value_candidate_limit: group.limits.value_candidate_limit,
+            group_candidate_limit: group.limits.group_candidate_limit,
+            max_moves_per_step: group.limits.max_moves_per_step,
+            max_augmenting_depth: group.limits.max_augmenting_depth,
+            max_rematch_size: group.limits.max_rematch_size,
+        },
+    })
+}
+
+pub struct DynamicAssignmentMoveCursor {
+    group_name: String,
+    inner: GroupedScalarCursor<PyDynamicSolution>,
+    store: CandidateStore<PyDynamicSolution, DynamicMove>,
+    next_index: usize,
+}
+
+impl DynamicAssignmentMoveCursor {
+    #[allow(clippy::too_many_arguments)]
+    fn try_new<D: Director<PyDynamicSolution>>(
+        score_director: &D,
+        context: MoveStreamContext,
+        group_name: &str,
+        scalar_slots: &[DynamicScalarVariableSlot<PyDynamicSolution>],
+        value_candidate_limit: Option<usize>,
+        max_moves_per_step: Option<usize>,
+        require_hard_improvement: bool,
+    ) -> Option<Self> {
+        let solution = score_director.working_solution();
+        let group = dynamic_assignment_group_binding(solution, group_name, scalar_slots)
+            .unwrap_or_else(|error| panic!("dynamic assignment group binding failed: {error}"));
+        let selector = GroupedScalarSelector::new(
+            group,
+            value_candidate_limit,
+            max_moves_per_step,
+            require_hard_improvement,
+        );
+        let inner = with_dynamic_assignment_group(group_name, || {
+            selector.open_cursor_with_context(score_director, context)
+        });
+        Some(Self {
+            group_name: group_name.to_string(),
+            inner,
+            store: CandidateStore::new(),
+            next_index: 0,
+        })
+    }
+}
+
+impl MoveCursor<PyDynamicSolution, DynamicMove> for DynamicAssignmentMoveCursor {
+    fn next_candidate(&mut self) -> Option<CandidateId> {
+        if self.next_index < self.store.len() {
+            let id = CandidateId::new(self.next_index);
+            self.next_index += 1;
+            return Some(id);
+        }
+        let inner_id =
+            with_dynamic_assignment_group(&self.group_name, || self.inner.next_candidate())?;
+        let scalar_move =
+            with_dynamic_assignment_group(&self.group_name, || self.inner.take_candidate(inner_id));
+        let id = self
+            .store
+            .push(DynamicMove::Scalar(DynamicScalar::Native(scalar_move)));
+        self.next_index = id.index() + 1;
+        Some(id)
+    }
+
+    fn candidate(
+        &self,
+        id: CandidateId,
+    ) -> Option<MoveCandidateRef<'_, PyDynamicSolution, DynamicMove>> {
+        self.store.candidate(id)
+    }
+
+    fn take_candidate(&mut self, id: CandidateId) -> DynamicMove {
+        self.store.take_candidate(id)
+    }
+}
+
+// Keep the concrete assignment cursor inline: this is local-search cursor state
+// in the candidate loop, and the enum size tradeoff preserves zero-erasure flow.
+#[allow(clippy::large_enum_variant)]
+pub enum DynamicMoveCursor {
+    Arena(ArenaMoveCursor<PyDynamicSolution, DynamicMove>),
+    Assignment(DynamicAssignmentMoveCursor),
+}
+
+impl MoveCursor<PyDynamicSolution, DynamicMove> for DynamicMoveCursor {
+    fn next_candidate(&mut self) -> Option<CandidateId> {
+        match self {
+            Self::Arena(cursor) => cursor.next_candidate(),
+            Self::Assignment(cursor) => cursor.next_candidate(),
+        }
+    }
+
+    fn candidate(
+        &self,
+        id: CandidateId,
+    ) -> Option<MoveCandidateRef<'_, PyDynamicSolution, DynamicMove>> {
+        match self {
+            Self::Arena(cursor) => cursor.candidate(id),
+            Self::Assignment(cursor) => cursor.candidate(id),
+        }
+    }
+
+    fn take_candidate(&mut self, id: CandidateId) -> DynamicMove {
+        match self {
+            Self::Arena(cursor) => cursor.take_candidate(id),
+            Self::Assignment(cursor) => cursor.take_candidate(id),
         }
     }
 }
@@ -1606,11 +2583,17 @@ impl DynamicAnySelector {
         context: MoveStreamContext,
     ) -> Vec<DynamicMove> {
         match self {
-            Self::Scalar(selector) => selector
-                .moves(score_director.working_solution(), context)
-                .into_iter()
-                .map(DynamicMove::Scalar)
-                .collect(),
+            Self::Scalar(selector) => {
+                collect_dynamic_assignment_moves(selector, score_director, context).unwrap_or_else(
+                    || {
+                        selector
+                            .moves(score_director.working_solution(), context)
+                            .into_iter()
+                            .map(DynamicMove::Scalar)
+                            .collect()
+                    },
+                )
+            }
             Self::List(selector) => selector
                 .moves(score_director, context)
                 .into_iter()
@@ -1641,6 +2624,30 @@ impl DynamicAnySelector {
             ),
         }
     }
+
+    fn assignment_cursor<D: Director<PyDynamicSolution>>(
+        &self,
+        score_director: &D,
+        context: MoveStreamContext,
+    ) -> Option<DynamicAssignmentMoveCursor> {
+        match self {
+            Self::Scalar(selector) => selector.assignment_cursor(score_director, context),
+            Self::List(_) | Self::Union(_) | Self::Limited { .. } | Self::Cartesian { .. } => None,
+        }
+    }
+}
+
+fn collect_dynamic_assignment_moves<D: Director<PyDynamicSolution>>(
+    selector: &DynamicScalarMoveSelector,
+    score_director: &D,
+    context: MoveStreamContext,
+) -> Option<Vec<DynamicMove>> {
+    let mut cursor = selector.assignment_cursor(score_director, context)?;
+    let mut moves = Vec::new();
+    while let Some(id) = cursor.next_candidate() {
+        moves.push(cursor.take_candidate(id));
+    }
+    Some(moves)
 }
 
 fn cartesian_dynamic_moves<D: Director<PyDynamicSolution>>(
@@ -1805,11 +2812,22 @@ fn typed_dynamic_list_slot(
         None,
         None,
         None,
+        None,
+        None,
+        None,
     )
     .with_element_owner_fn(dynamic_element_owner_for_slot(
         slot,
         solution.schema.as_ref(),
     ))
+    .with_construction_element_order_key(dynamic_construction_element_order_for_slot(
+        slot,
+        solution.schema.as_ref(),
+    ))
+    .with_precedence_hooks(
+        dynamic_precedence_duration_for_slot(slot, solution.schema.as_ref()),
+        dynamic_precedence_successors_for_slot(slot, solution.schema.as_ref()),
+    )
 }
 
 fn dynamic_list_entity_count(solution: &PyDynamicSolution) -> usize {
@@ -1967,40 +2985,74 @@ fn dynamic_route_set(solution: &mut PyDynamicSolution, entity_index: usize, rout
 }
 
 fn dynamic_route_depot(solution: &PyDynamicSolution, entity_index: usize) -> usize {
+    let slot = active_dynamic_list_slot();
+    if let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) {
+        if let Some(field_name) = variable.route_depot_field.as_deref() {
+            if let Some(value) =
+                dynamic_route_usize_field(solution, &slot, entity_index, field_name)
+            {
+                return value;
+            }
+        }
+    }
     Python::attach(|py| -> PyResult<Option<usize>> {
-        let slot = active_dynamic_list_slot();
         let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
             return Ok(None);
         };
-        let Some(callback) = variable.route_depot.as_ref() else {
-            return Ok(None);
-        };
-        let snapshot = solution.to_python_snapshot(py)?;
-        callback
-            .bind(py)
-            .call1((snapshot, entity_index))?
-            .extract::<usize>()
-            .map(Some)
+        if let Some(callback) = variable.route_depot_entity.as_ref() {
+            let route = dynamic_route_entity_view(py, solution, &slot, entity_index)?;
+            return callback
+                .bind(py)
+                .call1((route,))?
+                .extract::<usize>()
+                .map(Some);
+        }
+        if let Some(callback) = variable.route_depot.as_ref() {
+            let snapshot = solution.to_python_callback_view(py)?;
+            return callback
+                .bind(py)
+                .call1((snapshot, entity_index))?
+                .extract::<usize>()
+                .map(Some);
+        }
+        Ok(None)
     })
     .unwrap_or_else(|error| panic!("dynamic route depot callback failed: {error}"))
     .unwrap_or_else(|| active_dynamic_list_slot().element_count(solution))
 }
 
 fn dynamic_route_metric_class(solution: &PyDynamicSolution, entity_index: usize) -> usize {
+    let slot = active_dynamic_list_slot();
+    if let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) {
+        if let Some(field_name) = variable.route_metric_class_field.as_deref() {
+            if let Some(value) =
+                dynamic_route_usize_field(solution, &slot, entity_index, field_name)
+            {
+                return value;
+            }
+        }
+    }
     Python::attach(|py| -> PyResult<Option<usize>> {
-        let slot = active_dynamic_list_slot();
         let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
             return Ok(None);
         };
-        let Some(callback) = variable.route_metric_class.as_ref() else {
-            return Ok(None);
-        };
-        let snapshot = solution.to_python_snapshot(py)?;
-        callback
-            .bind(py)
-            .call1((snapshot, entity_index))?
-            .extract::<usize>()
-            .map(Some)
+        if let Some(callback) = variable.route_metric_class_entity.as_ref() {
+            let route = dynamic_route_entity_view(py, solution, &slot, entity_index)?;
+            return callback
+                .bind(py)
+                .call1((route,))?
+                .extract::<usize>()
+                .map(Some);
+        }
+        if let Some(callback) = variable.route_metric_class.as_ref() {
+            let snapshot = solution.to_python_callback_view(py)?;
+            return callback
+                .bind(py)
+                .call1((snapshot, entity_index))?
+                .extract::<usize>()
+                .map(Some);
+        }
+        Ok(None)
     })
     .unwrap_or_else(|error| panic!("dynamic route metric class callback failed: {error}"))
     .unwrap_or(entity_index)
@@ -2012,20 +3064,37 @@ fn dynamic_route_distance(
     from: usize,
     to: usize,
 ) -> i64 {
+    let slot = active_dynamic_list_slot();
+    if let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) {
+        if let Some(field_name) = variable.route_distance_matrix_field.as_deref() {
+            if let Some(value) =
+                dynamic_route_matrix_distance(solution, &slot, entity_index, field_name, from, to)
+            {
+                return value;
+            }
+        }
+    }
     Python::attach(|py| -> PyResult<Option<i64>> {
-        let slot = active_dynamic_list_slot();
         let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
             return Ok(None);
         };
-        let Some(callback) = variable.route_distance.as_ref() else {
-            return Ok(None);
-        };
-        let snapshot = solution.to_python_snapshot(py)?;
-        callback
-            .bind(py)
-            .call1((snapshot, entity_index, from, to))?
-            .extract::<i64>()
-            .map(Some)
+        if let Some(callback) = variable.route_distance_entity.as_ref() {
+            let route = dynamic_route_entity_view(py, solution, &slot, entity_index)?;
+            return callback
+                .bind(py)
+                .call1((route, from, to))?
+                .extract::<i64>()
+                .map(Some);
+        }
+        if let Some(callback) = variable.route_distance.as_ref() {
+            let snapshot = solution.to_python_callback_view(py)?;
+            return callback
+                .bind(py)
+                .call1((snapshot, entity_index, from, to))?
+                .extract::<i64>()
+                .map(Some);
+        }
+        Ok(None)
     })
     .unwrap_or_else(|error| panic!("dynamic route distance callback failed: {error}"))
     .unwrap_or_else(|| from.abs_diff(to) as i64)
@@ -2036,23 +3105,137 @@ fn dynamic_route_feasible(
     entity_index: usize,
     route: &[usize],
 ) -> bool {
+    let slot = active_dynamic_list_slot();
+    if let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) {
+        if let Some(value) =
+            dynamic_route_capacity_feasible(solution, &slot, variable, entity_index, route)
+        {
+            return value;
+        }
+    }
     Python::attach(|py| -> PyResult<Option<bool>> {
-        let slot = active_dynamic_list_slot();
         let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
             return Ok(None);
         };
-        let Some(callback) = variable.route_feasible.as_ref() else {
-            return Ok(None);
-        };
-        let snapshot = solution.to_python_snapshot(py)?;
-        callback
-            .bind(py)
-            .call1((snapshot, entity_index, route.to_vec()))?
-            .extract::<bool>()
-            .map(Some)
+        if let Some(callback) = variable.route_feasible_entity.as_ref() {
+            let entity = dynamic_route_entity_view(py, solution, &slot, entity_index)?;
+            return callback
+                .bind(py)
+                .call1((entity, route.to_vec()))?
+                .extract::<bool>()
+                .map(Some);
+        }
+        if let Some(callback) = variable.route_feasible.as_ref() {
+            let snapshot = solution.to_python_callback_view(py)?;
+            return callback
+                .bind(py)
+                .call1((snapshot, entity_index, route.to_vec()))?
+                .extract::<bool>()
+                .map(Some);
+        }
+        Ok(None)
     })
     .unwrap_or_else(|error| panic!("dynamic route feasible callback failed: {error}"))
     .unwrap_or(true)
+}
+
+fn dynamic_route_row<'a>(
+    solution: &'a PyDynamicSolution,
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    entity_index: usize,
+) -> Option<&'a DynamicEntityRow> {
+    solution
+        .state
+        .entities
+        .get(slot.entity.0)
+        .and_then(|rows| rows.get(entity_index))
+}
+
+fn dynamic_route_usize_field(
+    solution: &PyDynamicSolution,
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    entity_index: usize,
+    field_name: &str,
+) -> Option<usize> {
+    dynamic_route_i64_field(solution, slot, entity_index, field_name)
+        .and_then(|value| usize::try_from(value).ok())
+}
+
+fn dynamic_route_i64_field(
+    solution: &PyDynamicSolution,
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    entity_index: usize,
+    field_name: &str,
+) -> Option<i64> {
+    let row = dynamic_route_row(solution, slot, entity_index)?;
+    dynamic_route_value(solution, row, field_name).and_then(dynamic_value_i64)
+}
+
+fn dynamic_route_matrix_distance(
+    solution: &PyDynamicSolution,
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    entity_index: usize,
+    field_name: &str,
+    from: usize,
+    to: usize,
+) -> Option<i64> {
+    let row = dynamic_route_row(solution, slot, entity_index)?;
+    dynamic_nested_list_i64(dynamic_route_value(solution, row, field_name)?, &[from, to])
+}
+
+fn dynamic_route_capacity_feasible(
+    solution: &PyDynamicSolution,
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    variable: &VariableSchema,
+    entity_index: usize,
+    route: &[usize],
+) -> Option<bool> {
+    let capacity_field = variable.route_capacity_field.as_deref()?;
+    let demand_field = variable.route_demand_field.as_deref()?;
+    let row = dynamic_route_row(solution, slot, entity_index)?;
+    let capacity = dynamic_route_i64_field(solution, slot, entity_index, capacity_field)?;
+    let demands = dynamic_route_value(solution, row, demand_field)?;
+    let mut load = 0_i64;
+    for element in route {
+        load = load.checked_add(dynamic_nested_list_i64(demands, &[*element])?)?;
+    }
+    Some(load <= capacity)
+}
+
+fn dynamic_route_value<'a>(
+    solution: &'a PyDynamicSolution,
+    row: &'a DynamicEntityRow,
+    field_name: &str,
+) -> Option<&'a DynamicValue> {
+    row.fields
+        .get(field_name)
+        .or_else(|| solution.state.solution_fields.get(field_name))
+}
+
+fn dynamic_nested_list_i64(value: &DynamicValue, path: &[usize]) -> Option<i64> {
+    if path.is_empty() {
+        return dynamic_value_i64(value);
+    }
+    let DynamicValue::List(values) = value else {
+        return None;
+    };
+    dynamic_nested_list_i64(values.get(path[0])?, &path[1..])
+}
+
+fn dynamic_value_i64(value: &DynamicValue) -> Option<i64> {
+    match value {
+        DynamicValue::Int(value) => Some(*value),
+        _ => None,
+    }
+}
+
+fn dynamic_route_entity_view(
+    py: Python<'_>,
+    solution: &PyDynamicSolution,
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    entity_index: usize,
+) -> PyResult<Py<PyAny>> {
+    solution.entity_callback_view(py, slot.entity.0, entity_index)
 }
 
 fn dynamic_element_owner(solution: &PyDynamicSolution, element: &usize) -> Option<usize> {
@@ -2064,7 +3247,7 @@ fn dynamic_element_owner(solution: &PyDynamicSolution, element: &usize) -> Optio
         let Some(callback) = variable.element_owner.as_ref() else {
             return Ok(None);
         };
-        let snapshot = solution.to_python_snapshot(py)?;
+        let snapshot = solution.to_python_callback_view(py)?;
         let result = callback.bind(py).call1((snapshot, *element))?;
         if result.is_none() {
             Ok(None)
@@ -2073,6 +3256,70 @@ fn dynamic_element_owner(solution: &PyDynamicSolution, element: &usize) -> Optio
         }
     })
     .unwrap_or_else(|error| panic!("dynamic element owner callback failed: {error}"))
+}
+
+fn dynamic_construction_element_order(solution: &PyDynamicSolution, element: usize) -> i64 {
+    Python::attach(|py| -> PyResult<Option<i64>> {
+        let slot = active_dynamic_list_slot();
+        let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.construction_element_order_key.as_ref() else {
+            return Ok(None);
+        };
+        let snapshot = solution.to_python_callback_view(py)?;
+        callback
+            .bind(py)
+            .call1((snapshot, element))?
+            .extract::<i64>()
+            .map(Some)
+    })
+    .unwrap_or_else(|error| panic!("dynamic list element order callback failed: {error}"))
+    .unwrap_or(0)
+}
+
+fn dynamic_precedence_duration(solution: &PyDynamicSolution, element: usize) -> usize {
+    Python::attach(|py| -> PyResult<Option<usize>> {
+        let slot = active_dynamic_list_slot();
+        let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.precedence_duration.as_ref() else {
+            return Ok(None);
+        };
+        let snapshot = solution.to_python_callback_view(py)?;
+        callback
+            .bind(py)
+            .call1((snapshot, element))?
+            .extract::<usize>()
+            .map(Some)
+    })
+    .unwrap_or_else(|error| panic!("dynamic precedence duration callback failed: {error}"))
+    .unwrap_or(0)
+}
+
+fn dynamic_precedence_successors(
+    solution: &PyDynamicSolution,
+    element: usize,
+    successors: &mut Vec<usize>,
+) {
+    Python::attach(|py| -> PyResult<()> {
+        let slot = active_dynamic_list_slot();
+        let Some(variable) = schema_variable_for_slot(&solution.schema, &slot) else {
+            return Ok(());
+        };
+        let Some(callback) = variable.precedence_successors.as_ref() else {
+            return Ok(());
+        };
+        let snapshot = solution.to_python_callback_view(py)?;
+        let result = callback.bind(py).call1((snapshot, element))?;
+        if result.is_none() {
+            return Ok(());
+        }
+        successors.extend(result.extract::<Vec<usize>>()?);
+        Ok(())
+    })
+    .unwrap_or_else(|error| panic!("dynamic precedence successors callback failed: {error}"));
 }
 
 #[derive(Clone)]
@@ -2515,6 +3762,26 @@ fn dynamic_list_leaf_moves<D: Director<PyDynamicSolution>>(
             Some(MoveSelectorConfig::ListReverseMoveSelector(_)) => {
                 append_list_reverse_moves(&mut moves, slot, &typed_slot, score_director, context);
             }
+            Some(MoveSelectorConfig::ListPermuteMoveSelector(config)) => {
+                append_list_permute_moves(
+                    &mut moves,
+                    slot,
+                    &typed_slot,
+                    config.min_window_size,
+                    config.max_window_size,
+                    score_director,
+                    context,
+                );
+            }
+            Some(MoveSelectorConfig::ListPrecedenceMoveSelector(_)) => {
+                append_list_precedence_moves(
+                    &mut moves,
+                    slot,
+                    &typed_slot,
+                    score_director,
+                    context,
+                );
+            }
             Some(MoveSelectorConfig::KOptMoveSelector(config)) => {
                 append_k_opt_moves(
                     &mut moves,
@@ -2653,6 +3920,73 @@ fn append_list_reverse_moves<D: Director<PyDynamicSolution>>(
         context,
         ListMoveUnion::ListReverse,
     );
+}
+
+fn append_list_permute_moves<D: Director<PyDynamicSolution>>(
+    out: &mut Vec<DynamicList>,
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    ctx: &DynamicTypedListSlot,
+    min_window_size: usize,
+    max_window_size: usize,
+    score_director: &D,
+    context: MoveStreamContext,
+) {
+    let selector = ListPermuteMoveSelector::new(
+        FromSolutionEntitySelector::new(ctx.descriptor_index),
+        min_window_size,
+        max_window_size,
+        ctx.list_len,
+        ctx.list_get,
+        ctx.sublist_remove,
+        ctx.sublist_insert,
+        ctx.variable_name,
+        ctx.descriptor_index,
+    )
+    .with_element_owner_fn(ctx.element_owner_fn);
+    collect_wrapped_list_moves(
+        out,
+        slot,
+        &selector,
+        score_director,
+        context,
+        ListMoveUnion::ListPermute,
+    );
+}
+
+fn append_list_precedence_moves<D: Director<PyDynamicSolution>>(
+    out: &mut Vec<DynamicList>,
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    ctx: &DynamicTypedListSlot,
+    score_director: &D,
+    context: MoveStreamContext,
+) {
+    let (Some(duration_fn), Some(successors_fn)) =
+        (ctx.precedence_duration_fn, ctx.precedence_successors_fn)
+    else {
+        return;
+    };
+    let selector = ListPrecedenceMoveSelector::new(
+        FromSolutionEntitySelector::new(ctx.descriptor_index),
+        ctx.element_count,
+        ctx.index_to_element,
+        duration_fn,
+        successors_fn,
+        ctx.entity_count,
+        ctx.list_len,
+        ctx.list_get,
+        ctx.list_remove,
+        ctx.list_insert,
+        ctx.list_set,
+        ctx.list_reverse,
+        ctx.ruin_remove,
+        ctx.ruin_insert,
+        ctx.element_owner_fn,
+        ctx.sublist_remove,
+        ctx.sublist_insert,
+        ctx.variable_name,
+        ctx.descriptor_index,
+    );
+    collect_wrapped_list_moves(out, slot, &selector, score_director, context, |mov| mov);
 }
 
 fn append_sublist_change_moves<D: Director<PyDynamicSolution>>(
@@ -2926,6 +4260,8 @@ fn list_selector_target(config: &MoveSelectorConfig) -> Option<&VariableTargetCo
         MoveSelectorConfig::SublistChangeMoveSelector(config) => Some(&config.target),
         MoveSelectorConfig::SublistSwapMoveSelector(config) => Some(&config.target),
         MoveSelectorConfig::ListReverseMoveSelector(config) => Some(&config.target),
+        MoveSelectorConfig::ListPermuteMoveSelector(config) => Some(&config.target),
+        MoveSelectorConfig::ListPrecedenceMoveSelector(config) => Some(&config.target),
         MoveSelectorConfig::KOptMoveSelector(config) => Some(&config.target),
         MoveSelectorConfig::ListRuinMoveSelector(config) => Some(&config.target),
         _ => None,
@@ -2981,8 +4317,11 @@ fn matching_route_list_slots(
     matching_list_slots(model, target)
         .into_iter()
         .filter(|slot| {
-            schema_variable_for_slot(schema, slot)
-                .is_some_and(|variable| variable.route_distance.is_some())
+            schema_variable_for_slot(schema, slot).is_some_and(|variable| {
+                variable.route_distance.is_some()
+                    || variable.route_distance_entity.is_some()
+                    || variable.route_distance_matrix_field.is_some()
+            })
         })
         .collect()
 }
@@ -2994,6 +4333,33 @@ fn dynamic_element_owner_for_slot(
     schema_variable_for_slot(schema, slot)
         .and_then(|variable| variable.element_owner.as_ref())
         .map(|_| dynamic_element_owner as fn(&PyDynamicSolution, &usize) -> Option<usize>)
+}
+
+fn dynamic_construction_element_order_for_slot(
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    schema: &DynamicSchema,
+) -> Option<fn(&PyDynamicSolution, usize) -> i64> {
+    schema_variable_for_slot(schema, slot)
+        .and_then(|variable| variable.construction_element_order_key.as_ref())
+        .map(|_| dynamic_construction_element_order as fn(&PyDynamicSolution, usize) -> i64)
+}
+
+fn dynamic_precedence_duration_for_slot(
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    schema: &DynamicSchema,
+) -> Option<fn(&PyDynamicSolution, usize) -> usize> {
+    schema_variable_for_slot(schema, slot)
+        .and_then(|variable| variable.precedence_duration.as_ref())
+        .map(|_| dynamic_precedence_duration as fn(&PyDynamicSolution, usize) -> usize)
+}
+
+fn dynamic_precedence_successors_for_slot(
+    slot: &DynamicListVariableSlot<PyDynamicSolution>,
+    schema: &DynamicSchema,
+) -> Option<fn(&PyDynamicSolution, usize, &mut Vec<usize>)> {
+    schema_variable_for_slot(schema, slot)
+        .and_then(|variable| variable.precedence_successors.as_ref())
+        .map(|_| dynamic_precedence_successors as fn(&PyDynamicSolution, usize, &mut Vec<usize>))
 }
 
 fn schema_variable_for_slot<'a>(
@@ -3437,14 +4803,16 @@ fn nearby_change_moves(
             slot,
         );
         let current = slot.current_value(solution, entity_index);
-        let mut candidates = slot
-            .candidate_values(solution, entity_index)
+        let mut candidates = nearby_value_candidates(solution, slot, entity_index)
             .iter()
             .copied()
             .take(limit)
             .enumerate()
             .filter_map(|(order, value)| {
                 if current == Some(value) {
+                    return None;
+                }
+                if !slot.value_is_legal(solution, entity_index, Some(value)) {
                     return None;
                 }
                 let distance = nearby_value_distance(solution, slot, entity_index, value, order);
@@ -3502,7 +4870,7 @@ fn swap_moves(
             slot,
         );
         let right_indices = if max_nearby.is_some() {
-            (0..count).collect::<Vec<_>>()
+            nearby_entity_candidates(solution, slot, left, count)
         } else {
             (0..count)
                 .map(|right_offset| {
@@ -3523,7 +4891,9 @@ fn swap_moves(
             .into_iter()
             .enumerate()
             .filter_map(|(order, right)| {
-                if right <= left {
+                if (max_nearby.is_some() && right == left)
+                    || (max_nearby.is_none() && right <= left)
+                {
                     return None;
                 }
                 if !can_swap(solution, slot, left, right) {
@@ -3747,7 +5117,7 @@ fn grouped_scalar_moves(
             let limits = dynamic_limits_dict(py)?;
             set_optional_usize(&limits, "value_candidate_limit", value_candidate_limit)?;
             set_optional_usize(&limits, "max_moves_per_step", max_moves_per_step)?;
-            let result = callback.call1((dynamic_solution_snapshot(py, solution)?, limits))?;
+            let result = callback.call1((solution.to_python_callback_view(py)?, limits))?;
             let parsed = parse_dynamic_compound_candidates(
                 py,
                 &result,
@@ -3845,7 +5215,7 @@ fn conflict_repair_moves(
             limits.set_item("max_repairs_per_match", max_repairs_per_match)?;
             limits.set_item("max_moves_per_step", max_moves_per_step)?;
             limits.set_item("include_soft_matches", include_soft_matches)?;
-            let result = callback.call1((dynamic_solution_snapshot(py, solution)?, limits))?;
+            let result = callback.call1((solution.to_python_callback_view(py)?, limits))?;
             let mut parsed = parse_dynamic_compound_candidates(
                 py,
                 &result,
@@ -4097,104 +5467,6 @@ fn parse_dynamic_compound_edit(
     })
 }
 
-fn dynamic_solution_snapshot(py: Python<'_>, solution: &PyDynamicSolution) -> PyResult<Py<PyAny>> {
-    let kwargs = PyDict::new(py);
-    for (entity_index, entity_schema) in solution.schema.entities.iter().enumerate() {
-        let mut rows = Vec::new();
-        if let Some(entity_rows) = solution.state.entities.get(entity_index) {
-            for (row_index, row) in entity_rows.iter().enumerate() {
-                rows.push(dynamic_row_snapshot(
-                    py,
-                    solution,
-                    entity_index,
-                    row_index,
-                    row,
-                    true,
-                )?);
-            }
-        }
-        kwargs.set_item(entity_schema.collection.as_str(), PyList::new(py, rows)?)?;
-    }
-    for (fact_index, fact_schema) in solution.schema.facts.iter().enumerate() {
-        let mut rows = Vec::new();
-        if let Some(fact_rows) = solution.state.facts.get(fact_index) {
-            for (row_index, row) in fact_rows.iter().enumerate() {
-                rows.push(dynamic_fact_snapshot(
-                    py,
-                    fact_schema.type_name.as_str(),
-                    row_index,
-                    row,
-                )?);
-            }
-        }
-        kwargs.set_item(fact_schema.collection.as_str(), PyList::new(py, rows)?)?;
-    }
-    let types = py.import("types")?;
-    let namespace = types.getattr("SimpleNamespace")?;
-    namespace.call((), Some(&kwargs)).map(Bound::unbind)
-}
-
-fn dynamic_row_snapshot(
-    py: Python<'_>,
-    solution: &PyDynamicSolution,
-    entity_index: usize,
-    row_index: usize,
-    row: &crate::state::entity_table::DynamicEntityRow,
-    include_variables: bool,
-) -> PyResult<Py<PyAny>> {
-    let kwargs = PyDict::new(py);
-    kwargs.set_item("_solverforge_entity_index", row_index)?;
-    kwargs.set_item("_solverforge_descriptor_index", entity_index)?;
-    kwargs.set_item(
-        "_solverforge_entity_class",
-        solution.schema.entities[entity_index].type_name.as_str(),
-    )?;
-    for (name, value) in &row.fields {
-        let value = value.to_python(py)?;
-        kwargs.set_item(name, value.bind(py))?;
-    }
-    if include_variables {
-        for variable in &solution.schema.entities[entity_index].variables {
-            match variable.kind.as_str() {
-                "planning_variable" => match row.scalars.get(variable.name.as_str()) {
-                    Some(Some(value)) => kwargs.set_item(variable.name.as_str(), *value)?,
-                    _ => kwargs.set_item(variable.name.as_str(), py.None())?,
-                },
-                "planning_list_variable" => {
-                    let values = row
-                        .lists
-                        .get(variable.name.as_str())
-                        .cloned()
-                        .unwrap_or_default();
-                    kwargs.set_item(variable.name.as_str(), values)?;
-                }
-                _ => {}
-            }
-        }
-    }
-    let types = py.import("types")?;
-    let namespace = types.getattr("SimpleNamespace")?;
-    namespace.call((), Some(&kwargs)).map(Bound::unbind)
-}
-
-fn dynamic_fact_snapshot(
-    py: Python<'_>,
-    fact_type_name: &str,
-    row_index: usize,
-    row: &crate::state::entity_table::DynamicEntityRow,
-) -> PyResult<Py<PyAny>> {
-    let kwargs = PyDict::new(py);
-    kwargs.set_item("_solverforge_fact_index", row_index)?;
-    kwargs.set_item("_solverforge_fact_class", fact_type_name)?;
-    for (name, value) in &row.fields {
-        let value = value.to_python(py)?;
-        kwargs.set_item(name, value.bind(py))?;
-    }
-    let types = py.import("types")?;
-    let namespace = types.getattr("SimpleNamespace")?;
-    namespace.call((), Some(&kwargs)).map(Bound::unbind)
-}
-
 fn validate_dynamic_conflict_constraints(
     py: Python<'_>,
     solution: &PyDynamicSolution,
@@ -4258,6 +5530,107 @@ fn set_optional_usize(dict: &Bound<'_, PyDict>, key: &str, value: Option<usize>)
     match value {
         Some(value) => dict.set_item(key, value),
         None => dict.set_item(key, dict.py().None()),
+    }
+}
+
+fn dynamic_assignment_bool_hook(
+    py: Python<'_>,
+    solution: &PyDynamicSolution,
+    hook_name: &str,
+    args: &[usize],
+) -> PyResult<Option<bool>> {
+    dynamic_assignment_extract_hook(py, solution, hook_name, args, |value| {
+        value.extract::<bool>()
+    })
+}
+
+fn dynamic_assignment_optional_usize_hook(
+    py: Python<'_>,
+    solution: &PyDynamicSolution,
+    hook_name: &str,
+    args: &[usize],
+) -> PyResult<Option<usize>> {
+    dynamic_assignment_extract_hook(py, solution, hook_name, args, |value| {
+        value.extract::<usize>()
+    })
+}
+
+fn dynamic_assignment_optional_i64_hook(
+    py: Python<'_>,
+    solution: &PyDynamicSolution,
+    hook_name: &str,
+    args: &[usize],
+) -> PyResult<Option<i64>> {
+    dynamic_assignment_extract_hook(py, solution, hook_name, args, |value| {
+        value.extract::<i64>()
+    })
+}
+
+fn dynamic_assignment_extract_hook<T>(
+    py: Python<'_>,
+    solution: &PyDynamicSolution,
+    hook_name: &str,
+    args: &[usize],
+    extract: impl FnOnce(&Bound<'_, PyAny>) -> PyResult<T>,
+) -> PyResult<Option<T>> {
+    let group_name = active_dynamic_assignment_group();
+    let group = solution.schema.assignment_scalar_group(&group_name).ok_or_else(|| {
+        crate::error::py_err(format!(
+            "grouped_scalar_move_selector configured for `{group_name}`, but no matching assignment scalar group was declared"
+        ))
+    })?;
+    let Some(callback) = dynamic_assignment_hook_callback(group, hook_name) else {
+        return Ok(None);
+    };
+    let snapshot = dynamic_assignment_callback_view(py, solution, group)?;
+    let result = call_assignment_callback(callback.bind(py), snapshot, args)?;
+    if result.is_none() {
+        Ok(None)
+    } else {
+        extract(&result).map(Some)
+    }
+}
+
+fn dynamic_assignment_hook_callback<'a>(
+    group: &'a crate::schema::types::AssignmentScalarGroupSchema,
+    hook_name: &str,
+) -> Option<&'a Py<PyAny>> {
+    match hook_name {
+        "required_entity" => group.required_entity.as_ref(),
+        "capacity_key" => group.capacity_key.as_ref(),
+        "assignment_rule" => group.assignment_rule.as_ref(),
+        "position_key" => group.position_key.as_ref(),
+        "sequence_key" => group.sequence_key.as_ref(),
+        "entity_order" => group.entity_order.as_ref(),
+        "value_order" => group.value_order.as_ref(),
+        _ => None,
+    }
+}
+
+fn dynamic_assignment_callback_view(
+    py: Python<'_>,
+    solution: &PyDynamicSolution,
+    group: &crate::schema::types::AssignmentScalarGroupSchema,
+) -> PyResult<Py<PyAny>> {
+    if group.sync_solution_before_callbacks {
+        return solution.to_python_callback_view(py);
+    }
+    solution.to_python_unsynced_callback_view(py)
+}
+
+fn call_assignment_callback<'py>(
+    callback: &Bound<'py, PyAny>,
+    snapshot: Py<PyAny>,
+    args: &[usize],
+) -> PyResult<Bound<'py, PyAny>> {
+    match args {
+        [a] => callback.call1((snapshot, *a)),
+        [a, b] => callback.call1((snapshot, *a, *b)),
+        [a, b, c, d] => callback.call1((snapshot, *a, *b, *c, *d)),
+        _ => Err(crate::error::py_err(format!(
+            "unsupported assignment hook arity {}",
+            args.len()
+        ))),
     }
 }
 
@@ -4420,6 +5793,68 @@ fn can_swap(
         && slot.value_is_legal(solution, right, left_value)
 }
 
+fn schema_variable_for_scalar_slot<'a>(
+    schema: &'a DynamicSchema,
+    slot: &DynamicScalarVariableSlot<PyDynamicSolution>,
+) -> Option<&'a VariableSchema> {
+    schema
+        .entities
+        .get(slot.entity.0)?
+        .variables
+        .get(slot.variable.0)
+}
+
+fn nearby_value_candidates(
+    solution: &PyDynamicSolution,
+    slot: &DynamicScalarVariableSlot<PyDynamicSolution>,
+    entity_index: usize,
+) -> Vec<usize> {
+    let values = Python::attach(|py| -> PyResult<Option<Vec<usize>>> {
+        let Some(variable) = schema_variable_for_scalar_slot(&solution.schema, slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.nearby_value_candidates.as_ref() else {
+            return Ok(None);
+        };
+        let entity = solution.entity_callback_view(py, slot.entity.0, entity_index)?;
+        let result = callback.bind(py).call1((entity,))?;
+        if result.is_none() {
+            Ok(None)
+        } else {
+            result.extract::<Vec<usize>>().map(Some)
+        }
+    })
+    .unwrap_or_else(|error| panic!("dynamic nearby value candidates callback failed: {error}"));
+
+    values.unwrap_or_else(|| slot.candidate_values(solution, entity_index).to_vec())
+}
+
+fn nearby_entity_candidates(
+    solution: &PyDynamicSolution,
+    slot: &DynamicScalarVariableSlot<PyDynamicSolution>,
+    entity_index: usize,
+    entity_count: usize,
+) -> Vec<usize> {
+    let candidates = Python::attach(|py| -> PyResult<Option<Vec<usize>>> {
+        let Some(variable) = schema_variable_for_scalar_slot(&solution.schema, slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.nearby_entity_candidates.as_ref() else {
+            return Ok(None);
+        };
+        let entity = solution.entity_callback_view(py, slot.entity.0, entity_index)?;
+        let result = callback.bind(py).call1((entity,))?;
+        if result.is_none() {
+            Ok(None)
+        } else {
+            result.extract::<Vec<usize>>().map(Some)
+        }
+    })
+    .unwrap_or_else(|error| panic!("dynamic nearby entity candidates callback failed: {error}"));
+
+    candidates.unwrap_or_else(|| (0..entity_count).collect())
+}
+
 fn nearby_value_distance(
     solution: &PyDynamicSolution,
     slot: &DynamicScalarVariableSlot<PyDynamicSolution>,
@@ -4427,14 +5862,24 @@ fn nearby_value_distance(
     value: usize,
     order: usize,
 ) -> f64 {
-    solution
-        .state
-        .entities
-        .get(slot.entity.0)
-        .and_then(|rows| rows.get(entity_index))
-        .and_then(|row| row.fields.get("employee_nearby_distance"))
-        .and_then(|value_distances| list_number(value_distances, value))
-        .unwrap_or(order as f64)
+    Python::attach(|py| -> PyResult<Option<f64>> {
+        let Some(variable) = schema_variable_for_scalar_slot(&solution.schema, slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.nearby_value_distance_meter.as_ref() else {
+            return Ok(None);
+        };
+        let entity = solution.entity_callback_view(py, slot.entity.0, entity_index)?;
+        let result = callback.bind(py).call1((entity, value))?;
+        if result.is_none() {
+            Ok(None)
+        } else {
+            result.extract::<f64>().map(Some)
+        }
+    })
+    .unwrap_or_else(|error| panic!("dynamic nearby value distance callback failed: {error}"))
+    .or_else(|| nearby_value_distance_field(solution, slot, entity_index, value))
+    .unwrap_or(order as f64)
 }
 
 fn nearby_entity_distance(
@@ -4444,58 +5889,115 @@ fn nearby_entity_distance(
     right: usize,
     order: usize,
 ) -> f64 {
-    let Some(rows) = solution.state.entities.get(slot.entity.0) else {
-        return order as f64;
-    };
-    let (Some(left_row), Some(right_row)) = (rows.get(left), rows.get(right)) else {
-        return order as f64;
-    };
-    let left_hub = string_field(left_row, "care_hub");
-    let right_hub = string_field(right_row, "care_hub");
-    let left_hour = string_field(left_row, "start").and_then(start_hour);
-    let right_hour = string_field(right_row, "start").and_then(start_hour);
-    match (left_hub, right_hub, left_hour, right_hour) {
-        (Some(left_hub), Some(right_hub), Some(left_hour), Some(right_hour)) => {
-            10.0 * care_hub_distance(left_hub, right_hub)
-                + start_band_distance(left_hour, right_hour)
+    Python::attach(|py| -> PyResult<Option<f64>> {
+        let Some(variable) = schema_variable_for_scalar_slot(&solution.schema, slot) else {
+            return Ok(None);
+        };
+        let Some(callback) = variable.nearby_entity_distance_meter.as_ref() else {
+            return Ok(None);
+        };
+        let left_entity = solution.entity_callback_view(py, slot.entity.0, left)?;
+        let right_entity = solution.entity_callback_view(py, slot.entity.0, right)?;
+        let result = callback.bind(py).call1((left_entity, right_entity))?;
+        if result.is_none() {
+            Ok(None)
+        } else {
+            result.extract::<f64>().map(Some)
         }
-        _ => order as f64,
-    }
+    })
+    .unwrap_or_else(|error| panic!("dynamic nearby entity distance callback failed: {error}"))
+    .or_else(|| nearby_entity_distance_fields(solution, slot, left, right))
+    .unwrap_or(order as f64)
+}
+
+fn nearby_value_distance_field(
+    solution: &PyDynamicSolution,
+    slot: &DynamicScalarVariableSlot<PyDynamicSolution>,
+    entity_index: usize,
+    value: usize,
+) -> Option<f64> {
+    let row = solution
+        .state
+        .entities
+        .get(slot.entity.0)?
+        .get(entity_index)?;
+    list_number(row.fields.get("employee_nearby_distance")?, value)
+}
+
+fn nearby_entity_distance_fields(
+    solution: &PyDynamicSolution,
+    slot: &DynamicScalarVariableSlot<PyDynamicSolution>,
+    left: usize,
+    right: usize,
+) -> Option<f64> {
+    let rows = solution.state.entities.get(slot.entity.0)?;
+    let left_row = rows.get(left)?;
+    let right_row = rows.get(right)?;
+    let hub_distance = care_hub_distance(
+        string_field(left_row, "care_hub")?,
+        string_field(right_row, "care_hub")?,
+    )?;
+    let start_distance = start_band_distance(start_hour(left_row)?, start_hour(right_row)?);
+    Some(10.0 * hub_distance + start_distance)
 }
 
 fn list_number(value: &DynamicValue, index: usize) -> Option<f64> {
     let DynamicValue::List(values) = value else {
         return None;
     };
-    match values.get(index)? {
+    dynamic_number(values.get(index)?)
+}
+
+fn dynamic_number(value: &DynamicValue) -> Option<f64> {
+    match value {
         DynamicValue::Int(value) => Some(*value as f64),
         DynamicValue::Float(value) => Some(*value),
         _ => None,
     }
 }
 
-fn string_field<'a>(
-    row: &'a crate::state::entity_table::DynamicEntityRow,
-    field: &str,
-) -> Option<&'a str> {
-    match row.fields.get(field)? {
+fn string_field<'a>(row: &'a DynamicEntityRow, field_name: &str) -> Option<&'a str> {
+    match row.fields.get(field_name)? {
         DynamicValue::String(value) => Some(value.as_str()),
         _ => None,
     }
 }
 
-fn start_hour(value: &str) -> Option<u32> {
-    value.split_once('T')?.1.get(0..2)?.parse::<u32>().ok()
+fn start_hour(row: &DynamicEntityRow) -> Option<i64> {
+    let start = string_field(row, "start")?;
+    let time = start
+        .split('T')
+        .nth(1)
+        .or_else(|| start.split(' ').nth(1))?;
+    let hour = time.split(':').next()?;
+    hour.parse().ok()
 }
 
-fn care_hub_distance(left: &str, right: &str) -> f64 {
-    let (lx, ly) = care_hub_position(left);
-    let (rx, ry) = care_hub_position(right);
-    ((lx - rx).abs() + (ly - ry).abs()) as f64
+fn start_band_distance(left_hour: i64, right_hour: i64) -> f64 {
+    let distance = (start_band_index(left_hour) - start_band_index(right_hour)).abs();
+    distance.min(2) as f64
 }
 
-fn care_hub_position(hub: &str) -> (i32, i32) {
-    match hub {
+fn start_band_index(hour: i64) -> i64 {
+    if hour <= 7 {
+        0
+    } else if hour <= 12 {
+        1
+    } else if hour <= 17 {
+        2
+    } else {
+        3
+    }
+}
+
+fn care_hub_distance(left: &str, right: &str) -> Option<f64> {
+    let (left_x, left_y) = care_hub_position(left)?;
+    let (right_x, right_y) = care_hub_position(right)?;
+    Some((left_x - right_x).abs() as f64 + (left_y - right_y).abs() as f64)
+}
+
+fn care_hub_position(hub: &str) -> Option<(i64, i64)> {
+    Some(match hub {
         "ambulatory" => (0, 0),
         "outpatient" => (1, 0),
         "pediatric_care" => (0, 1),
@@ -4503,21 +6005,7 @@ fn care_hub_position(hub: &str) -> (i32, i32) {
         "critical_care" => (2, 1),
         "surgery" => (2, 2),
         "radiology" => (3, 2),
-        _ => (4, 4),
-    }
-}
-
-fn start_band_distance(left_hour: u32, right_hour: u32) -> f64 {
-    start_band_index(left_hour)
-        .abs_diff(start_band_index(right_hour))
-        .min(2) as f64
-}
-
-fn start_band_index(hour: u32) -> u32 {
-    match hour {
-        0..=7 => 0,
-        8..=12 => 1,
-        13..=17 => 2,
-        _ => 3,
-    }
+        "unknown" => (4, 4),
+        _ => return None,
+    })
 }

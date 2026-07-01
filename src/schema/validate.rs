@@ -16,5 +16,16 @@ pub fn validate_dynamic_schema(schema: &DynamicSchema) -> Result<(), pyo3::PyErr
             )));
         }
     }
+    for group in &schema.assignment_scalar_groups {
+        if group.name.is_empty() {
+            return Err(py_err("assignment scalar group has an empty name"));
+        }
+        if group.assignment_rule.is_some() && group.sequence_key.is_none() {
+            return Err(py_err(format!(
+                "assignment scalar group `{}` declares assignment_rule but no sequence_key",
+                group.name
+            )));
+        }
+    }
     Ok(())
 }

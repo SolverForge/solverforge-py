@@ -8,6 +8,7 @@ use solverforge_core::domain::PlanningSolution;
 
 use crate::schema::DynamicSchema;
 use crate::score::DynamicScore;
+use crate::state::callback_view::PythonCallbackView;
 use crate::state::entity_table::DynamicState;
 use crate::value::DynamicValue;
 
@@ -15,6 +16,7 @@ use crate::value::DynamicValue;
 pub struct PyDynamicSolution {
     pub schema: Arc<DynamicSchema>,
     pub state: DynamicState,
+    pub callback_view: PythonCallbackView,
     pub score: Option<DynamicScore>,
     pub solver_config: SolverConfig,
 }
@@ -96,8 +98,8 @@ impl PyDynamicSolution {
                 .map(|update| update.post_update_listener.clone_ref(py))
                 .collect::<Vec<_>>();
             for callback in callbacks {
-                let snapshot = self.to_python_snapshot(py)?;
-                let result = callback.bind(py).call1((snapshot, entity_index))?;
+                let callback_view = self.to_python_callback_view(py)?;
+                let result = callback.bind(py).call1((callback_view, entity_index))?;
                 if result.is_none() {
                     continue;
                 }
@@ -124,6 +126,10 @@ impl PyDynamicSolution {
 
     pub fn to_python_snapshot(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let kwargs = PyDict::new(py);
+        for (name, value) in &self.state.solution_fields {
+            let value = value.to_python(py)?;
+            kwargs.set_item(name.as_str(), value.bind(py))?;
+        }
         for (entity_index, entity_schema) in self.schema.entities.iter().enumerate() {
             let mut rows = Vec::new();
             if let Some(entity_rows) = self.state.entities.get(entity_index) {
@@ -152,7 +158,25 @@ impl PyDynamicSolution {
         namespace.call((), Some(&kwargs)).map(Bound::unbind)
     }
 
-    fn entity_row_snapshot(
+    pub fn to_python_callback_view(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.callback_view.solution_view(py, self)
+    }
+
+    pub fn to_python_unsynced_callback_view(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.callback_view.unsynced_solution_view(py, self)
+    }
+
+    pub fn entity_callback_view(
+        &self,
+        py: Python<'_>,
+        entity_index: usize,
+        row_index: usize,
+    ) -> PyResult<Py<PyAny>> {
+        self.callback_view
+            .entity_view(py, self, entity_index, row_index)
+    }
+
+    pub(crate) fn entity_row_snapshot(
         &self,
         py: Python<'_>,
         entity_index: usize,
@@ -192,7 +216,7 @@ impl PyDynamicSolution {
         namespace.call((), Some(&kwargs)).map(Bound::unbind)
     }
 
-    fn fact_row_snapshot(
+    pub(crate) fn fact_row_snapshot(
         &self,
         py: Python<'_>,
         fact_type_name: &str,
@@ -217,6 +241,7 @@ impl Clone for PyDynamicSolution {
         Self {
             schema: Arc::clone(&self.schema),
             state: self.state.clone(),
+            callback_view: self.callback_view.clone(),
             score: self.score,
             solver_config: self.solver_config.clone(),
         }
