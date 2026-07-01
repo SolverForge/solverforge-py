@@ -90,6 +90,18 @@ impl PyIndexedPresence {
         *self.points.entry(point).or_insert(0) += 1;
         self.item_count += 1;
     }
+
+    fn remove(&mut self, point: i64) {
+        let Some(count) = self.points.get_mut(&point) else {
+            return;
+        };
+        if *count <= 1 {
+            self.points.remove(&point);
+        } else {
+            *count -= 1;
+        }
+        self.item_count = self.item_count.saturating_sub(1);
+    }
 }
 
 #[pymethods]
@@ -201,6 +213,7 @@ type JoinKeyCache = BTreeMap<(usize, u8), Vec<Py<PyAny>>>;
 type JoinIndexCache = BTreeMap<(usize, u8), Vec<(Py<PyAny>, Vec<usize>)>>;
 type BalanceCountCache = BTreeMap<usize, Vec<(Py<PyAny>, i64)>>;
 type ListUnassignedCountCache = BTreeMap<usize, BTreeMap<usize, i64>>;
+type GroupCache = BTreeMap<usize, Vec<DynamicGroup>>;
 type RetractedEntitySet = BTreeSet<(usize, usize)>;
 
 #[derive(Clone, Copy)]
@@ -220,6 +233,7 @@ struct ConstraintStateCaches<'a> {
     join_key: &'a mut JoinKeyCache,
     join_index: &'a mut JoinIndexCache,
     balance_count: &'a mut BalanceCountCache,
+    group: &'a mut GroupCache,
     list_unassigned_count: &'a mut ListUnassignedCountCache,
     list_precedence: &'a mut ListPrecedenceStateCache,
 }
@@ -253,6 +267,20 @@ struct GroupedPlanArgs<'a, 'py> {
     weighted: WeightedPlan<'a, 'py>,
 }
 
+struct GroupedDeltaArgs<'a, 'py> {
+    plan_index: usize,
+    row_sets: &'a [PythonRowSet],
+    entity_index: usize,
+    target_entity_index: usize,
+    filters: &'a Bound<'py, PyList>,
+    group_filters: &'a Bound<'py, PyList>,
+    group_key: &'a Bound<'py, PyAny>,
+    group_collector: Option<&'a Bound<'py, PyDict>>,
+    retracted_entities: &'a RetractedEntitySet,
+    weighted: WeightedPlan<'a, 'py>,
+    mode: DeltaMode,
+}
+
 enum GroupAggregate {
     Count(usize),
     IndexedPresence(PyIndexedPresence),
@@ -268,10 +296,6 @@ enum GroupActivity<'a> {
     All,
     BeforeDelta {
         retracted_entities: &'a RetractedEntitySet,
-    },
-    AfterDelta {
-        retracted_entities: &'a RetractedEntitySet,
-        target: DeltaTarget,
     },
 }
 
@@ -289,6 +313,7 @@ pub struct PyDynamicConstraintSet {
     join_key_cache: JoinKeyCache,
     join_index_cache: JoinIndexCache,
     balance_count_cache: BalanceCountCache,
+    group_cache: GroupCache,
     list_unassigned_count_cache: ListUnassignedCountCache,
     list_precedence_cache: ListPrecedenceStateCache,
     retracted_entities: RetractedEntitySet,
@@ -305,6 +330,7 @@ impl PyDynamicConstraintSet {
             join_key_cache: JoinKeyCache::new(),
             join_index_cache: JoinIndexCache::new(),
             balance_count_cache: BalanceCountCache::new(),
+            group_cache: GroupCache::new(),
             list_unassigned_count_cache: ListUnassignedCountCache::new(),
             list_precedence_cache: ListPrecedenceStateCache::new(),
             retracted_entities: RetractedEntitySet::new(),
@@ -338,6 +364,7 @@ impl PyDynamicConstraintSet {
             self.join_key_cache.clear();
             self.join_index_cache.clear();
             self.balance_count_cache.clear();
+            self.group_cache.clear();
             self.list_unassigned_count_cache.clear();
             self.list_precedence_cache.clear();
             self.retracted_entities.clear();
@@ -358,6 +385,7 @@ impl PyDynamicConstraintSet {
         self.join_key_cache.clear();
         self.join_index_cache.clear();
         self.balance_count_cache.clear();
+        self.group_cache.clear();
         self.list_unassigned_count_cache.clear();
         self.list_precedence_cache.clear();
         self.retracted_entities.clear();
@@ -420,6 +448,7 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
                 join_key: &mut self.join_key_cache,
                 join_index: &mut self.join_index_cache,
                 balance_count: &mut self.balance_count_cache,
+                group: &mut self.group_cache,
                 list_unassigned_count: &mut self.list_unassigned_count_cache,
                 list_precedence: &mut self.list_precedence_cache,
             };
@@ -455,6 +484,7 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
                 join_key: &mut self.join_key_cache,
                 join_index: &mut self.join_index_cache,
                 balance_count: &mut self.balance_count_cache,
+                group: &mut self.group_cache,
                 list_unassigned_count: &mut self.list_unassigned_count_cache,
                 list_precedence: &mut self.list_precedence_cache,
             };
@@ -802,46 +832,28 @@ fn evaluate_impacted_state_constraints(
             if entity_index == target.descriptor_index {
                 let group_filters = optional_list(py, plan, "group_filters")?;
                 let group_collector = optional_dict(plan, "group_collector")?;
-                let before = evaluate_grouped_plan(
+                total = evaluate_grouped_delta(
                     py,
-                    DynamicScore::zero(),
-                    GroupedPlanArgs {
+                    total,
+                    caches.group,
+                    GroupedDeltaArgs {
+                        plan_index,
                         row_sets,
                         entity_index,
+                        target_entity_index: target.entity_index,
                         filters,
                         group_filters: &group_filters,
                         group_key: &group_key,
                         group_collector: group_collector.as_ref(),
-                        activity: GroupActivity::BeforeDelta { retracted_entities },
+                        retracted_entities,
                         weighted: WeightedPlan {
                             impact: impact.as_str(),
                             weight,
                             weight_callback: weight_callback.as_ref(),
                         },
+                        mode: target.mode,
                     },
                 )?;
-                let after = evaluate_grouped_plan(
-                    py,
-                    DynamicScore::zero(),
-                    GroupedPlanArgs {
-                        row_sets,
-                        entity_index,
-                        filters,
-                        group_filters: &group_filters,
-                        group_key: &group_key,
-                        group_collector: group_collector.as_ref(),
-                        activity: GroupActivity::AfterDelta {
-                            retracted_entities,
-                            target,
-                        },
-                        weighted: WeightedPlan {
-                            impact: impact.as_str(),
-                            weight,
-                            weight_callback: weight_callback.as_ref(),
-                        },
-                    },
-                )?;
-                total = total + (after - before);
             }
             continue;
         }
@@ -1730,46 +1742,151 @@ fn evaluate_grouped_plan(
     mut total: DynamicScore,
     args: GroupedPlanArgs<'_, '_>,
 ) -> PyResult<DynamicScore> {
-    let rows = args
+    let groups = build_grouped_aggregates(
+        py,
+        args.row_sets,
+        args.entity_index,
+        args.filters,
+        args.group_key,
+        args.group_collector,
+        args.activity,
+    )?;
+    total = score_grouped_aggregates(py, total, &groups, args.group_filters, &args.weighted)?;
+    Ok(total)
+}
+
+fn evaluate_grouped_delta(
+    py: Python<'_>,
+    total: DynamicScore,
+    cache: &mut GroupCache,
+    args: GroupedDeltaArgs<'_, '_>,
+) -> PyResult<DynamicScore> {
+    if let std::collections::btree_map::Entry::Vacant(entry) = cache.entry(args.plan_index) {
+        let groups = build_grouped_aggregates(
+            py,
+            args.row_sets,
+            args.entity_index,
+            args.filters,
+            args.group_key,
+            args.group_collector,
+            GroupActivity::BeforeDelta {
+                retracted_entities: args.retracted_entities,
+            },
+        )?;
+        entry.insert(groups);
+    }
+
+    let groups = cache
+        .get_mut(&args.plan_index)
+        .expect("group cache must exist after initialization");
+    let Some(row) = args
         .row_sets
         .get(args.entity_index)
+        .and_then(|row_set| row_set.rows.get(args.target_entity_index))
+    else {
+        return Ok(total);
+    };
+    let entity = row.bind(py);
+    if !passes_unary_filters(args.filters, entity)? {
+        return Ok(total);
+    }
+    let key = args.group_key.call1((entity,))?;
+    if key.is_none() {
+        return Ok(total);
+    }
+
+    let before = score_group_for_key(py, groups, &key, args.group_filters, &args.weighted)?;
+    match args.mode {
+        DeltaMode::Insert => {
+            accumulate_group_value(py, groups, key.clone(), entity, args.group_collector)?;
+        }
+        DeltaMode::Retract => {
+            remove_group_value(py, groups, &key, entity, args.group_collector)?;
+        }
+    }
+    let after = score_group_for_key(py, groups, &key, args.group_filters, &args.weighted)?;
+    Ok(total + (after - before))
+}
+
+fn build_grouped_aggregates(
+    py: Python<'_>,
+    row_sets: &[PythonRowSet],
+    entity_index: usize,
+    filters: &Bound<'_, PyList>,
+    group_key: &Bound<'_, PyAny>,
+    group_collector: Option<&Bound<'_, PyDict>>,
+    activity: GroupActivity<'_>,
+) -> PyResult<Vec<DynamicGroup>> {
+    let rows = row_sets
+        .get(entity_index)
         .map(|row_set| &row_set.rows)
         .ok_or_else(|| {
             py_err(format!(
-                "missing state rows for entity index `{}`",
-                args.entity_index
+                "missing state rows for entity index `{entity_index}`"
             ))
         })?;
     let mut groups = Vec::<DynamicGroup>::new();
     for (row_index, entity) in rows.iter().enumerate() {
-        if !grouped_row_active(args.activity, args.entity_index, row_index) {
+        if !grouped_row_active(activity, entity_index, row_index) {
             continue;
         }
         let entity = entity.bind(py);
-        if !passes_unary_filters(args.filters, entity)? {
+        if !passes_unary_filters(filters, entity)? {
             continue;
         }
-        let key = args.group_key.call1((entity,))?;
+        let key = group_key.call1((entity,))?;
         if key.is_none() {
             continue;
         }
-        accumulate_group_value(py, &mut groups, key, entity, args.group_collector)?;
+        accumulate_group_value(py, &mut groups, key, entity, group_collector)?;
     }
+    Ok(groups)
+}
+
+fn score_grouped_aggregates(
+    py: Python<'_>,
+    mut total: DynamicScore,
+    groups: &[DynamicGroup],
+    group_filters: &Bound<'_, PyList>,
+    weighted: &WeightedPlan<'_, '_>,
+) -> PyResult<DynamicScore> {
     for group in groups {
-        let key = group.key.bind(py);
-        if !passes_group_filters(py, args.group_filters, key, &group.aggregate)? {
-            continue;
-        }
-        let score = match_score_group(
-            py,
-            args.weighted.weight,
-            args.weighted.weight_callback,
-            key,
-            &group.aggregate,
-        )?;
-        total = apply_impact(total, args.weighted.impact, score);
+        total = total + score_group(py, group, group_filters, weighted)?;
     }
     Ok(total)
+}
+
+fn score_group_for_key(
+    py: Python<'_>,
+    groups: &[DynamicGroup],
+    key: &Bound<'_, PyAny>,
+    group_filters: &Bound<'_, PyList>,
+    weighted: &WeightedPlan<'_, '_>,
+) -> PyResult<DynamicScore> {
+    let Some(index) = find_group_index(py, groups, key)? else {
+        return Ok(DynamicScore::zero());
+    };
+    score_group(py, &groups[index], group_filters, weighted)
+}
+
+fn score_group(
+    py: Python<'_>,
+    group: &DynamicGroup,
+    group_filters: &Bound<'_, PyList>,
+    weighted: &WeightedPlan<'_, '_>,
+) -> PyResult<DynamicScore> {
+    let key = group.key.bind(py);
+    if !passes_group_filters(py, group_filters, key, &group.aggregate)? {
+        return Ok(DynamicScore::zero());
+    }
+    let score = match_score_group(
+        py,
+        weighted.weight,
+        weighted.weight_callback,
+        key,
+        &group.aggregate,
+    )?;
+    Ok(apply_impact(DynamicScore::zero(), weighted.impact, score))
 }
 
 fn accumulate_group_value(
@@ -1798,6 +1915,32 @@ fn accumulate_group_value(
     increment_group_presence(py, groups, key, index.extract::<i64>()?)
 }
 
+fn remove_group_value(
+    py: Python<'_>,
+    groups: &mut Vec<DynamicGroup>,
+    key: &Bound<'_, PyAny>,
+    entity: &Bound<'_, PyAny>,
+    collector: Option<&Bound<'_, PyDict>>,
+) -> PyResult<()> {
+    let Some(collector) = collector else {
+        return decrement_group_count(py, groups, key);
+    };
+    let collector_type = required_plan_string(collector, "type")?;
+    if collector_type != "indexed_presence" {
+        return Err(py_err(format!(
+            "unsupported dynamic group collector `{collector_type}`"
+        )));
+    }
+    let index_callback = collector
+        .get_item("index")?
+        .ok_or_else(|| py_err("indexed_presence collector missing `index`"))?;
+    let index = index_callback.call1((entity,))?;
+    if index.is_none() {
+        return Ok(());
+    }
+    decrement_group_presence(py, groups, key, index.extract::<i64>()?)
+}
+
 fn grouped_row_active(
     activity: GroupActivity<'_>,
     descriptor_index: usize,
@@ -1807,18 +1950,6 @@ fn grouped_row_active(
         GroupActivity::All => true,
         GroupActivity::BeforeDelta { retracted_entities } => {
             !retracted_entities.contains(&(descriptor_index, row_index))
-        }
-        GroupActivity::AfterDelta {
-            retracted_entities,
-            target,
-        } => {
-            let is_retracted = retracted_entities.contains(&(descriptor_index, row_index));
-            let is_target =
-                descriptor_index == target.descriptor_index && row_index == target.entity_index;
-            match target.mode {
-                DeltaMode::Insert => !is_retracted || is_target,
-                DeltaMode::Retract => !(is_retracted || is_target),
-            }
         }
     }
 }
@@ -1864,6 +1995,52 @@ fn increment_group_presence(
             key: key.unbind(),
             aggregate: GroupAggregate::IndexedPresence(presence),
         });
+    }
+    Ok(())
+}
+
+fn decrement_group_count(
+    py: Python<'_>,
+    groups: &mut Vec<DynamicGroup>,
+    key: &Bound<'_, PyAny>,
+) -> PyResult<()> {
+    let Some(index) = find_group_index(py, groups, key)? else {
+        return Ok(());
+    };
+    match &mut groups[index].aggregate {
+        GroupAggregate::Count(count) => {
+            if *count <= 1 {
+                groups.remove(index);
+            } else {
+                *count -= 1;
+            }
+        }
+        GroupAggregate::IndexedPresence(_) => {
+            return Err(py_err("group collector changed for existing key"));
+        }
+    }
+    Ok(())
+}
+
+fn decrement_group_presence(
+    py: Python<'_>,
+    groups: &mut Vec<DynamicGroup>,
+    key: &Bound<'_, PyAny>,
+    point: i64,
+) -> PyResult<()> {
+    let Some(index) = find_group_index(py, groups, key)? else {
+        return Ok(());
+    };
+    match &mut groups[index].aggregate {
+        GroupAggregate::IndexedPresence(presence) => {
+            presence.remove(point);
+            if presence.is_empty() {
+                groups.remove(index);
+            }
+        }
+        GroupAggregate::Count(_) => {
+            return Err(py_err("group collector changed for existing key"));
+        }
     }
     Ok(())
 }
