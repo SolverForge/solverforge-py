@@ -177,6 +177,7 @@ def test_deliveries_python_frontend_app_serves_static_and_solve_lifecycle() -> N
             {"plan": solution, "deliveryId": 0, "limit": 3},
         )
         assert recommendation["deliveryId"] == 0
+        assert recommendation["candidates"]
         assert len(recommendation["candidates"]) <= 3
 
         assert request_raw(base_url, f"/jobs/{job_id}", method="DELETE")[0] == 204

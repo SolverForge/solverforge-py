@@ -295,14 +295,14 @@ def rank_delivery_insertions(
 ) -> list[dict[str, Any]]:
     baseline = score_components(plan)
     candidates = []
-    for vehicle in plan.vehicles:
-        if delivery_id in vehicle.delivery_order:
-            continue
-        for insert_index in range(len(vehicle.delivery_order) + 1):
+    for vehicle_index, vehicle in enumerate(plan.vehicles):
+        removable_count = vehicle.delivery_order.count(delivery_id)
+        route_length_after_removal = len(vehicle.delivery_order) - removable_count
+        for insert_index in range(route_length_after_removal + 1):
             preview_plan = deepcopy(plan)
             preview_plan.normalize()
             preview_plan.remove_delivery_assignments(delivery_id)
-            preview_vehicle = preview_plan.vehicles[vehicle.id]
+            preview_vehicle = preview_plan.vehicles[vehicle_index]
             preview_vehicle.delivery_order.insert(insert_index, delivery_id)
             preview_plan.refresh_route_shadows()
             score = score_components(preview_plan)

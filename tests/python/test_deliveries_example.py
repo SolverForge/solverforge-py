@@ -17,6 +17,7 @@ from examples.solverforge_deliveries.src.domain import Delivery, Vehicle
 from examples.solverforge_deliveries.src.domain.metrics import (
     CAPACITY_HARD_WEIGHT,
     build_preview,
+    rank_delivery_insertions,
     score_components,
 )
 from solverforge import Solver, SolverManager
@@ -234,6 +235,58 @@ def test_solverforge_deliveries_preview_uses_capacity_hard_weight() -> None:
 
     assert score_components(plan)[0] == expected_hard
     assert build_preview(plan)["hardScore"] == expected_hard
+
+
+def test_solverforge_deliveries_recommends_same_route_assigned_insertions() -> None:
+    plan = DeliveryPlan(
+        name="same-route-recommendations",
+        deliveries=[
+            Delivery(
+                id=0,
+                label="A",
+                kind="retail",
+                lat=41.8,
+                lng=-72.7,
+                demand=1,
+                min_start_time=0,
+                max_end_time=100_000,
+                service_duration=60,
+            ),
+            Delivery(
+                id=1,
+                label="B",
+                kind="retail",
+                lat=41.81,
+                lng=-72.71,
+                demand=1,
+                min_start_time=0,
+                max_end_time=100_000,
+                service_duration=60,
+            ),
+        ],
+        vehicles=[
+            Vehicle(
+                id=0,
+                name="Van 1",
+                capacity=10,
+                home_lat=41.8,
+                home_lng=-72.7,
+                departure_time=0,
+                delivery_order=[0, 1],
+            )
+        ],
+    )
+
+    candidates = rank_delivery_insertions(plan, 0, 10)
+
+    assert len(candidates) == 2
+    assert {candidate["vehicleId"] for candidate in candidates} == {0}
+    assert {candidate["insertIndex"] for candidate in candidates} == {0, 1}
+    for candidate in candidates:
+        preview_order = candidate["previewPlan"].vehicles[0].delivery_order
+        assert preview_order.count(0) == 1
+        assert sorted(preview_order) == [0, 1]
+        assert preview_order[candidate["insertIndex"]] == 0
 
 
 def test_solverforge_deliveries_analysis_reports_unassigned_match_count() -> None:
