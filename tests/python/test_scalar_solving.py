@@ -947,6 +947,66 @@ class AssignmentSchedule:
         self.score = None
 
 
+_counting_assignment_candidate_calls = 0
+
+
+def counting_assignment_candidates(shift):
+    global _counting_assignment_candidate_calls
+    _counting_assignment_candidate_calls += 1
+    return [shift.shift_index]
+
+
+@planning_entity
+class CountingAssignmentShift:
+    nurse = planning_variable(
+        value_range_provider="nurses",
+        candidate_values=counting_assignment_candidates,
+        allows_unassigned=True,
+    )
+
+    def __init__(self, shift_index: int) -> None:
+        self.shift_index = shift_index
+        self.nurse: int | None = None
+
+
+def counting_assignment_required(solution, entity_index):
+    return solution.shifts[entity_index].nurse is None
+
+
+@constraint_provider
+def counting_assignment_constraints(factory: ConstraintFactory):
+    return [
+        factory.for_each(CountingAssignmentShift)
+        .filter(lambda shift: shift.nurse is None)
+        .penalize(HardSoftScore.ONE_HARD)
+        .named("counting assignment shift unassigned")
+    ]
+
+
+@planning_solution(
+    score=HardSoftScore,
+    constraints=counting_assignment_constraints,
+    scalar_groups=[
+        scalar_assignment_group(
+            "counting_shift_nurse_assignment",
+            entity_class="CountingAssignmentShift",
+            variable_name="nurse",
+            required_entity=counting_assignment_required,
+            sync_solution_before_callbacks=False,
+        )
+    ],
+)
+class CountingAssignmentSchedule:
+    shifts: list[CountingAssignmentShift]
+
+    def __init__(self, shift_count: int) -> None:
+        self.shifts = [
+            CountingAssignmentShift(shift_index) for shift_index in range(shift_count)
+        ]
+        self.nurses = list(range(shift_count))
+        self.score = None
+
+
 @planning_entity
 class OptionalAssignmentShift:
     nurse = planning_variable(value_range_provider="nurses", allows_unassigned=True)
@@ -1126,6 +1186,29 @@ def test_scalar_assignment_group_construction_completes_required_under_expired_l
     assert sorted(shift.nurse for shift in plan.shifts) == [0, 1]
     assert plan.score == Solver.analyze(plan)
     assert plan.score["levels"] == [0, 0]
+
+
+def test_scalar_assignment_group_first_fit_streams_python_required_candidates() -> None:
+    global _counting_assignment_candidate_calls
+    _counting_assignment_candidate_calls = 0
+    plan = Solver.solve(
+        CountingAssignmentSchedule(12),
+        {
+            "phases": [
+                {
+                    "type": "construction_heuristic",
+                    "construction_heuristic_type": "first_fit",
+                    "group_name": "counting_shift_nurse_assignment",
+                    "termination": {"step_count_limit": 0},
+                }
+            ]
+        },
+    )
+
+    assert [shift.nurse for shift in plan.shifts] == list(range(12))
+    assert plan.score == Solver.analyze(plan)
+    assert plan.score["levels"] == [0, 0]
+    assert _counting_assignment_candidate_calls <= 2 * len(plan.shifts) + 1
 
 
 def test_scalar_assignment_group_construction_preserves_solution_context_in_previews() -> (

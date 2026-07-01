@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
+use std::sync::{Arc, Mutex};
 
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
@@ -46,7 +47,7 @@ use solverforge_solver::{
     ListCheapestInsertionPhase, ListClarkeWrightPhase, ListKOptPhase, ListRegretInsertionPhase,
     ListRuinMoveSelector, ListVariableSlot, LocalSearchPhase, LocalSearchStrategy, Move,
     NearbyKOptMoveSelector, Phase, PhaseSequence, Placement, RuntimeModel,
-    ScalarAssignmentMoveCursor, ScalarAssignmentMoveOptions,
+    ScalarAssignmentMoveOptions, ScalarAssignmentRequiredStreamingCursor,
 };
 
 use crate::constraints::PyDynamicConstraintSet;
@@ -471,6 +472,7 @@ fn build_dynamic_assignment_construction(
         construction_heuristic_type: config.construction_heuristic_type,
         required_only: false,
         direct_required_cursor: true,
+        required_stream: Arc::new(Mutex::new(DynamicAssignmentRequiredStream::default())),
     };
     let mandatory = build_dynamic_assignment_mandatory_construction(config, placer.required_only());
     DynamicAssignmentConstructionPhase {
@@ -611,6 +613,7 @@ pub(crate) struct DynamicAssignmentConstructionPlacer {
     construction_heuristic_type: ConstructionHeuristicType,
     required_only: bool,
     direct_required_cursor: bool,
+    required_stream: Arc<Mutex<DynamicAssignmentRequiredStream>>,
 }
 
 impl Debug for DynamicAssignmentConstructionPlacer {
@@ -628,6 +631,12 @@ impl Debug for DynamicAssignmentConstructionPlacer {
             .field("direct_required_cursor", &self.direct_required_cursor)
             .finish()
     }
+}
+
+#[derive(Default)]
+struct DynamicAssignmentRequiredStream {
+    cursor: Option<ScalarAssignmentRequiredStreamingCursor<PyDynamicSolution>>,
+    pending: Option<CompoundScalarMove<PyDynamicSolution>>,
 }
 
 impl Debug for DynamicScalarEntityPlacer {
@@ -818,7 +827,30 @@ impl DynamicAssignmentConstructionPlacer {
     fn required_only(&self) -> Self {
         Self {
             required_only: true,
+            required_stream: Arc::new(Mutex::new(DynamicAssignmentRequiredStream::default())),
             ..self.clone()
+        }
+    }
+
+    fn sync_required_stream(&self, solution: &PyDynamicSolution) {
+        let mut stream = self
+            .required_stream
+            .lock()
+            .expect("dynamic assignment required stream mutex poisoned");
+        let Some(pending) = stream.pending.take() else {
+            return;
+        };
+        let committed = pending.edits().iter().all(|edit| {
+            (edit.getter)(solution, edit.entity_index, edit.variable_index) == edit.to_value
+        });
+        if committed {
+            if let Some(cursor) = &mut stream.cursor {
+                with_dynamic_assignment_group(&self.group_name, || {
+                    cursor.commit_move(solution, &pending)
+                });
+            }
+        } else {
+            stream.cursor = None;
         }
     }
 
@@ -866,7 +898,7 @@ impl DynamicAssignmentConstructionPlacer {
                 self.construction_heuristic_type,
                 ConstructionHeuristicType::FirstFit
             ) {
-            limits.group_candidate_limit.unwrap_or(usize::MAX).min(1)
+            usize::MAX
         } else {
             limits.group_candidate_limit.unwrap_or(usize::MAX)
         };
@@ -1005,6 +1037,7 @@ impl DynamicAssignmentConstructionPlacer {
             return self.next_required_selector_placement(score_director);
         }
         let solution = score_director.working_solution();
+        self.sync_required_stream(solution);
         let group =
             dynamic_assignment_group_binding(solution, &self.group_name, &self.scalar_slots)
                 .unwrap_or_else(|error| panic!("dynamic assignment group binding failed: {error}"));
@@ -1013,29 +1046,55 @@ impl DynamicAssignmentConstructionPlacer {
             assignment.remaining_required_count(solution)
         });
         if required_remaining == 0 {
+            let mut stream = self
+                .required_stream
+                .lock()
+                .expect("dynamic assignment required stream mutex poisoned");
+            stream.cursor = None;
+            stream.pending = None;
             return None;
         }
 
         let options = self.required_construction_options(group, solution);
-        let mut cursor = with_dynamic_assignment_group(&self.group_name, || {
-            ScalarAssignmentMoveCursor::required_construction(assignment, solution.clone(), options)
-        });
-        while let Some(mov) = with_dynamic_assignment_group(&self.group_name, || cursor.next_move())
-        {
-            if !mov.is_doable(score_director) {
-                continue;
+        let mut stream = self
+            .required_stream
+            .lock()
+            .expect("dynamic assignment required stream mutex poisoned");
+        let mut reopened_after_exhaustion = false;
+        loop {
+            if stream.cursor.is_none() {
+                let cursor = with_dynamic_assignment_group(&self.group_name, || {
+                    ScalarAssignmentRequiredStreamingCursor::new(assignment, solution, options)
+                });
+                stream.cursor = Some(cursor);
             }
-            let edit = mov
-                .edits()
-                .iter()
-                .find(|edit| edit.to_value.is_some())
-                .or_else(|| mov.edits().first())?;
-            return Some(Placement::new(
-                EntityReference::new(edit.descriptor_index, edit.entity_index),
-                vec![mov],
-            ));
+            let Some(cursor) = &mut stream.cursor else {
+                return None;
+            };
+            let Some(mov) =
+                with_dynamic_assignment_group(&self.group_name, || cursor.next_move(solution))
+            else {
+                stream.cursor = None;
+                stream.pending = None;
+                if reopened_after_exhaustion {
+                    return None;
+                }
+                reopened_after_exhaustion = true;
+                continue;
+            };
+            if mov.is_doable(score_director) {
+                let edit = mov
+                    .edits()
+                    .iter()
+                    .find(|edit| edit.to_value.is_some())
+                    .or_else(|| mov.edits().first())?;
+                stream.pending = Some(mov.clone());
+                return Some(Placement::new(
+                    EntityReference::new(edit.descriptor_index, edit.entity_index),
+                    vec![mov],
+                ));
+            }
         }
-        None
     }
 
     fn next_required_selector_placement<D: Director<PyDynamicSolution>>(
@@ -1139,7 +1198,10 @@ impl DynamicAssignmentMandatoryConstruction {
         ProgressCb: ProgressCallback<PyDynamicSolution>,
     {
         match self {
-            Self::FirstFit(phase) => phase.solve(solver_scope),
+            Self::FirstFit(phase) => {
+                solver_scope.mutate(|score_director| score_director.reset());
+                phase.solve(solver_scope);
+            }
             Self::BestFit(phase) => phase.solve(solver_scope),
         }
     }
