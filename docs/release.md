@@ -2,7 +2,7 @@
 
 This repository publishes the `solverforge` package on PyPI. The next release
 from this checkout is `0.5.0`, carrying the SolverForge Rust dependency base
-forward to `0.17.1`.
+forward to `0.17.2`.
 
 ## Current Index State
 

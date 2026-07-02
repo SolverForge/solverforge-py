@@ -25,6 +25,9 @@ shape, and source-checkout example UI/API surfaces.
   retained job lifecycle, and insertion recommendations.
 - Shared `/sf/*` frontend assets are embedded by the `solverforge-ui` Rust crate
   and exposed to Python through `solverforge.ui`, not copied into each example.
+  Versioned `/sf/*` asset names are served only when the pinned `solverforge-ui`
+  crate owns that exact file; stale versioned asset requests fail instead of
+  aliasing to current bytes.
 - `docs/`: callback, upstream bridge, threading, release, goal/non-goal, and
   dynamic move parity contracts.
 
@@ -197,12 +200,11 @@ The installable wheel contains only:
 The native extension embeds shared `solverforge-ui` assets and exposes them via
 `solverforge.ui.asset()` for example applications and other Python HTTP hosts.
 
-The source distribution also carries the repository tests, examples, docs, and
-the vendored `solverforge-ui` crate needed to rebuild the embedded shared UI
-assets. SolverForge Rust dependencies are declared from the exact release
-version in `Cargo.toml` and locked in `Cargo.lock`; release automation verifies
-that manifest/lockfile source of truth instead of inspecting a mutable sibling
-checkout.
+The source distribution also carries the repository tests, examples, and docs.
+SolverForge Rust dependencies and shared UI assets are declared from exact
+release versions in `Cargo.toml` and locked in `Cargo.lock`; release automation
+verifies that manifest/lockfile source of truth instead of inspecting a mutable
+sibling checkout.
 
 ## Makefile And Validation Flow
 
@@ -222,5 +224,4 @@ The root Makefile is the maintainer entry point:
 - `make test-deliveries`: deliveries model and FastAPI/frontend tests
 
 Use `make docs-check` after documentation edits so the tracked README, AGENTS,
-WIREFRAME, docs, example README, and vendored UI README surfaces stay present
-and current.
+WIREFRAME, docs, and example README surfaces stay present and current.

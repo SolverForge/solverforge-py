@@ -20,21 +20,12 @@ The correct split is:
 
 Do not fake unsupported behavior. If a feature requires a public upstream seam, add the seam upstream cleanly and use it from `solverforge-py`.
 
-## Repositories
+## Repository Boundary
 
-Work across these sibling repositories:
-
-- `../solverforge`
-- `../solverforge-py`
-
-Preserve unrelated dirty work. Before editing either repo, inspect:
-
-```bash
-git -C ../solverforge status --short --branch
-git -C ../solverforge-py status --short --branch
-```
-
-Do not reset, revert, or overwrite unrelated user changes.
+This checkout consumes public upstream SolverForge crates through exact
+registry pins in `Cargo.toml`. Upstream bridge work belongs in the upstream
+SolverForge repository first, then this package should move to the released
+crate version without local path overrides.
 
 ## Hard Constraints
 
@@ -259,13 +250,7 @@ In `solverforge-py`:
 
 ## Required Tests
 
-Run and make pass:
-
-```bash
-cargo test --workspace --all-targets
-```
-
-from `../solverforge`, plus:
+Run and make pass from this checkout:
 
 ```bash
 make rust-test
@@ -274,8 +259,6 @@ make ruff
 make typecheck
 make docs-check
 ```
-
-from `../solverforge-py`.
 
 If the venv does not exist, create it with Python 3.14 and install the dev tools.
 
