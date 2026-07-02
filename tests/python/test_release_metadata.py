@@ -91,7 +91,7 @@ def test_solverforge_rust_dependency_base_is_manifest_owned() -> None:
     solverforge = cargo["package"]["metadata"]["solverforge"]
     dependencies = cargo["dependencies"]
 
-    assert solverforge["version"] == "0.17.1"
+    assert solverforge["version"] == "0.17.2"
     assert "git" not in solverforge
     assert "rev" not in solverforge
     assert "path" not in solverforge
@@ -111,13 +111,15 @@ def test_solverforge_rust_dependency_base_is_manifest_owned() -> None:
         assert "path" not in spec
 
 
-def test_solverforge_ui_dependency_is_vendored() -> None:
+def test_solverforge_ui_dependency_is_registry_pinned() -> None:
     cargo = load_toml(ROOT / "Cargo.toml")
     ui_spec = cargo["dependencies"]["solverforge-ui"]
 
-    assert ui_spec == {"path": "vendor/solverforge-ui"}
-    assert (ROOT / "vendor" / "solverforge-ui" / "Cargo.toml").is_file()
-    assert (ROOT / "vendor" / "solverforge-ui" / "static" / "sf" / "sf.css").is_file()
+    assert ui_spec["version"] == "=0.7.0"
+    assert ui_spec["default-features"] is False
+    assert "git" not in ui_spec
+    assert "rev" not in ui_spec
+    assert "path" not in ui_spec
 
 
 def test_release_workflow_validates_only_tagged_pypi_publish() -> None:
@@ -175,7 +177,7 @@ def test_latest_sdist_carries_locked_project_sources_when_present() -> None:
     assert direct_layout <= names or nested_project_layout <= names
 
 
-def test_release_artifact_verifier_accepts_vendored_ui_sdist(
+def test_release_artifact_verifier_accepts_registry_ui_sdist(
     tmp_path: Path,
 ) -> None:
     version = str(load_toml(ROOT / "pyproject.toml")["project"]["version"])
@@ -189,11 +191,6 @@ def test_release_artifact_verifier_accepts_vendored_ui_sdist(
             f"{prefix}/solverforge-py/Cargo.toml",
             f"{prefix}/solverforge-py/src/bindings.rs",
             f"{prefix}/solverforge-py/src/lib.rs",
-            f"{prefix}/solverforge-py/vendor/solverforge-ui/Cargo.toml",
-            f"{prefix}/solverforge-py/vendor/solverforge-ui/src/assets.rs",
-            f"{prefix}/solverforge-py/vendor/solverforge-ui/src/lib.rs",
-            f"{prefix}/solverforge-py/vendor/solverforge-ui/static/sf/sf.css",
-            f"{prefix}/solverforge-py/vendor/solverforge-ui/static/sf/sf.js",
         },
     )
     verifier = load_release_artifact_verifier()

@@ -24,11 +24,6 @@ REQUIRED_SDIST_PROJECT_PATHS = {
     "Cargo.lock",
     "src/lib.rs",
     "src/bindings.rs",
-    "vendor/solverforge-ui/Cargo.toml",
-    "vendor/solverforge-ui/src/lib.rs",
-    "vendor/solverforge-ui/src/assets.rs",
-    "vendor/solverforge-ui/static/sf/sf.css",
-    "vendor/solverforge-ui/static/sf/sf.js",
 }
 REQUIRED_SDIST_PYTHON_PATHS = {
     "python/solverforge/__init__.py",
