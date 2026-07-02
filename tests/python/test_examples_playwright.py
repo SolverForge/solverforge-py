@@ -102,6 +102,53 @@ def collect_browser_errors(page: Page) -> list[str]:
     return errors
 
 
+def test_browser_imports_solverforge_ui_module_assets() -> None:
+    from urllib.error import HTTPError
+    from urllib.request import urlopen
+
+    server, base_url = start_test_server(create_hospital_app)
+    try:
+        with sync_playwright() as playwright:
+            browser = launch_browser(playwright)
+            try:
+                page = browser.new_page()
+                browser_errors = collect_browser_errors(page)
+
+                page.goto(base_url, wait_until="networkidle")
+                result = page.evaluate("""async () => {
+                      const module = await import('/sf/sf.mjs');
+                      return {
+                        version: module.version,
+                        createBackendType: typeof module.createBackend,
+                        defaultMatches: module.default.createBackend === module.createBackend,
+                      };
+                    }""")
+
+                assert result == {
+                    "version": "0.7.0",
+                    "createBackendType": "function",
+                    "defaultMatches": True,
+                }
+                assert browser_errors == []
+
+                for path in (
+                    "/sf/sf.0.6.5.css",
+                    "/sf/sf.0.6.5.js",
+                    "/sf/sf.0.6.5.mjs",
+                    "/sf/sf.0.7.0.mjs",
+                ):
+                    try:
+                        urlopen(f"{base_url}{path}", timeout=2)
+                    except HTTPError as error:
+                        assert error.code == 404
+                    else:
+                        raise AssertionError(f"{path} should not be served")
+            finally:
+                browser.close()
+    finally:
+        server.shutdown()
+
+
 def test_hospital_browser_solves_and_opens_analysis_modal() -> None:
     server, base_url = start_test_server(create_hospital_app)
     try:

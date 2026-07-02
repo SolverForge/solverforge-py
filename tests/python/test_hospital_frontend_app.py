@@ -185,7 +185,7 @@ def test_hospital_python_frontend_app_serves_static_and_solve_lifecycle() -> Non
             "application/javascript; charset=utf-8",
             "public, max-age=3600",
         )
-        assert request_asset_headers(base_url, "/sf/sf.0.6.5.css") == (
+        assert request_asset_headers(base_url, "/sf/sf.0.7.0.css") == (
             "text/css; charset=utf-8",
             "public, max-age=31536000, immutable",
         )
