@@ -17,7 +17,8 @@ It demonstrates:
 - stock `ConstraintFactory.for_each_unassigned_element(...)` scoring for
   unassigned deliveries.
 - seeded `PHILADELPHIA`, `HARTFORD`, and `FIRENZE` data sets.
-- list cheapest-insertion construction followed by list k-opt polish.
+- list cheapest-insertion construction, list k-opt construction polish, and
+  late-acceptance list change/swap/reverse local search.
 - a FastAPI app with retained `SolverManager` jobs, live SSE, exact snapshots,
   route snapshots, analysis, pause, resume, cancel, terminal-job delete, and
   delivery-insertion recommendations.
