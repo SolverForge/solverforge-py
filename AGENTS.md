@@ -9,10 +9,11 @@ extension, dynamic runtime bridge, callbacks, manager, and schema code live unde
 examples are in `examples/`. The hospital and deliveries demos own their
 FastAPI apps, app-specific static UI, generated UI models, and seed data under
 `examples/solverforge_hospital/` and `examples/solverforge_deliveries/`;
-shared `/sf/*` assets are served from the `solverforge-ui` crate through the
-native binding.
-`WIREFRAME.md` is the as-built API/UI map; `docs/` contains callback, upstream
-bridge, threading, release, goal/non-goal, and dynamic move parity contracts.
+shared `/sf/*` assets are served from the pinned `solverforge-ui` crate through
+the native binding.
+`WIREFRAME.md` is the as-built API/UI map; `README.md` carries installation,
+callback/threading, boundary, and release contracts. There is no separate
+`docs/` directory.
 
 ## Build, Test, and Development Commands
 
@@ -25,7 +26,10 @@ bridge, threading, release, goal/non-goal, and dynamic move parity contracts.
   and deliveries Playwright browser test.
 - `make test-examples-browser`: run the Playwright browser tests for both example apps.
 - `make lint`: run rustfmt check, ruff, strict mypy, and clippy with warnings denied.
-- `make docs-check`: verify the tracked documentation surface exists and avoids known stale claims.
+- `make docs-check`: verify the tracked README, AGENTS, WIREFRAME, and example
+  README surface exists and avoids known stale claims.
+- `make release-base-check`: verify the exact crates.io SolverForge dependency
+  base in `Cargo.toml` and `Cargo.lock`.
 - `make ci-local` or `make audit`: run the local CI simulation.
 - `make pre-release`: run `release-base-check`, `ci-local`, release
   distribution build/checks, and clean-wheel smoke test.
@@ -55,6 +59,44 @@ integration changes. Use `make test-hospital` or `make test-deliveries` when
 touching either example app. Binding changes should normally prove behavior
 through the public Python API and add Rust coverage only when native runtime
 behavior changes directly.
+
+## Runtime & Callback Contracts
+
+Python owns model authoring: classes, decorators, functions, lambdas, and
+callbacks. `solverforge-py` owns the Python API, PyO3 binding code, Rust-owned
+dynamic model state, callback invocation, marshaling, packaging, and example
+apps. Upstream SolverForge owns the solver engine, phases, selectors, move
+machinery, termination, telemetry, retained lifecycle, descriptors, and public
+bridge seams. This checkout consumes public upstream crates through exact
+registry pins in `Cargo.toml` and `Cargo.lock`; do not add private upstream
+module dependencies or local path overrides for release work.
+
+Python callbacks are the only constraint authoring surface. Callback exceptions
+must preserve actionable Python tracebacks. Callback solution views must expose
+ordinary solution-level lookup context while projecting entity/fact collections
+from Rust-owned state. Callback code may be called many times and from multiple
+worker threads on CPython 3.14 free-threaded, so treat solution-level lookup
+context as immutable during a solve.
+
+Do not fake unsupported behavior. Top-level `ConstraintFactory.join`,
+`group_by`, `if_exists`, `if_not_exists`, and `flattened` remain explicit
+unsupported methods until public bridge support exists for those top-level
+semantics. Rust-only custom search and partitioner registration cannot be
+claimed as Python-bindable without a public upstream seam.
+
+## Release Responsibilities
+
+`pyproject.toml` owns PyPI metadata, version, Python requirement, optional
+example dependencies, project URLs, classifiers, and maturin module settings.
+`Cargo.toml` owns native crate metadata and the SolverForge Rust dependency
+base; the package version must match `pyproject.toml`. `Cargo.lock` locks
+reproducible Rust builds. The `Makefile` owns local release targets,
+dependency-base checks, distribution builds, artifact validation, and
+`pre-release`. `.github/workflows/ci.yml` validates source checkouts, and
+`.github/workflows/release.yml` builds sdists/wheels and publishes to TestPyPI
+and PyPI. `scripts/verify_release_artifacts.py` checks deterministic artifact
+metadata/content, and `tests/python/test_release_metadata.py` guards release
+metadata drift.
 
 ## Commit & Pull Request Guidelines
 
