@@ -13,6 +13,10 @@ def status_event_payload(
     *,
     solution: DeliveryPlan | None = None,
 ) -> dict[str, Any]:
+    current_score = _solution_score(solution) or score_to_string(
+        status.get("current_score")
+    )
+    best_score = score_to_string(status.get("best_score")) or current_score
     return {
         "id": record.id,
         "jobId": record.id,
@@ -21,8 +25,8 @@ def status_event_payload(
         "lifecycleState": status.get("lifecycle_state"),
         "terminalReason": terminal_reason(status.get("terminal_reason")),
         "telemetry": telemetry(status.get("telemetry")),
-        "currentScore": score_to_string(status.get("current_score")),
-        "bestScore": score_to_string(status.get("best_score")),
+        "currentScore": current_score,
+        "bestScore": best_score,
         "snapshotRevision": status.get("latest_snapshot_revision"),
         "solution": plan_to_payload(solution) if solution is not None else None,
         "error": None,
@@ -36,6 +40,10 @@ def event_payload_from_native(
     *,
     solution: DeliveryPlan | None = None,
 ) -> dict[str, Any]:
+    current_score = _solution_score(solution) or score_to_string(
+        native_event.get("current_score")
+    )
+    best_score = score_to_string(native_event.get("best_score")) or current_score
     return {
         "id": record.id,
         "jobId": record.id,
@@ -44,8 +52,8 @@ def event_payload_from_native(
         "lifecycleState": native_event.get("lifecycle_state"),
         "terminalReason": terminal_reason(native_event.get("terminal_reason")),
         "telemetry": telemetry(native_event.get("telemetry")),
-        "currentScore": score_to_string(native_event.get("current_score")),
-        "bestScore": score_to_string(native_event.get("best_score")),
+        "currentScore": current_score,
+        "bestScore": best_score,
         "snapshotRevision": native_event.get("snapshot_revision"),
         "solution": plan_to_payload(solution) if solution is not None else None,
         "error": native_event.get("error"),
@@ -70,3 +78,9 @@ def bootstrap_snapshot_event_type(state: str) -> str:
     if state == "SOLVING":
         return "best_solution"
     return bootstrap_event_type(state)
+
+
+def _solution_score(solution: DeliveryPlan | None) -> str | None:
+    if solution is None:
+        return None
+    return score_to_string(solution.score)

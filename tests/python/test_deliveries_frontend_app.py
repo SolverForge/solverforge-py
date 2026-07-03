@@ -14,6 +14,10 @@ import uvicorn
 
 from examples.solverforge_deliveries import create_app, demo_plan
 from examples.solverforge_deliveries.src.api.dto import snapshot_payload
+from examples.solverforge_deliveries.src.solver.service.payload import (
+    event_payload_from_native,
+    status_event_payload,
+)
 
 
 @dataclass
@@ -88,6 +92,47 @@ def test_snapshot_payload_uses_snapshot_score_as_current_score() -> None:
 
     assert payload["currentScore"] == "0hard/42soft"
     assert payload["solution"]["score"] == "0hard/42soft"
+
+
+def test_event_payload_uses_solution_score_as_current_score() -> None:
+    plan = demo_plan("HARTFORD")
+    plan.score = {"family": "hard_soft", "levels": [0, 42]}
+    native_current_score = {"family": "hard_soft", "levels": [-1, 10]}
+    native_best_score = {"family": "hard_soft", "levels": [0, 42]}
+
+    event_payload = event_payload_from_native(
+        SimpleNamespace(id="7"),
+        "completed",
+        {
+            "event_sequence": 9,
+            "lifecycle_state": "COMPLETED",
+            "terminal_reason": "TERMINATED_BY_CONFIG",
+            "snapshot_revision": 3,
+            "current_score": native_current_score,
+            "best_score": native_best_score,
+            "telemetry": None,
+        },
+        solution=plan,
+    )
+    bootstrap_payload = status_event_payload(
+        SimpleNamespace(id="7"),
+        "completed",
+        {
+            "event_sequence": 9,
+            "lifecycle_state": "COMPLETED",
+            "terminal_reason": "TERMINATED_BY_CONFIG",
+            "latest_snapshot_revision": 3,
+            "current_score": native_current_score,
+            "best_score": native_best_score,
+            "telemetry": None,
+        },
+        solution=plan,
+    )
+
+    for payload in (event_payload, bootstrap_payload):
+        assert payload["currentScore"] == "0hard/42soft"
+        assert payload["bestScore"] == "0hard/42soft"
+        assert payload["solution"]["score"] == "0hard/42soft"
 
 
 def start_test_server() -> tuple[RunningServer, str]:
