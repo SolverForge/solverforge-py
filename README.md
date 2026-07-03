@@ -8,11 +8,13 @@ The native extension owns the working solution state in Rust so SolverForge can
 clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
-The package targets CPython 3.14 and Rust 1.95.0. The `solverforge` `0.5.x`
-line is the current dynamic binding architecture and intentionally supersedes
-the older incompatible `0.2.x` and `0.3.0` artifacts in the same PyPI namespace.
-Those older artifacts exposed `SolverFactory`, `PlanningVariable`, Java service
-requirements, and other APIs that are not part of this package.
+The package targets CPython 3.14 and Rust 1.95.0. This checkout pins upstream
+SolverForge Rust crates to `0.17.2` and `solverforge-ui` to `0.7.0` through
+`Cargo.toml` and `Cargo.lock`. The `solverforge` `0.5.x` line is the current
+dynamic binding architecture and intentionally supersedes the older incompatible
+`0.2.x` and `0.3.0` artifacts in the same PyPI namespace. Those older artifacts
+exposed `SolverFactory`, `PlanningVariable`, Java service requirements, and
+other APIs that are not part of this package.
 
 ## Installation
 
@@ -106,18 +108,21 @@ make pre-release      # ci-local plus release sdist/wheel checks
 ```
 
 Run `make help` for focused targets such as `make test-hospital`,
-`make test-deliveries`, `make test-examples-browser`,
-`make test-one TEST=pattern`, `make hospital-run`, `make hospital-solve`,
-`make deliveries-run`, and `make deliveries-solve`.
+`make test-deliveries`, `make test-examples-browser`, `make docs-check`,
+`make release-base-check`, `make test-one TEST=pattern`, `make hospital-run`,
+`make hospital-solve`, `make deliveries-run`, and `make deliveries-solve`.
 
 ## Boundaries
 
 - No generated Rust.
 - No expression-object DSL.
 - No string-parsed constraints.
+- No duplicate 100% Python solver.
 - No private upstream SolverForge modules; bindings use the public dynamic bridge
   contract.
 - No fixed pre-modeled JSON-only backends.
+- No upstream SolverForge mutation in this repository; upstream bridge work must
+  land upstream first and then be consumed through released crates.
 
 ## Current Support
 
@@ -130,11 +135,13 @@ Run `make help` for focused targets such as `make test-hospital`,
   `unimproved_seconds_spent_limit`.
 - Synchronous and retained scalar/list construction solves use upstream
   SolverForge. Dynamic scalar construction binds first-fit, cheapest insertion,
-  and assignment-group cheapest insertion phases; dynamic list construction
-  binds list cheapest insertion, list regret insertion, list Clarke-Wright, and
-  list k-opt phases where the model supplies the required list or route hooks.
+  and assignment-group first-fit or cheapest insertion phases when the
+  construction phase declares `group_name`; dynamic list construction binds list
+  cheapest insertion, list regret insertion, list Clarke-Wright, and list k-opt
+  phases where the model supplies the required list or route hooks.
 - `SolverManager` is backed by upstream retained jobs, statuses, events, and
-  snapshots, including pause, resume, cancel, delete, and exact snapshot reads.
+  snapshots. `SolverManager.solve(...)` returns `JobHandle(job_id=...)`; the
+  manager supports pause, resume, cancel, delete, and exact snapshot reads.
 - `planning_variable(...)` supports row candidate callbacks and nearby value or
   entity candidate/distance callbacks for dynamic scalar construction and nearby
   scalar local search.
@@ -147,8 +154,11 @@ Run `make help` for focused targets such as `make test-hospital`,
   for read-only lookup context such as capacity tables.
 - `planning_list_variable(...)` supports `element_owner`,
   `construction_element_order_key`, `precedence_duration`,
-  `precedence_successors`, `route_depot`, `route_metric_class`,
-  `route_distance`, and `route_feasible` callbacks for owner-aware list moves,
+  `precedence_successors`, route callbacks
+  (`route_depot`, `route_metric_class`, `route_distance`, `route_feasible`),
+  and entity-scoped route callbacks
+  (`route_depot_entity`, `route_metric_class_entity`,
+  `route_distance_entity`, `route_feasible_entity`) for owner-aware list moves,
   JSSP-style precedence/makespan scoring, and CVRP-style route construction.
   CVRP-style models with immutable row data can avoid per-query Python callbacks
   by passing
@@ -203,21 +213,66 @@ Run `make help` for focused targets such as `make test-hospital`,
   stream-level `for_each(...).join(...)` and `for_each(...).group_by(...)` for
   the supported join and grouped-count surfaces.
 
-## Documentation Map
-
-- `WIREFRAME.md` is the as-built public API, runtime, and example UI/API map.
-- `AGENTS.md` is the contributor guide and agent scope contract.
-- `docs/callback-contract.md` records callback solution-view semantics,
-  determinism expectations, and traceback behavior.
-- `docs/upstream-contract.md` records the public SolverForge bridge assumptions.
-- `docs/dynamic-move-parity-plan.md` tracks implemented dynamic selector parity.
-- `docs/threading.md`, `docs/release.md`, `docs/goal.md`, and
-  `docs/non-goals.md` cover runtime threading, release gates, product goals, and
-  explicit non-goals.
-
 Rust macro-generated SolverForge models remain the performance ceiling. The
 Python path preserves the Rust solver engine and Rust-owned state while paying
 the honest dynamic callback boundary cost.
+
+## Callback And Threading Contract
+
+Python callbacks are the only constraint authoring surface. Filter callbacks
+return `bool`; weight callbacks return a score object or integer; grouped scalar
+callbacks return scalar edit candidates for `@scalar_group`; conflict repair
+callbacks return scalar edit candidates for constraints declared with
+`@conflict_repair`; value range providers return ordered finite collections;
+distance callbacks return numeric distances; and owner hooks used by list
+selectors return an owner index or `None`.
+
+Callback exceptions are surfaced as SolverForge Python exceptions with the
+original Python traceback. Callback solution views include non-private,
+non-callable solution-level attributes from the imported Python solution, such as
+lookup tables and value sets used by hooks. Entity and fact collections in those
+views are projected from Rust-owned solver state so preview and best-solution
+clones never share mutable Python row objects with the working solution.
+
+The primary target is CPython 3.14 free-threaded. The native extension declares
+that it does not require the GIL; Rust worker threads attach to Python only when
+invoking Python callbacks. Callback code must be deterministic for a given
+solution state, safe to run concurrently, and treat solution-level lookup context
+as immutable for the duration of a solve. Third-party Python extension modules
+used inside callbacks may still impose their own synchronization constraints.
+
+## Release Plan
+
+This repository publishes the `solverforge` package on PyPI. The next release
+from this checkout is `0.5.0`, carrying the SolverForge Rust dependency base
+forward to `0.17.2`. As of 2026-07-03, PyPI latest for `solverforge` is `0.4.0`
+with published versions `0.2.2`, `0.2.3`, `0.2.4`, `0.2.5`, `0.2.6`, `0.3.0`,
+and `0.4.0`; TestPyPI also has `0.4.0`. The old PyPI artifacts describe a
+different API and architecture, including `SolverFactory`, `PlanningVariable`,
+and Java-service requirements.
+
+Release rules:
+
+- Publish a final `0.5.0`, not a prerelease.
+- Keep `requires-python = ">=3.14"`.
+- Build wheels and the source distribution from this repository, with the
+  SolverForge Rust dependency base declared in `Cargo.toml` and locked in
+  `Cargo.lock`.
+- Publish to TestPyPI first through trusted publishing, then publish to PyPI
+  from a tagged release through the reviewed `pypi` environment.
+- After PyPI publication, verify `python3.14 -m pip install solverforge`
+  resolves to `0.5.0`.
+- After `0.5.0` is published and smoke-tested, yank PyPI `0.2.2` through
+  `0.3.0` with the reason
+  `Superseded by solverforge 0.5.0 dynamic Python binding architecture.`
+
+Trusted publishing should trust owner `SolverForge`, repository
+`solverforge-py`, workflow `release.yml`, TestPyPI environment `testpypi`, and
+PyPI environment `pypi`. The `pypi` GitHub environment should require manual
+approval, and the workflow uses OIDC rather than long-lived PyPI tokens. Run
+`make pre-release` before publishing; it checks the SolverForge dependency base,
+runs local CI, builds release artifacts, runs `twine check`, and verifies
+artifact contents.
 
 ## License
 
