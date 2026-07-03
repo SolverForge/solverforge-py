@@ -23,7 +23,8 @@ jobs:
       - name: Set up Python
         shell: bash
         run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
+          curl --retry 5 --retry-all-errors --retry-delay 5 \
+            -LsSf https://astral.sh/uv/install.sh | sh
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           "${HOME}/.local/bin/uv" python install "${PYTHON_VERSION}"
           host_python="$("${HOME}/.local/bin/uv" python find "${PYTHON_VERSION}")"
@@ -40,7 +41,8 @@ jobs:
       - name: Set up Rust
         shell: bash
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+          curl --retry 5 --retry-all-errors --retry-delay 5 \
+            --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- -y --profile minimal --default-toolchain "${RUST_VERSION}" \
                 --component rustfmt --component clippy
           if [ -f "${HOME}/.cargo/env" ]; then
