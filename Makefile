@@ -51,7 +51,7 @@ PY_INSTSONAME := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.ge
 PY_LINK_DIR := $(CURDIR)/target/libpython-link
 
 # ============== Phony Targets ==============
-.PHONY: banner help doctor venv install-python-deps install-playwright-browsers python-link develop develop-debug build build-wheel \
+.PHONY: banner help doctor venv install-python-deps install-playwright-browsers install-playwright-system-deps python-link develop develop-debug build build-wheel \
 		        build-sdist build-dist build-release check test test-quick rust-test py-test test-hospital test-deliveries test-one \
 	        test-examples-browser rust-test-one typecheck ruff lint fmt fmt-check py-format py-format-check clippy pre-commit docs-check \
         ci-local audit pre-release release-base-check release-upstream-check dist-check smoke-wheel \
@@ -102,6 +102,12 @@ $(PLAYWRIGHT_BROWSERS_STAMP): $(PY_DEPS_STAMP)
 	@$(PLAYWRIGHT) install chromium
 	@touch "$(PLAYWRIGHT_BROWSERS_STAMP)"
 	@printf -- "$(GREEN)$(CHECK) Playwright Chromium browser installed$(RESET)\n\n"
+
+install-playwright-system-deps: $(PY_DEPS_STAMP)
+	@printf -- "$(PROGRESS) Installing Playwright Chromium browser and system dependencies...\n"
+	@$(PLAYWRIGHT) install --with-deps chromium
+	@touch "$(PLAYWRIGHT_BROWSERS_STAMP)"
+	@printf -- "$(GREEN)$(CHECK) Playwright Chromium system dependencies installed$(RESET)\n\n"
 
 python-link: $(PY_LINK_DIR)/$(PY_LDLIBRARY)
 
@@ -347,7 +353,8 @@ help: banner
 	@printf -- "$(BOLD)Environment$(RESET)\n"
 	@printf -- "  $(GREEN)make doctor$(RESET)              Check Python, Rust, and Cargo availability\n"
 	@printf -- "  $(GREEN)make venv$(RESET)                Create the Python 3.14 virtualenv\n"
-	@printf -- "  $(GREEN)make install-python-deps$(RESET) Install runtime and developer Python tools\n\n"
+	@printf -- "  $(GREEN)make install-python-deps$(RESET) Install runtime and developer Python tools\n"
+	@printf -- "  $(GREEN)make install-playwright-system-deps$(RESET) Install Chromium and Linux browser libraries\n\n"
 	@printf -- "$(BOLD)Build$(RESET)\n"
 	@printf -- "  $(GREEN)make develop$(RESET)             Install the release native extension locally\n"
 	@printf -- "  $(GREEN)make develop-debug$(RESET)       Install the debug native extension locally\n"

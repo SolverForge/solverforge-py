@@ -56,6 +56,10 @@ jobs:
       - name: Validate SolverForge release base
         run: make release-base-check
 
+      - name: Install Playwright system dependencies
+        if: ${{ runner.os == 'Linux' }}
+        run: make install-playwright-system-deps
+
       - name: Run local CI
         run: make ci-local
 
