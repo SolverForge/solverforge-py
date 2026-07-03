@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import socket
 import threading
@@ -15,6 +16,8 @@ from playwright.sync_api import expect as playwright_expect
 
 from examples.solverforge_deliveries import create_app as create_deliveries_app
 from examples.solverforge_hospital import create_app as create_hospital_app
+
+SCORE_TEXT_RE = re.compile(r"-?\d+(?:\.\d+)?hard/-?\d+(?:\.\d+)?soft")
 
 
 @dataclass
@@ -177,8 +180,15 @@ def test_hospital_browser_solves_and_opens_analysis_modal() -> None:
                     "Completed",
                     timeout=70_000,
                 )
-                playwright_expect(page.locator("#sfScoreDisplay")).to_contain_text(
-                    "0hard/"
+                score_text = page.locator("#sfScoreDisplay").inner_text()
+                assert SCORE_TEXT_RE.fullmatch(score_text), score_text
+                playwright_expect(page.locator("#sf-app")).to_have_attribute(
+                    "data-lifecycle-state",
+                    "COMPLETED",
+                )
+                playwright_expect(page.locator("#sf-app")).to_have_attribute(
+                    "data-snapshot-revision",
+                    re.compile(r"\d+"),
                 )
 
                 page.locator('button[title="Score Analysis"]').click()
