@@ -28,14 +28,16 @@ shape, and source-checkout example UI/API surfaces.
   Versioned `/sf/*` asset names are served only when the pinned `solverforge-ui`
   crate owns that exact file; stale versioned asset requests fail instead of
   aliasing to current bytes.
-- `docs/`: callback, upstream bridge, threading, release, goal/non-goal, and
-  dynamic move parity contracts.
+- Documentation is intentionally kept in `README.md`, `AGENTS.md`, this
+  wireframe, and the example READMEs. There is no separate `docs/` directory.
 
 ## Python Package API
 
-The package exports `Solver`, `SolverManager`, `SolverConfig`,
+The package exports `Solver`, `SolverManager`, `JobHandle`, `SolverConfig`,
 `TerminationConfig`, `ConstraintFactory`, score classes, stable package error
-classes, `joiner`, `console`, `ui`, and decorators/helpers for model authoring:
+classes (`SolverForgeError`, `CallbackError`, `ModelValidationError`, and
+`NativeBridgeError`), `joiner`, `console`, `ui`, and decorators/helpers for
+model authoring:
 
 - `@planning_solution`, `@planning_entity`, `@problem_fact`
 - `planning_id`, `planning_variable`, `planning_list_variable`
@@ -50,12 +52,14 @@ mutates Rust-owned dynamic state and exports the solved state back to Python.
 Python callback solution views preserve ordinary solution-level lookup context
 while projecting entity/fact collections from Rust-owned state, so preview clones
 do not share mutable row objects with the working solution.
-List variables may declare element-owner and route callbacks for owner-aware
-list moves, list precedence/makespan scoring, and CVRP-style construction.
-Field-backed route metadata can supply depot, metric-class, distance-matrix,
-capacity, and demand data without per-query Python callbacks. Shadow update
-listeners refresh native-owned derived fields and those fields are exported back
-to Python objects after solve, analyze, and retained snapshot export.
+List variables may declare element-owner callbacks, solution-level route
+callbacks, entity-scoped route callbacks, and field-backed route metadata for
+owner-aware list moves, list precedence/makespan scoring, and CVRP-style
+construction. Field-backed route metadata can supply depot, metric-class,
+distance-matrix, capacity, and demand data without per-query Python callbacks.
+Shadow update listeners refresh native-owned derived fields and those fields are
+exported back to Python objects after solve, analyze, and retained snapshot
+export.
 
 ## Constraint Surface
 
@@ -93,24 +97,51 @@ fields, evaluates callback constraints against the imported state, exports
 refreshed assignments/shadow fields back to the Python object, and writes the
 calculated score to `solution.score`.
 
-`SolverManager(config=None)` wraps upstream retained jobs. It exposes
-`solve`, `get_status`, `events`, `wait`, `snapshot`, `pause`, `resume`,
-`cancel`, and `delete`. Submitted Python solutions are deep-copied before import
-so retained jobs do not mutate the caller's object. Snapshots are deep-copied
-Python solutions exported from Rust-owned retained state.
+`SolverManager(config=None)` wraps upstream retained jobs. It exposes `solve`,
+which returns `JobHandle(job_id=...)`, plus `get_status`, `events`, `wait`,
+`snapshot`, `pause`, `resume`, `cancel`, and `delete`. Submitted Python
+solutions are deep-copied before import so retained jobs do not mutate the
+caller's object. Snapshots are deep-copied Python solutions exported from
+Rust-owned retained state.
 
 Config may be a `SolverConfig`, a dict, or `None`. When `None`, `solver.toml` in
 the current directory is loaded if present. Termination fields are accepted at
 the top level or under `termination`, and phase termination is normalized before
 handoff.
 
+## Upstream Boundary
+
+The binding works against public upstream crates only. `PlanningSolution`
+requires `Clone + Send + Sync + 'static`. `ConstraintSet<S, Score>` is the
+public scoring seam used by the dynamic adapter. Logical descriptor IDs and
+dynamic backend/slot contracts are exposed through `solverforge-core`, with
+`solverforge-bridge` re-exporting them for binding crates, so dynamic Python
+entity classes do not need distinct Rust row types for descriptor identity.
+
+Upstream exposes `run_solver_with_config_parts`, allowing the binding to pass
+already-built descriptors, constraint sets, runtime model pieces, config, and
+runtime values instead of macro-style `fn() -> T` factories.
+`SolverRuntime::detached()` is used for synchronous binding solves that should
+use the upstream runner without copying retained manager internals. Retained
+Python jobs use upstream `SolverManager<PyDynamicSolution>` and the same
+`Solvable`/runtime path as synchronous dynamic solves.
+
+Rust-only custom search and partitioner registration remain Rust-only unless
+upstream exposes a public host-language binding seam.
+
 ## Dynamic Move Support
+
+Dynamic Python models support the public upstream move selectors listed below
+without exposing Rust macros, generating Rust, or silently degrading one
+selector into another. `DynamicScalar` and `DynamicList` are first-class dynamic
+move families; compound scalar hooks use Python callbacks because upstream
+grouped/conflict registration is typed Rust.
 
 Dynamic construction phases:
 
 - scalar `first_fit` and `cheapest_insertion`
-- scalar assignment-group `cheapest_insertion` when a construction phase declares
-  `group_name`
+- scalar assignment-group `first_fit` and `cheapest_insertion` when a
+  construction phase declares `group_name`
 - list `list_cheapest_insertion` and `list_regret_insertion`
 - route-aware list `list_clarke_wright` and `list_k_opt`
 
@@ -137,6 +168,35 @@ Selector combinators `limited_neighborhood`, `union_move_selector`, and
 two-child `cartesian_product_move_selector` compose supported scalar and list
 selectors. Rust macro models remain the fastest path; Python bindings preserve
 the Rust engine while paying dynamic callback overhead.
+
+The dynamic runtime uses one move family with scalar, list, and cartesian
+variants. `DynamicScalar` covers change, swap, pillar change/swap,
+ruin-recreate, grouped, conflict repair, and compound conflict repair moves.
+`DynamicList` covers change, swap, multi-swap, permute, sublist change/swap,
+reverse, k-opt, and ruin moves. Nearby selectors are selector strategies, not
+separate move mutations; they emit the corresponding change or swap variants
+after pruning and ordering.
+
+Grouped scalar and conflict repair selectors use Python-declared callbacks that
+return compound scalar edit candidates. Rust owns the actual solver state and
+applies those edits through `DynamicScalarVariableSlot<PyDynamicSolution>`, so
+clone, snapshot, and move mutation semantics remain Rust-side.
+
+Implementation status is complete across the relevant surfaces:
+`python/solverforge/decorators.py` exposes `@scalar_group`,
+`@conflict_repair`, and `@planning_solution(..., scalar_groups=...,
+conflict_repairs=...)`; `python/solverforge/model.py` emits and validates those
+schema registries; `python/solverforge/__init__.py` exports the public helpers;
+the Rust schema carries scalar group and conflict repair callback registries;
+`src/runtime/dynamic_scalar_search.rs` implements scalar, list, and cartesian
+dynamic moves; Python tests cover scalar assignment/change, limited
+neighborhood, swap with tabu, pillar moves, ruin-recreate, cartesian
+composition, grouped scalar, conflict repair, compound conflict repair, list
+selectors, mixed scalar/list union, list/list and scalar/list cartesian
+composition, and assigned-element preservation. Rust tests cover score, clone
+independence, descriptors, runtime slots, constraint set behavior, and manager
+type wiring. `DynamicListChange` must not exist as a top-level
+`solverforge-py` runtime type.
 
 ## Hospital Example UI/API
 
@@ -200,7 +260,7 @@ The installable wheel contains only:
 The native extension embeds shared `solverforge-ui` assets and exposes them via
 `solverforge.ui.asset()` for example applications and other Python HTTP hosts.
 
-The source distribution also carries the repository tests, examples, and docs.
+The source distribution also carries the repository tests and examples.
 SolverForge Rust dependencies and shared UI assets are declared from exact
 release versions in `Cargo.toml` and locked in `Cargo.lock`; release automation
 verifies that manifest/lockfile source of truth instead of inspecting a mutable
@@ -217,11 +277,16 @@ The root Makefile is the maintainer entry point:
 - `make test-examples-browser`: Playwright browser tests for both example apps
 - `make build-dist`: release source distribution plus local wheel
 - `make dist-check`: metadata and artifact-content checks
-- `make pre-release`: CI simulation plus release artifact checks
+- `make release-base-check`: exact SolverForge crates.io dependency-base check
+- `make pre-release`: release-base check, CI simulation, and release artifact checks
 - `make hospital-run` / `make hospital-solve`: browser or terminal hospital demo
 - `make test-hospital`: hospital model and FastAPI/frontend tests
 - `make deliveries-run` / `make deliveries-solve`: browser or terminal deliveries demo
 - `make test-deliveries`: deliveries model and FastAPI/frontend tests
 
 Use `make docs-check` after documentation edits so the tracked README, AGENTS,
-WIREFRAME, docs, and example README surfaces stay present and current.
+WIREFRAME, and example README surfaces stay present and current. Dynamic move
+parity closeout searches should stay clean for
+`cartesian_product_move_selector is not yet bound`, unsupported dynamic selector
+claims, stale `_ => false` selector fallbacks, and any top-level
+`DynamicListChange` runtime type.
