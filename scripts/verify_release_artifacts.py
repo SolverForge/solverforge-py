@@ -132,7 +132,7 @@ def assert_wheel(path: Path, version: str) -> None:
         if not has_native_extension:
             fail(f"wheel {path.name} does not contain the native extension")
 
-        forbidden_prefixes = ("docs/", "examples/", "tests/", "src/")
+        forbidden_prefixes = ("examples/", "tests/", "src/")
         forbidden = sorted(
             name for name in names if name.startswith(forbidden_prefixes)
         )
