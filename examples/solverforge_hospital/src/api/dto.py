@@ -120,15 +120,18 @@ def snapshot_payload(
     status: dict[str, object],
     revision: int | None,
 ) -> dict[str, Any]:
-    resolved_revision = revision if revision is not None else status.get("latest_snapshot_revision")
+    resolved_revision = (
+        revision if revision is not None else status.get("latest_snapshot_revision")
+    )
+    snapshot_score = score_to_string(plan.score)
     return {
         "id": record.id,
         "jobId": record.id,
         "snapshotRevision": resolved_revision,
         "lifecycleState": status.get("lifecycle_state"),
         "terminalReason": terminal_reason(status.get("terminal_reason")),
-        "currentScore": score_to_string(status.get("current_score")) or score_to_string(plan.score),
-        "bestScore": score_to_string(status.get("best_score")) or score_to_string(plan.score),
+        "currentScore": snapshot_score,
+        "bestScore": score_to_string(status.get("best_score")) or snapshot_score,
         "telemetry": telemetry(status.get("telemetry")),
         "solution": plan_to_payload(plan),
     }
@@ -141,7 +144,9 @@ def analysis_payload(
     revision: int | None,
 ) -> dict[str, Any]:
     analysis = analyze_plan(plan)
-    resolved_revision = revision if revision is not None else status.get("latest_snapshot_revision")
+    resolved_revision = (
+        revision if revision is not None else status.get("latest_snapshot_revision")
+    )
     return {
         "id": record.id,
         "jobId": record.id,
@@ -196,10 +201,15 @@ def constraint_analysis(plan: HospitalPlan) -> dict[str, dict[str, object]]:
             )
         undesired_count = shift.employee_undesired_day_count[shift.employee_idx]
         if undesired_count > 0:
-            add_match(rows["Undesired day for employee"], soft=-(undesired_count * SCORE_SCALE))
+            add_match(
+                rows["Undesired day for employee"],
+                soft=-(undesired_count * SCORE_SCALE),
+            )
         desired_count = shift.employee_desired_day_count[shift.employee_idx]
         if desired_count > 0:
-            add_match(rows["Desired day for employee"], soft=desired_count * SCORE_SCALE)
+            add_match(
+                rows["Desired day for employee"], soft=desired_count * SCORE_SCALE
+            )
 
     for left in plan.shifts:
         for right in plan.shifts:
@@ -220,7 +230,9 @@ def constraint_analysis(plan: HospitalPlan) -> dict[str, dict[str, object]]:
             if gap is not None and gap < 10 * 60:
                 add_match(
                     rows["At least 10 hours between 2 shifts"],
-                    hard=-((10 * 60 - gap) * STRUCTURAL_MINUTE_HARD_UNITS * SCORE_SCALE),
+                    hard=-(
+                        (10 * 60 - gap) * STRUCTURAL_MINUTE_HARD_UNITS * SCORE_SCALE
+                    ),
                 )
 
     balance = balance_score(plan.shifts)
@@ -233,7 +245,13 @@ def constraint_analysis(plan: HospitalPlan) -> dict[str, dict[str, object]]:
 
 
 def analysis_row(weight: str) -> dict[str, object]:
-    return {"weight": weight, "hard": 0, "soft": 0, "matchCount": 0, "score": "0hard/0soft"}
+    return {
+        "weight": weight,
+        "hard": 0,
+        "soft": 0,
+        "matchCount": 0,
+        "score": "0hard/0soft",
+    }
 
 
 def add_match(row: dict[str, object], *, hard: int = 0, soft: int = 0) -> None:
@@ -247,7 +265,9 @@ def row_int(value: object) -> int:
 
 
 def hard_soft_string(hard: int, soft: int) -> str:
-    return f"{format_decimal_score_part(hard)}hard/{format_decimal_score_part(soft)}soft"
+    return (
+        f"{format_decimal_score_part(hard)}hard/{format_decimal_score_part(soft)}soft"
+    )
 
 
 def balance_match_count(plan: HospitalPlan) -> int:

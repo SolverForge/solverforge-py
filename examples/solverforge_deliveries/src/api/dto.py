@@ -125,16 +125,15 @@ def snapshot_payload(
     resolved_revision = (
         revision if revision is not None else status.get("latest_snapshot_revision")
     )
+    snapshot_score = score_to_string(plan.score)
     return {
         "id": record.id,
         "jobId": record.id,
         "snapshotRevision": resolved_revision,
         "lifecycleState": status.get("lifecycle_state"),
         "terminalReason": terminal_reason(status.get("terminal_reason")),
-        "currentScore": score_to_string(status.get("current_score"))
-        or score_to_string(plan.score),
-        "bestScore": score_to_string(status.get("best_score"))
-        or score_to_string(plan.score),
+        "currentScore": snapshot_score,
+        "bestScore": score_to_string(status.get("best_score")) or snapshot_score,
         "telemetry": telemetry(status.get("telemetry")),
         "solution": plan_to_payload(plan),
     }

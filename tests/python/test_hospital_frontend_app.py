@@ -5,13 +5,15 @@ import socket
 import threading
 import time
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import uvicorn
 
-from examples.solverforge_hospital import create_app
+from examples.solverforge_hospital import create_app, demo_plan
+from examples.solverforge_hospital.src.api.dto import snapshot_payload
 
 
 @dataclass
@@ -64,6 +66,31 @@ def request_asset_headers(base_url: str, path: str) -> tuple[str, str]:
             response.headers.get("content-type") or "",
             response.headers.get("cache-control") or "",
         )
+
+
+def test_snapshot_payload_uses_snapshot_score_as_current_score() -> None:
+    plan = demo_plan()
+    plan.score = {"family": "hard_soft_decimal", "levels": [0, 15_199_995]}
+
+    payload = snapshot_payload(
+        SimpleNamespace(id="7"),
+        plan,
+        {
+            "lifecycle_state": "COMPLETED",
+            "terminal_reason": "TERMINATED_BY_CONFIG",
+            "latest_snapshot_revision": 3,
+            "current_score": {
+                "family": "hard_soft_decimal",
+                "levels": [-18_300_000, 11_299_996],
+            },
+            "best_score": {"family": "hard_soft_decimal", "levels": [0, 15_199_995]},
+            "telemetry": None,
+        },
+        None,
+    )
+
+    assert payload["currentScore"] == "0hard/151.99995soft"
+    assert payload["solution"]["score"] == "0hard/151.99995soft"
 
 
 def read_first_sse_event(

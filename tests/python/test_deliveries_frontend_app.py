@@ -5,13 +5,15 @@ import socket
 import threading
 import time
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import uvicorn
 
-from examples.solverforge_deliveries import create_app
+from examples.solverforge_deliveries import create_app, demo_plan
+from examples.solverforge_deliveries.src.api.dto import snapshot_payload
 
 
 @dataclass
@@ -64,6 +66,28 @@ def request_asset_headers(base_url: str, path: str) -> tuple[str, str]:
             response.headers.get("content-type") or "",
             response.headers.get("cache-control") or "",
         )
+
+
+def test_snapshot_payload_uses_snapshot_score_as_current_score() -> None:
+    plan = demo_plan("HARTFORD")
+    plan.score = {"family": "hard_soft", "levels": [0, 42]}
+
+    payload = snapshot_payload(
+        SimpleNamespace(id="7"),
+        plan,
+        {
+            "lifecycle_state": "COMPLETED",
+            "terminal_reason": "TERMINATED_BY_CONFIG",
+            "latest_snapshot_revision": 3,
+            "current_score": {"family": "hard_soft", "levels": [-1, 10]},
+            "best_score": {"family": "hard_soft", "levels": [0, 42]},
+            "telemetry": None,
+        },
+        None,
+    )
+
+    assert payload["currentScore"] == "0hard/42soft"
+    assert payload["solution"]["score"] == "0hard/42soft"
 
 
 def start_test_server() -> tuple[RunningServer, str]:
