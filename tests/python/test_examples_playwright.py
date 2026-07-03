@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 import re
 import shutil
@@ -9,6 +10,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 import uvicorn
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
@@ -18,6 +20,15 @@ from examples.solverforge_deliveries import create_app as create_deliveries_app
 from examples.solverforge_hospital import create_app as create_hospital_app
 
 SCORE_TEXT_RE = re.compile(r"-?\d+(?:\.\d+)?hard/-?\d+(?:\.\d+)?soft")
+OPENSTREETMAP_TILE_HOSTS = {
+    "a.tile.openstreetmap.org",
+    "b.tile.openstreetmap.org",
+    "c.tile.openstreetmap.org",
+}
+TRANSPARENT_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ax"
+    "p06QAAAAASUVORK5CYII="
+)
 
 
 @dataclass
@@ -103,6 +114,41 @@ def collect_browser_errors(page: Page) -> list[str]:
     )
     page.on("pageerror", lambda error: errors.append(str(error)))
     return errors
+
+
+def is_openstreetmap_tile_url(url: str) -> bool:
+    parsed = urlsplit(url)
+    return (
+        parsed.scheme == "https"
+        and parsed.netloc in OPENSTREETMAP_TILE_HOSTS
+        and parsed.path.endswith(".png")
+    )
+
+
+def stub_external_map_tiles(page: Page, base_url: str) -> list[str]:
+    base_origin = urlsplit(base_url).netloc
+    external_urls: list[str] = []
+
+    def handle_route(route: Any) -> None:
+        request = route.request
+        parsed = urlsplit(request.url)
+        if parsed.scheme in {"http", "https"} and parsed.netloc != base_origin:
+            external_urls.append(request.url)
+            if request.resource_type == "image" and is_openstreetmap_tile_url(
+                request.url
+            ):
+                route.fulfill(
+                    status=200,
+                    content_type="image/png",
+                    body=TRANSPARENT_PNG,
+                )
+            else:
+                route.abort()
+            return
+        route.continue_()
+
+    page.route("**/*", handle_route)
+    return external_urls
 
 
 def test_browser_imports_solverforge_ui_module_assets() -> None:
@@ -210,6 +256,7 @@ def test_deliveries_browser_recommends_insertions_for_assigned_delivery() -> Non
             try:
                 page = browser.new_page()
                 browser_errors = collect_browser_errors(page)
+                external_urls = stub_external_map_tiles(page, base_url)
 
                 page.goto(base_url, wait_until="networkidle")
                 playwright_expect(page.locator(".sf-header-title")).to_have_text(
@@ -239,6 +286,9 @@ def test_deliveries_browser_recommends_insertions_for_assigned_delivery() -> Non
                 playwright_expect(
                     dialog.get_by_role("button", name="Apply").first
                 ).to_be_visible()
+                assert all(
+                    is_openstreetmap_tile_url(url) for url in external_urls
+                ), external_urls
                 assert browser_errors == []
             finally:
                 browser.close()
