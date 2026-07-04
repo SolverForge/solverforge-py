@@ -18,6 +18,8 @@ callback/threading, boundary, and release contracts. There is no separate
 ## Build, Test, and Development Commands
 
 - `make develop`: create `.venv`, install tools, and install the release native extension.
+- `make install-playwright-system-deps`: install Chromium plus Linux shared
+  libraries required by Playwright browser tests in lean CI images.
 - `make test`: run Rust tests with the local Python link setup, then pytest.
 - `make test-quick`: run fast Python regressions without the example app tests.
 - `make test-hospital`: run the hospital model, FastAPI/frontend lifecycle, and
@@ -91,12 +93,16 @@ example dependencies, project URLs, classifiers, and maturin module settings.
 `Cargo.toml` owns native crate metadata and the SolverForge Rust dependency
 base; the package version must match `pyproject.toml`. `Cargo.lock` locks
 reproducible Rust builds. The `Makefile` owns local release targets,
-dependency-base checks, distribution builds, artifact validation, and
-`pre-release`. `.github/workflows/ci.yml` validates source checkouts, and
-`.github/workflows/release.yml` builds sdists/wheels and publishes to TestPyPI
-and PyPI. `scripts/verify_release_artifacts.py` checks deterministic artifact
-metadata/content, and `tests/python/test_release_metadata.py` guards release
-metadata drift.
+dependency-base checks, distribution builds, artifact validation, browser system
+dependency setup, and `pre-release`. `.github/workflows/ci.yml` validates source
+checkouts on GitHub and Forgejo, installs Playwright system dependencies on
+Linux, and retries network toolchain bootstraps for transient runner DNS misses.
+`.github/workflows/release.yml` builds sdists/wheels, verifies release
+artifacts, publishes to TestPyPI only from manual workflow dispatch, and
+publishes to PyPI only from a matching `v*.*.*` tag after the reviewed `pypi`
+environment approves the job. `scripts/verify_release_artifacts.py` checks
+deterministic artifact metadata/content, and
+`tests/python/test_release_metadata.py` guards release metadata drift.
 
 ## Commit & Pull Request Guidelines
 

@@ -102,7 +102,10 @@ which returns `JobHandle(job_id=...)`, plus `get_status`, `events`, `wait`,
 `snapshot`, `pause`, `resume`, `cancel`, and `delete`. Submitted Python
 solutions are deep-copied before import so retained jobs do not mutate the
 caller's object. Snapshots are deep-copied Python solutions exported from
-Rust-owned retained state.
+Rust-owned retained state. Example app bootstrap and retained event payloads
+report the current score from the attached solution snapshot when one is
+available, and use that score as the best-score fallback only when the retained
+manager event has not supplied a best score.
 
 Config may be a `SolverConfig`, a dict, or `None`. When `None`, `solver.toml` in
 the current directory is loaded if present. Termination fields are accepted at
@@ -213,8 +216,9 @@ tree with `domain/`, `constraints/`, `data/data_seed/`, `solver/service/`, and
 
 The static app loads `sf-config.json` and `generated/ui-model.json`, renders
 schedule views by location and by employee, streams retained job events over
-SSE, shows score/telemetry state, opens snapshot analysis, and supports pause,
-resume, cancel, and terminal delete controls.
+SSE, shows score/telemetry state from the latest retained event or snapshot,
+opens snapshot analysis, and supports pause, resume, cancel, and terminal delete
+controls.
 
 The app serves `/sf/{path}` from the native `solverforge-ui` bridge and serves
 only app-specific files from `examples/solverforge_hospital/static`.
@@ -245,7 +249,9 @@ It exposes:
 
 The static app serves the same native `/sf/{path}` shared assets as the hospital
 app and keeps deliveries-specific modules under
-`examples/solverforge_deliveries/static`.
+`examples/solverforge_deliveries/static`. Browser smoke tests stub only known
+OpenStreetMap tile image requests so route markers and insertion workflows stay
+hermetic while real app console/page errors still fail the test.
 
 ## PyPI Artifact Shape
 
@@ -266,11 +272,19 @@ release versions in `Cargo.toml` and locked in `Cargo.lock`; release automation
 verifies that manifest/lockfile source of truth instead of inspecting a mutable
 sibling checkout.
 
+As of July 4, 2026, this checkout is tagged as `v0.5.0` and the GitHub release
+workflow has built and verified the source distribution plus Linux, macOS, and
+Windows wheels. PyPI publication is still waiting at the reviewed `pypi`
+environment, so public PyPI and TestPyPI indexes still report `0.4.0` as the
+latest published package.
+
 ## Makefile And Validation Flow
 
 The root Makefile is the maintainer entry point:
 
 - `make develop`: release local extension install
+- `make install-playwright-system-deps`: Chromium and Linux browser libraries
+  for Playwright tests in lean CI images
 - `make test`: Rust plus Python tests
 - `make lint`: rustfmt check, ruff, mypy, clippy
 - `make ci-local`: local CI simulation

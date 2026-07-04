@@ -24,7 +24,20 @@ It demonstrates:
 - the upstream SolverForge Rust console in both terminal-only and FastAPI CLI
   server modes.
 
-Install the published package and run the source-checkout example:
+For this source checkout, run the example through the root Makefile:
+
+```sh
+make hospital-run
+```
+
+For a terminal-only solve:
+
+```sh
+make hospital-solve
+```
+
+After the verified `0.5.0` artifacts are approved and published to PyPI, the
+same source-checkout example can be run against the installed package:
 
 ```sh
 python3.14 -m venv .venv-hospital
@@ -35,7 +48,7 @@ python -m examples.solverforge_hospital
 
 Then open `http://127.0.0.1:7860`.
 
-For a terminal-only solve:
+For a terminal-only solve against the installed package:
 
 ```sh
 python -m examples.solverforge_hospital --solve

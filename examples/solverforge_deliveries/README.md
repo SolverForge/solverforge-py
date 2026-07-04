@@ -25,7 +25,20 @@ It demonstrates:
 - shared SolverForge UI assets served from the native `solverforge-ui` bridge,
   with only app-specific browser modules under this example's `static/` tree.
 
-Install the published package and run the source-checkout example:
+For this source checkout, run the example through the root Makefile:
+
+```sh
+make deliveries-run PORT=7861
+```
+
+For a terminal-only solve:
+
+```sh
+make deliveries-solve
+```
+
+After the verified `0.5.0` artifacts are approved and published to PyPI, the
+same source-checkout example can be run against the installed package:
 
 ```sh
 python3.14 -m venv .venv-deliveries
@@ -36,7 +49,7 @@ python -m examples.solverforge_deliveries
 
 Then open `http://127.0.0.1:7861`.
 
-For a terminal-only solve:
+For a terminal-only solve against the installed package:
 
 ```sh
 python -m examples.solverforge_deliveries --solve

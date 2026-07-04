@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
-## [0.5.0](///compare/v0.4.1...v0.5.0) (2026-07-03)
+## [0.5.0](https://github.com/SolverForge/solverforge-py/compare/v0.4.1...v0.5.0) (2026-07-03)
 
 
 ### Features
@@ -17,9 +17,13 @@ All notable changes to this project will be documented in this file. See [commit
 ### Bug Fixes
 
 * **ci:** bootstrap Forgejo toolchains in workflow 8e5f791
+* **ci:** install Playwright system dependencies b249fd1
+* **ci:** retry toolchain bootstrap downloads cd60f76
 * **ci:** run workflow from checkout root 8733fc3
 * **ci:** select Forgejo runner labels 56ff4fc
 * **deliveries:** recommend assigned-route insertions d59daea
+* **examples:** report snapshot score in payloads 0bfcaa0
+* **examples:** report solution scores in events bdcddd8
 * **model:** validate scalar group names cfa2070
 * **runtime:** align dynamic construction with core semantics 7cacda0
 * **runtime:** cap first-fit required construction candidates 3666c20
@@ -29,7 +33,19 @@ All notable changes to this project will be documented in this file. See [commit
 * **scoring:** return true shadow update deltas 88dc500
 * **state:** preserve callback root fields 0aacef5
 
-## [0.4.1](///compare/v0.4.0...v0.4.1) (2026-06-02)
+
+### Tests
+
+* **examples:** stabilize hospital browser smoke f11efd6
+* **examples:** stub map tiles in browser smoke d69ca3e
+
+
+### Documentation and release
+
+* **docs:** remove standalone docs surface b1c6e1f
+* **release:** cut 0.5.0 metadata 4728014
+
+## [0.4.1](https://github.com/SolverForge/solverforge-py/compare/v0.4.0...v0.4.1) (2026-06-02)
 
 
 ### Bug Fixes

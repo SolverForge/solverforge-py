@@ -43,6 +43,7 @@ SOLVERFORGE_RELEASE_VERSION := $(shell $(HOST_PYTHON) scripts/verify_solverforge
 MYPY_PATHS := python/solverforge examples/solverforge_hospital examples/solverforge_deliveries
 PY_STYLE_PATHS := python tests examples scripts
 DOC_CHECK_PATHS := README.md AGENTS.md WIREFRAME.md examples/solverforge_hospital/README.md examples/solverforge_deliveries/README.md
+DOC_STALE_PATTERNS := move_count_limit|bounded scalar assignment fallback|currently contains scaffolding|owner-aware, nearby, swap, sublist, reverse, k-opt, and ruin selectors .*not yet|no committed history yet|/home/pvd/dev/solverforge|next release from this checkout|As of 2026-07-03|Install the published package and run
 PY_DEPS_STAMP := $(VENV)/.solverforge-py-deps
 PLAYWRIGHT_BROWSERS_STAMP := $(VENV)/.solverforge-py-playwright-chromium
 PY_LIBDIR := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')
@@ -244,7 +245,7 @@ docs-check:
 	@test ! -d docs
 	@test -f examples/solverforge_hospital/README.md
 	@test -f examples/solverforge_deliveries/README.md
-	@! rg -n "move_count_limit|bounded scalar assignment fallback|currently contains scaffolding|owner-aware, nearby, swap, sublist, reverse, k-opt, and ruin selectors .*not yet|no committed history yet|/home/pvd/dev/solverforge" $(DOC_CHECK_PATHS)
+	@! rg -n "$(DOC_STALE_PATTERNS)" $(DOC_CHECK_PATHS)
 	@printf -- "$(GREEN)$(CHECK) Documentation surface looks current$(RESET)\n"
 
 release-base-check:

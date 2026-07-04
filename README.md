@@ -18,8 +18,16 @@ other APIs that are not part of this package.
 
 ## Installation
 
+This checkout builds `solverforge` `0.5.0`. As of July 4, 2026, the `v0.5.0`
+tagged release artifacts have passed GitHub release verification and are waiting
+at the reviewed PyPI publish environment; PyPI and TestPyPI still resolve
+`solverforge` to `0.4.0`. Use the root Makefile targets for source-current
+validation until that publish approval completes.
+
+After the release approval completes:
+
 ```sh
-python3.14 -m pip install solverforge
+python3.14 -m pip install "solverforge==0.5.0"
 ```
 
 The installable wheel contains the core `solverforge` package, native extension,
@@ -30,9 +38,16 @@ installed into the runtime wheel.
 
 ## Examples
 
-Run source-checkout examples against the published PyPI package. The examples
-import `solverforge` from the installed package and do not require `PYTHONPATH`
-or an editable local checkout.
+Run source-current examples through the root Makefile while the `0.5.0` PyPI
+publish job is awaiting approval:
+
+```sh
+make hospital-run
+make deliveries-run PORT=7861
+```
+
+After `0.5.0` is published to PyPI, the same source-checkout examples can be run
+against the installed package without `PYTHONPATH` or an editable checkout:
 
 ```sh
 python3.14 -m venv .venv-examples
@@ -101,6 +116,7 @@ current checkout.
 
 ```sh
 make develop          # release native extension installed into .venv
+make install-playwright-system-deps  # Linux Chromium browser libraries for CI
 make test             # Rust tests with Python link setup, then pytest
 make lint             # rustfmt check, ruff, mypy, and clippy
 make ci-local         # local CI simulation
@@ -141,7 +157,9 @@ Run `make help` for focused targets such as `make test-hospital`,
   phases where the model supplies the required list or route hooks.
 - `SolverManager` is backed by upstream retained jobs, statuses, events, and
   snapshots. `SolverManager.solve(...)` returns `JobHandle(job_id=...)`; the
-  manager supports pause, resume, cancel, delete, and exact snapshot reads.
+  manager supports pause, resume, cancel, delete, exact snapshot reads, and
+  retained event payloads whose current score is read from the attached solution
+  snapshot when present.
 - `planning_variable(...)` supports row candidate callbacks and nearby value or
   entity candidate/distance callbacks for dynamic scalar construction and nearby
   scalar local search.
@@ -241,25 +259,31 @@ solution state, safe to run concurrently, and treat solution-level lookup contex
 as immutable for the duration of a solve. Third-party Python extension modules
 used inside callbacks may still impose their own synchronization constraints.
 
-## Release Plan
+## Release State
 
-This repository publishes the `solverforge` package on PyPI. The next release
-from this checkout is `0.5.0`, carrying the SolverForge Rust dependency base
-forward to `0.17.2`. As of 2026-07-03, PyPI latest for `solverforge` is `0.4.0`
-with published versions `0.2.2`, `0.2.3`, `0.2.4`, `0.2.5`, `0.2.6`, `0.3.0`,
-and `0.4.0`; TestPyPI also has `0.4.0`. The old PyPI artifacts describe a
-different API and architecture, including `SolverFactory`, `PlanningVariable`,
-and Java-service requirements.
+This repository publishes the `solverforge` package on PyPI. The current
+checkout is `0.5.0`, carrying the SolverForge Rust dependency base forward to
+`0.17.2`. The `v0.5.0` tag points at the source-current release head, GitHub CI
+and Forgejo CI are green for that head, and the GitHub release workflow has built
+and verified the source distribution plus Linux, macOS, and Windows wheels. As
+of July 4, 2026, the release workflow is waiting at the reviewed `pypi`
+environment before publishing.
+
+PyPI latest for `solverforge` is still `0.4.0`, with published versions `0.2.2`,
+`0.2.3`, `0.2.4`, `0.2.5`, `0.2.6`, `0.3.0`, and `0.4.0`; TestPyPI also has
+`0.4.0`. The old PyPI artifacts describe a different API and architecture,
+including `SolverFactory`, `PlanningVariable`, and Java-service requirements.
 
 Release rules:
 
-- Publish a final `0.5.0`, not a prerelease.
+- Publish the verified final `0.5.0`, not a prerelease.
 - Keep `requires-python = ">=3.14"`.
 - Build wheels and the source distribution from this repository, with the
   SolverForge Rust dependency base declared in `Cargo.toml` and locked in
   `Cargo.lock`.
-- Publish to TestPyPI first through trusted publishing, then publish to PyPI
-  from a tagged release through the reviewed `pypi` environment.
+- Publish to TestPyPI only from `workflow_dispatch` through trusted publishing.
+  Tagged `v*.*.*` pushes build and verify release artifacts, then publish to
+  PyPI only after the reviewed `pypi` environment approves the job.
 - After PyPI publication, verify `python3.14 -m pip install solverforge`
   resolves to `0.5.0`.
 - After `0.5.0` is published and smoke-tested, yank PyPI `0.2.2` through
