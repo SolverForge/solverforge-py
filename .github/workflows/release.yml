@@ -143,6 +143,8 @@ jobs:
     runs-on: ${{ github.server_url == 'https://github.com' && 'ubuntu-latest' || 'rust' }}
     needs: verify
     if: >-
+      always() &&
+      needs.verify.result == 'success' &&
       github.server_url == 'https://github.com' &&
       github.event_name == 'workflow_dispatch'
     environment: testpypi
@@ -166,6 +168,8 @@ jobs:
     runs-on: ${{ github.server_url == 'https://github.com' && 'ubuntu-latest' || 'rust' }}
     needs: verify
     if: >-
+      always() &&
+      needs.verify.result == 'success' &&
       github.server_url == 'https://github.com' &&
       github.event_name == 'push' &&
       startsWith(github.ref, 'refs/tags/v')
