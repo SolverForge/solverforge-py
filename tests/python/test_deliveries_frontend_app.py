@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 import uvicorn
 
 from examples.solverforge_deliveries import create_app, demo_plan
-from examples.solverforge_deliveries.src.api.dto import snapshot_payload
+from examples.solverforge_deliveries.src.api.dto import snapshot_payload, telemetry
 from examples.solverforge_deliveries.src.solver.service.payload import (
     event_payload_from_native,
     status_event_payload,
@@ -92,6 +92,40 @@ def test_snapshot_payload_uses_snapshot_score_as_current_score() -> None:
 
     assert payload["currentScore"] == "0hard/42soft"
     assert payload["solution"]["score"] == "0hard/42soft"
+
+
+def test_telemetry_payload_maps_current_phase() -> None:
+    payload = telemetry(
+        {
+            "phase": {
+                "phase_index": 0,
+                "phase_type": "Construction Heuristic",
+                "elapsed_ms": 1010,
+                "step_count": 6,
+                "moves_generated": 18,
+                "moves_evaluated": 15,
+                "moves_accepted": 4,
+                "moves_applied": 2,
+                "score_calculations": 16,
+                "generation_ms": 5,
+                "evaluation_ms": 9,
+            }
+        }
+    )
+
+    assert payload["phase"] == {
+        "phaseIndex": 0,
+        "phaseType": "Construction Heuristic",
+        "elapsedMs": 1010,
+        "stepCount": 6,
+        "movesGenerated": 18,
+        "movesEvaluated": 15,
+        "movesAccepted": 4,
+        "movesApplied": 2,
+        "scoreCalculations": 16,
+        "generationMs": 5,
+        "evaluationMs": 9,
+    }
 
 
 def test_event_payload_uses_solution_score_as_current_score() -> None:
@@ -212,7 +246,7 @@ def test_deliveries_python_frontend_app_serves_static_and_solve_lifecycle() -> N
         demo = request_json(base_url, "/demo-data/HARTFORD")
         assert len(demo["deliveries"]) == 50
         assert len(demo["vehicles"]) == 10
-        assert demo["viewState"]["preview"]["unassignedDeliveryIds"] == []
+        assert demo["viewState"]["preview"]["unassignedDeliveryIds"] == list(range(50))
 
         created = request_json(base_url, "/jobs", demo)
         job_id = created["id"]

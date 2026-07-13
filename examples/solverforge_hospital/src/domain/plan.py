@@ -4,7 +4,12 @@ import math
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
-from solverforge import HardSoftDecimalScore, planning_entity, planning_solution, planning_variable
+from solverforge import (
+    HardSoftDecimalScore,
+    planning_entity,
+    planning_solution,
+    planning_variable,
+)
 
 from .care_hub import CareHub, care_hub_distance, care_hub_from_skill
 from .employee import Employee
@@ -18,10 +23,33 @@ def hard_scaled(value: int) -> HardSoftDecimalScore:
     return HardSoftDecimalScore.of_hard_scaled(value)
 
 
+def nearby_shift_distance(left: Any, right: Any) -> float:
+    return shift_to_shift_nearby_distance(left, right)
+
+
+def eligible_employee_candidates(shift: Any) -> list[int]:
+    return [
+        employee_idx
+        for employee_idx, (has_skill, unavailable_minutes) in enumerate(
+            zip(
+                shift.employee_has_skill,
+                shift.employee_unavailable_minutes,
+                strict=True,
+            )
+        )
+        if has_skill and unavailable_minutes == 0
+    ]
+
+
 @planning_entity
 class Shift:
     employee_idx = planning_variable(
         value_range_provider="employee_indices",
+        candidate_values=eligible_employee_candidates,
+        nearby_value_candidates="employee_nearby_candidates",
+        nearby_entity_candidates="shift_nearby_candidates",
+        nearby_value_distance_meter="employee_nearby_distance",
+        nearby_entity_distance_meter=nearby_shift_distance,
         allows_unassigned=True,
     )
 
@@ -52,7 +80,9 @@ class Shift:
         self.touched_dates = tuple(
             day.isoformat() for day in dates_touched_by_span(self.start_dt, self.end_dt)
         )
-        self.employee_has_skill = [required_skill in employee.skills for employee in employees]
+        self.employee_has_skill = [
+            required_skill in employee.skills for employee in employees
+        ]
         self.employee_unavailable_minutes = [
             sum(
                 overlap_minutes_for_day(self.start_dt, self.end_dt, parse_date(day))
@@ -68,11 +98,17 @@ class Shift:
             sum(1 for day in self.touched_dates if day in employee.desired_days)
             for employee in employees
         ]
-        self.employee_undesired_day = [count > 0 for count in self.employee_undesired_day_count]
-        self.employee_desired_day = [count > 0 for count in self.employee_desired_day_count]
+        self.employee_undesired_day = [
+            count > 0 for count in self.employee_undesired_day_count
+        ]
+        self.employee_desired_day = [
+            count > 0 for count in self.employee_desired_day_count
+        ]
         self.employee_nearby_distance = [
             shift_to_employee_nearby_distance(self, employee) for employee in employees
         ]
+        self.employee_nearby_candidates = eligible_employee_candidates(self)
+        self.shift_nearby_candidates: list[int] = []
         self.employee_idx = validate_employee_idx(employee_idx, len(employees))
 
     @property
@@ -120,7 +156,9 @@ def employee_unavailable_minutes(shift: Any, employee: Any) -> int:
 
 
 def overlaps(left: Any, right: Any) -> bool:
-    return bool(left.start_minute < right.end_minute and right.start_minute < left.end_minute)
+    return bool(
+        left.start_minute < right.end_minute and right.start_minute < left.end_minute
+    )
 
 
 def overlap_minutes(left: Any, right: Any) -> int:
@@ -198,7 +236,9 @@ def overlap_minutes_for_day(start: datetime, end: datetime, target: date) -> int
 
 
 def start_band_distance(left_hour: int, right_hour: int) -> float:
-    return float(min(abs(start_band_index(left_hour) - start_band_index(right_hour)), 2))
+    return float(
+        min(abs(start_band_index(left_hour) - start_band_index(right_hour)), 2)
+    )
 
 
 def start_band_index(hour: int) -> int:
@@ -223,7 +263,9 @@ def shift_to_employee_nearby_distance(shift: Shift, employee: Employee) -> float
 
 
 def shift_to_shift_nearby_distance(left: Any, right: Any) -> float:
-    return 10.0 * care_hub_distance(left.care_hub, right.care_hub) + start_band_distance(
+    return 10.0 * care_hub_distance(
+        left.care_hub, right.care_hub
+    ) + start_band_distance(
         parse_datetime(left.start).hour,
         parse_datetime(right.start).hour,
     )
@@ -253,4 +295,7 @@ class HospitalPlan:
         self.employees = employees
         self.shifts = shifts
         self.employee_indices = list(range(len(employees)))
+        shift_indices = list(range(len(shifts)))
+        for shift in shifts:
+            shift.shift_nearby_candidates = shift_indices
         self.score = None

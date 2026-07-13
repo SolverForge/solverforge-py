@@ -16,7 +16,9 @@ from examples.solverforge_hospital import (
     solve_demo,
 )
 from examples.solverforge_hospital.src.api.dto import plan_to_payload
+from examples.solverforge_hospital.src.domain.plan import eligible_employee_candidates
 from solverforge import Solver, SolverConfig
+from solverforge.model import build_schema
 
 HOSPITAL_EXAMPLE_ROOT = Path(__file__).parents[2] / "examples" / "solverforge_hospital"
 
@@ -51,6 +53,7 @@ def test_solverforge_hospital_python_model_solves_full_schedule() -> None:
 
 def test_solverforge_hospital_construction_matches_upstream_oracle() -> None:
     construction_only = SolverConfig.from_toml("""
+environment_mode = "reproducible"
 random_seed = 1
 
 [termination]
@@ -77,6 +80,7 @@ variable_name = "employee_idx"
 def test_solverforge_hospital_config_keeps_upstream_termination() -> None:
     config = HOSPITAL_SOLVER_CONFIG.to_dict()
 
+    assert config["environment_mode"] == "reproducible"
     assert config["random_seed"] == 1
     assert config["termination"]["seconds_spent_limit"] == 30
     assert config["termination"]["unimproved_seconds_spent_limit"] == 5
@@ -88,11 +92,33 @@ def test_solverforge_hospital_config_keeps_upstream_termination() -> None:
         "type": "late_acceptance",
         "late_acceptance_size": 400,
     }
-    assert config["phases"][1]["forager"] == {"type": "accepted_count", "limit": 4}
-    assert [selector["type"] for selector in config["phases"][1]["move_selector"]["selectors"]] == [
+    assert config["phases"][1]["forager"] == {"type": "first_best_score_improving"}
+    assert [
+        selector["type"]
+        for selector in config["phases"][1]["move_selector"]["selectors"]
+    ] == [
         "nearby_change_move_selector",
         "nearby_swap_move_selector",
     ]
+
+
+def test_solverforge_hospital_prunes_statically_ineligible_employee_candidates() -> (
+    None
+):
+    plan = demo_plan()
+    field = build_schema(plan)["entities"][0]["fields"][0]
+
+    assert field["candidate_values"] is eligible_employee_candidates
+
+    for shift in plan.shifts:
+        candidates = eligible_employee_candidates(shift)
+        assert candidates == shift.employee_nearby_candidates
+        assert candidates
+        assert all(shift.employee_has_skill[candidate] for candidate in candidates)
+        assert all(
+            shift.employee_unavailable_minutes[candidate] == 0
+            for candidate in candidates
+        )
 
 
 def test_solverforge_hospital_python_model_uses_canonical_large_payload() -> None:
@@ -164,6 +190,10 @@ def test_solverforge_hospital_file_tree_matches_rust_ownership_shape() -> None:
         "src/solver/service/payload.py",
     }
 
-    missing = [path for path in sorted(expected) if not (HOSPITAL_EXAMPLE_ROOT / path).is_file()]
+    missing = [
+        path
+        for path in sorted(expected)
+        if not (HOSPITAL_EXAMPLE_ROOT / path).is_file()
+    ]
 
     assert missing == []

@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 import uvicorn
 
 from examples.solverforge_hospital import create_app, demo_plan
-from examples.solverforge_hospital.src.api.dto import snapshot_payload
+from examples.solverforge_hospital.src.api.dto import snapshot_payload, telemetry
 from examples.solverforge_hospital.src.solver.service.payload import (
     event_payload_from_native,
     status_event_payload,
@@ -95,6 +95,40 @@ def test_snapshot_payload_uses_snapshot_score_as_current_score() -> None:
 
     assert payload["currentScore"] == "0hard/151.99995soft"
     assert payload["solution"]["score"] == "0hard/151.99995soft"
+
+
+def test_telemetry_payload_maps_current_phase() -> None:
+    payload = telemetry(
+        {
+            "phase": {
+                "phase_index": 1,
+                "phase_type": "Local Search",
+                "elapsed_ms": 1250,
+                "step_count": 3,
+                "moves_generated": 12,
+                "moves_evaluated": 10,
+                "moves_accepted": 2,
+                "moves_applied": 1,
+                "score_calculations": 11,
+                "generation_ms": 4,
+                "evaluation_ms": 8,
+            }
+        }
+    )
+
+    assert payload["phase"] == {
+        "phaseIndex": 1,
+        "phaseType": "Local Search",
+        "elapsedMs": 1250,
+        "stepCount": 3,
+        "movesGenerated": 12,
+        "movesEvaluated": 10,
+        "movesAccepted": 2,
+        "movesApplied": 1,
+        "scoreCalculations": 11,
+        "generationMs": 4,
+        "evaluationMs": 8,
+    }
 
 
 def test_event_payload_uses_solution_score_as_current_score() -> None:
@@ -294,9 +328,10 @@ def test_hospital_python_frontend_app_serves_static_and_solve_lifecycle() -> Non
         assert terminal["terminalReason"] == "terminated_by_config"
         assert terminal["bestScore"].startswith("0hard/")
         assert terminal["telemetry"]["stepCount"] > len(demo["shifts"])
-        assert terminal["telemetry"]["movesGenerated"] > len(demo["shifts"]) * len(
-            demo["employees"]
+        eligible_candidate_count = sum(
+            len(shift.employee_nearby_candidates) for shift in demo_plan().shifts
         )
+        assert terminal["telemetry"]["movesGenerated"] > eligible_candidate_count
 
         snapshot = request_json(base_url, f"/jobs/{job_id}/snapshot")
         assert snapshot["solution"]["score"].startswith("0hard/")

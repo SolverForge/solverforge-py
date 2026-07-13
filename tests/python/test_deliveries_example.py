@@ -60,10 +60,18 @@ def test_solverforge_deliveries_schema_exposes_cvrp_and_shadow_hooks() -> None:
     assert vehicle["type_name"] == "Vehicle"
     assert delivery_order["kind"] == "planning_list_variable"
     assert delivery_order["element_collection"] == "delivery_indices"
-    assert callable(delivery_order["route_depot"])
-    assert callable(delivery_order["route_distance"])
-    assert callable(delivery_order["route_feasible"])
-    assert callable(delivery_order["route_metric_class"])
+    metadata = delivery_order["list_metadata"]
+    assert metadata["route"]["depot"] == {"kind": "row", "field": "depot"}
+    assert metadata["savings"]["metric_class"] == {
+        "kind": "row",
+        "field": "metric_class",
+    }
+    assert metadata["route"]["distance"] == {
+        "kind": "row",
+        "field": "distance_matrix",
+    }
+    assert metadata["route"]["feasible"]["kind"] == "solution"
+    assert callable(metadata["route"]["feasible"]["callback"])
     assert schema["shadow_updates"][0]["list_owner"] == "vehicles"
     assert callable(schema["shadow_updates"][0]["post_update_listener"])
 
@@ -81,28 +89,72 @@ def test_solverforge_deliveries_config_uses_list_initializer_and_cvrp_polish() -
     assert config["phases"][1]["k"] == 2
 
 
-def test_solverforge_deliveries_payload_round_trips_seeded_routes() -> None:
+def test_solverforge_deliveries_payload_round_trips_unassigned_seed() -> None:
     payload = fixture_payload("HARTFORD")
     plan = plan_from_payload(payload)
 
     assert payload["score"] is None
     assert len(payload["deliveries"]) == 50
     assert len(payload["vehicles"]) == 10
-    assert payload["viewState"]["preview"]["unassignedDeliveryIds"] == []
-    assert_complete_routes(plan)
+    assert payload["viewState"]["preview"]["unassignedDeliveryIds"] == list(range(50))
+    assert [vehicle.delivery_order for vehicle in plan.vehicles] == [
+        [] for _ in range(10)
+    ]
     assert plan_to_payload(plan)["vehicles"] == payload["vehicles"]
 
 
 def test_solverforge_deliveries_analyze_penalizes_unassigned_deliveries() -> None:
     plan = demo_plan("HARTFORD")
-    plan.remove_delivery_assignments(0)
-    plan.refresh_route_shadows()
 
     score = Solver.analyze(plan)
     expected_hard, expected_soft = score_components(plan)
 
-    assert expected_hard == -1_000_000
+    assert expected_hard == -(len(plan.deliveries) * 1_000_000)
     assert score == {"family": "hard_soft", "levels": [expected_hard, expected_soft]}
+
+
+def test_solverforge_deliveries_refreshes_route_matrix_after_coordinate_edits() -> None:
+    plan = DeliveryPlan(
+        name="coordinate-edit",
+        deliveries=[
+            Delivery(
+                id=0,
+                label="A",
+                kind="retail",
+                lat=0.0,
+                lng=0.0,
+                demand=1,
+                min_start_time=0,
+                max_end_time=1_000_000,
+                service_duration=0,
+            )
+        ],
+        vehicles=[
+            Vehicle(
+                id=0,
+                name="Van 1",
+                capacity=10,
+                home_lat=0.0,
+                home_lng=0.0,
+                departure_time=0,
+                delivery_order=[0],
+            )
+        ],
+    )
+    original_matrix = plan.vehicles[0].distance_matrix
+
+    plan.deliveries[0].lat = 10.0
+    moved_delivery_score = score_components(plan)
+    moved_delivery_matrix = plan.vehicles[0].distance_matrix
+
+    assert moved_delivery_matrix is not original_matrix
+    assert moved_delivery_score[1] == build_preview(plan)["softScore"] < 0
+    assert Solver.analyze(plan)["levels"][-1] == moved_delivery_score[1]
+
+    plan.vehicles[0].home_lat = 10.0
+
+    assert plan.vehicles[0].distance_matrix is not moved_delivery_matrix
+    assert score_components(plan)[1] == build_preview(plan)["softScore"] == 0
 
 
 def test_solverforge_deliveries_solve_assigns_initially_unassigned_delivery() -> None:
@@ -289,13 +341,12 @@ def test_solverforge_deliveries_recommends_same_route_assigned_insertions() -> N
         assert preview_order[candidate["insertIndex"]] == 0
 
 
-def test_solverforge_deliveries_analysis_reports_unassigned_match_count() -> None:
+def test_solverforge_deliveries_analysis_reports_unassigned_seed_match_count() -> None:
     plan = demo_plan("HARTFORD")
-    plan.remove_delivery_assignments(0)
 
     rows = constraint_analysis(plan)
 
-    assert rows["All Deliveries Assigned"]["matchCount"] == 1
+    assert rows["All Deliveries Assigned"]["matchCount"] == len(plan.deliveries)
 
 
 def test_solverforge_deliveries_file_tree_matches_example_ownership_shape() -> None:

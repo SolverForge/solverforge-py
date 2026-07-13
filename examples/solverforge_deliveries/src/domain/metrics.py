@@ -26,6 +26,9 @@ def route_distance(
     to_element: int,
 ) -> int:
     vehicle = solution.vehicles[entity_index]
+    matrix = getattr(vehicle, "distance_matrix", None)
+    if matrix:
+        return int(matrix[from_element][to_element])
     from_coord = route_coord(solution, vehicle, from_element)
     to_coord = route_coord(solution, vehicle, to_element)
     return meters_to_seconds(round(haversine_meters(*from_coord, *to_coord)))
@@ -203,25 +206,7 @@ def vehicle_metrics(plan: Any, vehicle: Any) -> dict[str, Any]:
 
 
 def evaluate_plan_components(plan: Any) -> dict[str, int]:
-    assigned = {
-        delivery_id
-        for vehicle in plan.vehicles
-        for delivery_id in vehicle.delivery_order
-        if 0 <= delivery_id < len(plan.deliveries)
-    }
-    preview = build_preview(plan)
-    return {
-        "unassignedCount": len(plan.deliveries) - len(assigned),
-        "capacityOverage": sum(
-            int(vehicle["capacityOverage"]) for vehicle in preview["vehicles"]
-        ),
-        "lateSeconds": sum(
-            int(vehicle["totalLateSeconds"]) for vehicle in preview["vehicles"]
-        ),
-        "travelSeconds": sum(
-            int(vehicle["totalTravelSeconds"]) for vehicle in preview["vehicles"]
-        ),
-    }
+    return _route_score_components(plan)
 
 
 def build_routes_snapshot(plan: Any) -> dict[str, Any]:
@@ -294,20 +279,31 @@ def rank_delivery_insertions(
     plan: Any, delivery_id: int, limit: int
 ) -> list[dict[str, Any]]:
     baseline = score_components(plan)
+    base_plan = deepcopy(plan)
+    base_plan.normalize()
+    base_plan.remove_delivery_assignments(delivery_id)
+    base_components = _route_score_components(base_plan)
+    base_vehicle_components = [
+        _vehicle_score_components(base_plan, vehicle_index, vehicle.delivery_order)
+        for vehicle_index, vehicle in enumerate(base_plan.vehicles)
+    ]
     candidates = []
-    for vehicle_index, vehicle in enumerate(plan.vehicles):
-        removable_count = vehicle.delivery_order.count(delivery_id)
-        route_length_after_removal = len(vehicle.delivery_order) - removable_count
+    for vehicle_index, vehicle in enumerate(base_plan.vehicles):
+        route_length_after_removal = len(vehicle.delivery_order)
         for insert_index in range(route_length_after_removal + 1):
-            preview_plan = deepcopy(plan)
-            preview_plan.normalize()
-            preview_plan.remove_delivery_assignments(delivery_id)
-            preview_vehicle = preview_plan.vehicles[vehicle_index]
-            preview_vehicle.delivery_order.insert(insert_index, delivery_id)
-            preview_plan.refresh_route_shadows()
-            score = score_components(preview_plan)
+            candidate_order = list(vehicle.delivery_order)
+            candidate_order.insert(insert_index, delivery_id)
+            candidate_vehicle_components = _vehicle_score_components(
+                base_plan, vehicle_index, candidate_order
+            )
+            score = _candidate_score_components(
+                base_components,
+                base_vehicle_components[vehicle_index],
+                candidate_vehicle_components,
+            )
             candidates.append(
                 {
+                    "vehicleIndex": vehicle_index,
                     "vehicleId": vehicle.id,
                     "vehicleName": vehicle.name,
                     "insertIndex": insert_index,
@@ -316,17 +312,25 @@ def rank_delivery_insertions(
                     "score": hard_soft_string(score[0], score[1]),
                     "deltaHard": score[0] - baseline[0],
                     "deltaSoft": score[1] - baseline[1],
-                    "previewPlan": preview_plan,
                 }
             )
     candidates.sort(
         key=lambda item: (int(item["hardScore"]), int(item["softScore"])), reverse=True
     )
-    return candidates[:limit]
+    top_candidates = candidates[:limit]
+    for candidate in top_candidates:
+        preview_plan = deepcopy(base_plan)
+        preview_vehicle = preview_plan.vehicles[int(candidate.pop("vehicleIndex"))]
+        preview_vehicle.delivery_order.insert(
+            int(candidate["insertIndex"]), delivery_id
+        )
+        preview_plan.refresh_route_shadows()
+        candidate["previewPlan"] = preview_plan
+    return top_candidates
 
 
 def score_components(plan: Any) -> tuple[int, int]:
-    components = evaluate_plan_components(plan)
+    components = _route_score_components(plan)
     hard = -(
         components["unassignedCount"] * UNASSIGNED_DELIVERY_HARD_PENALTY
         + components["capacityOverage"] * CAPACITY_HARD_WEIGHT
@@ -334,6 +338,91 @@ def score_components(plan: Any) -> tuple[int, int]:
     )
     soft = -components["travelSeconds"]
     return hard, soft
+
+
+def _route_score_components(plan: Any) -> dict[str, int]:
+    assigned = {
+        delivery_id
+        for vehicle in plan.vehicles
+        for delivery_id in vehicle.delivery_order
+        if 0 <= delivery_id < len(plan.deliveries)
+    }
+    vehicle_components = [
+        _vehicle_score_components(plan, vehicle_index, vehicle.delivery_order)
+        for vehicle_index, vehicle in enumerate(plan.vehicles)
+    ]
+    return {
+        "unassignedCount": len(plan.deliveries) - len(assigned),
+        "capacityOverage": sum(item["capacityOverage"] for item in vehicle_components),
+        "lateSeconds": sum(item["lateSeconds"] for item in vehicle_components),
+        "travelSeconds": sum(item["travelSeconds"] for item in vehicle_components),
+    }
+
+
+def _candidate_score_components(
+    base_components: dict[str, int],
+    base_vehicle_components: dict[str, int],
+    candidate_vehicle_components: dict[str, int],
+) -> tuple[int, int]:
+    unassigned_count = max(0, base_components["unassignedCount"] - 1)
+    capacity_overage = (
+        base_components["capacityOverage"]
+        - base_vehicle_components["capacityOverage"]
+        + candidate_vehicle_components["capacityOverage"]
+    )
+    late_seconds = (
+        base_components["lateSeconds"]
+        - base_vehicle_components["lateSeconds"]
+        + candidate_vehicle_components["lateSeconds"]
+    )
+    travel_seconds = (
+        base_components["travelSeconds"]
+        - base_vehicle_components["travelSeconds"]
+        + candidate_vehicle_components["travelSeconds"]
+    )
+    hard = -(
+        unassigned_count * UNASSIGNED_DELIVERY_HARD_PENALTY
+        + capacity_overage * CAPACITY_HARD_WEIGHT
+        + late_seconds
+    )
+    return hard, -travel_seconds
+
+
+def _vehicle_score_components(
+    plan: Any, vehicle_index: int, delivery_order: list[int]
+) -> dict[str, int]:
+    vehicle = plan.vehicles[vehicle_index]
+    total_demand = 0
+    total_travel_seconds = 0
+    total_late_seconds = 0
+    current_time = int(vehicle.departure_time)
+    previous = len(plan.deliveries)
+    has_valid_stop = False
+
+    for delivery_id in delivery_order:
+        if not 0 <= delivery_id < len(plan.deliveries):
+            continue
+        has_valid_stop = True
+        delivery = plan.deliveries[delivery_id]
+        total_demand += int(delivery.demand)
+        travel = route_distance(plan, vehicle_index, previous, delivery_id)
+        total_travel_seconds += travel
+        current_time += travel
+        service_start = max(current_time, int(delivery.min_start_time))
+        current_time = service_start + int(delivery.service_duration)
+        total_late_seconds += max(0, current_time - int(delivery.max_end_time))
+        previous = delivery_id
+
+    if has_valid_stop:
+        total_travel_seconds += route_distance(
+            plan, vehicle_index, previous, len(plan.deliveries)
+        )
+
+    return {
+        "capacityOverage": max(0, total_demand - int(vehicle.capacity)),
+        "lateSeconds": total_late_seconds,
+        "travelSeconds": total_travel_seconds,
+    }
 
 
 def route_coord(solution: Any, vehicle: Any, element: int) -> tuple[float, float]:

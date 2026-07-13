@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from solverforge import HardSoftScore, planning_solution, shadow_variable_updates
@@ -48,6 +49,10 @@ class DeliveryPlan:
             delivery.id = index
         for index, vehicle in enumerate(self.vehicles):
             vehicle.id = index
+            vehicle.depot = len(self.deliveries)
+            vehicle.metric_class = index
+            vehicle.bind_distance_plan(self)
+            vehicle.refresh_distance_matrix()
             vehicle.delivery_order = [
                 old_to_new[delivery_id]
                 for delivery_id in vehicle.delivery_order
@@ -55,6 +60,43 @@ class DeliveryPlan:
             ]
         self.delivery_indices = list(range(len(self.deliveries)))
         self.refresh_route_shadows()
+
+    def __deepcopy__(self, memo: dict[int, object]) -> DeliveryPlan:
+        copied = type(self).__new__(type(self))
+        memo[id(self)] = copied
+        copied.name = self.name
+        copied.routing_mode = self.routing_mode
+        copied.view_state = deepcopy(self.view_state, memo)
+        copied.deliveries = deepcopy(self.deliveries, memo)
+        copied.vehicles = deepcopy(self.vehicles, memo)
+        copied.delivery_indices = list(self.delivery_indices)
+        copied.score = deepcopy(self.score, memo)
+        for vehicle in copied.vehicles:
+            vehicle.bind_distance_plan(copied)
+        return copied
+
+    def _vehicle_distance_signature(
+        self, vehicle: Vehicle
+    ) -> tuple[tuple[float, float], ...]:
+        return tuple(
+            [(delivery.lat, delivery.lng) for delivery in self.deliveries]
+            + [(vehicle.home_lat, vehicle.home_lng)]
+        )
+
+    def _vehicle_distance_matrix(self, vehicle: Vehicle) -> list[list[int]]:
+        from .metrics import haversine_meters, meters_to_seconds
+
+        coords = [(delivery.lat, delivery.lng) for delivery in self.deliveries]
+        coords.append((vehicle.home_lat, vehicle.home_lng))
+        matrix: list[list[int]] = []
+        for from_coord in coords:
+            row: list[int] = []
+            for to_coord in coords:
+                row.append(
+                    meters_to_seconds(round(haversine_meters(*from_coord, *to_coord)))
+                )
+            matrix.append(row)
+        return matrix
 
     def refresh_route_shadows(self) -> None:
         assigned_counts = [0 for _ in self.deliveries]

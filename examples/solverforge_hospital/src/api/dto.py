@@ -79,6 +79,7 @@ def format_decimal_score_part(scaled: int) -> str:
 def telemetry(payload: object | None = None) -> dict[str, Any]:
     if not isinstance(payload, dict):
         payload = {}
+    phase = payload.get("phase")
     return {
         "elapsedMs": int(payload.get("elapsed_ms", 0)),
         "stepCount": int(payload.get("step_count", 0)),
@@ -90,6 +91,23 @@ def telemetry(payload: object | None = None) -> dict[str, Any]:
         "evaluationMs": int(payload.get("evaluation_ms", 0)),
         "movesPerSecond": int(payload.get("moves_per_second", 0)),
         "acceptanceRate": float(payload.get("acceptance_rate", 0.0)),
+        "phase": (
+            {
+                "phaseIndex": int(phase.get("phase_index", 0)),
+                "phaseType": str(phase.get("phase_type", "")),
+                "elapsedMs": int(phase.get("elapsed_ms", 0)),
+                "stepCount": int(phase.get("step_count", 0)),
+                "movesGenerated": int(phase.get("moves_generated", 0)),
+                "movesEvaluated": int(phase.get("moves_evaluated", 0)),
+                "movesAccepted": int(phase.get("moves_accepted", 0)),
+                "movesApplied": int(phase.get("moves_applied", 0)),
+                "scoreCalculations": int(phase.get("score_calculations", 0)),
+                "generationMs": int(phase.get("generation_ms", 0)),
+                "evaluationMs": int(phase.get("evaluation_ms", 0)),
+            }
+            if isinstance(phase, dict)
+            else None
+        ),
     }
 
 
