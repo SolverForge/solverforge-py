@@ -422,7 +422,7 @@ and shared UI assets are declared from exact release versions in `Cargo.toml`;
 `Cargo.lock` resolves the six SolverForge crates at `0.18.0` and
 `solverforge-ui` at `0.7.0` from crates.io with registry checksums.
 
-The current package and crate release is `0.6.0` on the exact SolverForge
+The current package and crate release is `0.6.1` on the exact SolverForge
 `0.18.0` crate boundary. Its artifact set is one source distribution plus
 Linux, macOS, and Windows wheels, verified together before release.
 

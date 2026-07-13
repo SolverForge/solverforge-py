@@ -122,7 +122,7 @@ claimed as Python-bindable without a public upstream seam.
 example dependencies, project URLs, classifiers, and maturin module settings.
 `Cargo.toml` owns native crate metadata and the SolverForge Rust dependency
 base; the package version must match `pyproject.toml`. `Cargo.lock` locks
-reproducible Rust builds. The current release line is package/crate `0.6.0` on
+reproducible Rust builds. The current release line is package/crate `0.6.1` on
 the six SolverForge `0.18.0` registry crates and `solverforge-ui` `0.7.0`;
 `make release-base-check` must stay green. The `Makefile` owns local release targets,
 dependency-base checks, distribution builds, artifact validation, browser system

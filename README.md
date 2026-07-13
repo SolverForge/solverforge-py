@@ -19,11 +19,11 @@ Java service requirements, and other APIs that are not part of this package.
 
 ## Installation
 
-Install the `solverforge` `0.6.0` release, built on the exact published and
+Install the `solverforge` `0.6.1` release, built on the exact published and
 locked SolverForge Rust `0.18.0` registry dependency base:
 
 ```sh
-python3.14 -m pip install "solverforge==0.6.0"
+python3.14 -m pip install "solverforge==0.6.1"
 ```
 
 The installable wheel contains the core `solverforge` package, native extension,
@@ -48,7 +48,7 @@ without `PYTHONPATH` or an editable checkout:
 ```sh
 python3.14 -m venv .venv-examples
 . .venv-examples/bin/activate
-python -m pip install "solverforge[examples]==0.6.0"
+python -m pip install "solverforge[examples]==0.6.1"
 python examples/nqueens.py
 python -m examples.solverforge_hospital
 python -m examples.solverforge_deliveries

@@ -41,13 +41,13 @@ For a terminal-only solve:
 make hospital-solve
 ```
 
-The same source-checkout example can be run against the published `0.6.0`
+The same source-checkout example can be run against the published `0.6.1`
 package:
 
 ```sh
 python3.14 -m venv .venv-hospital
 . .venv-hospital/bin/activate
-python -m pip install "solverforge[examples]==0.6.0"
+python -m pip install "solverforge[examples]==0.6.1"
 python -m examples.solverforge_hospital
 ```
 
