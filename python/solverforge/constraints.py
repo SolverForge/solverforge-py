@@ -27,8 +27,11 @@ class ConstraintPlan:
     group_collector: object | None = None
     balance_key: Callable[..., object] | None = None
     precedence_duration: Callable[..., object] | None = None
+    precedence_duration_field: str | None = None
     precedence_successors: Callable[..., object] | None = None
+    precedence_successors_field: str | None = None
     element_owner: Callable[..., object] | None = None
+    element_owner_field: str | None = None
 
     def to_native(self) -> dict[str, object]:
         plan: dict[str, object] = {
@@ -62,10 +65,16 @@ class ConstraintPlan:
             plan["balance_key"] = self.balance_key
         if self.precedence_duration is not None:
             plan["precedence_duration"] = self.precedence_duration
+        if self.precedence_duration_field is not None:
+            plan["precedence_duration_field"] = self.precedence_duration_field
         if self.precedence_successors is not None:
             plan["precedence_successors"] = self.precedence_successors
+        if self.precedence_successors_field is not None:
+            plan["precedence_successors_field"] = self.precedence_successors_field
         if self.element_owner is not None:
             plan["element_owner"] = self.element_owner
+        if self.element_owner_field is not None:
+            plan["element_owner_field"] = self.element_owner_field
         if callable(self.weight):
             plan["weight"] = _callback_weight_placeholder(self.score_family)
             plan["weight_callback"] = self.weight
@@ -118,7 +127,7 @@ class ListPrecedenceMakespanConstraintStream:
 
     def named(self, name: str) -> ConstraintPlan:
         metadata = _list_variable_metadata(self.entity_type, self.variable_name)
-        return ConstraintPlan(
+        plan = ConstraintPlan(
             entity_type=self.entity_type,
             score_family=self.score_family,
             constraint_type="list_precedence_makespan",
@@ -126,25 +135,44 @@ class ListPrecedenceMakespanConstraintStream:
             impact="penalty",
             weight=_zero_weight(self.score_family),
             name=name,
-            precedence_duration=_required_list_variable_callback(
+            precedence_duration=_metadata_callback(
                 metadata,
                 "precedence_duration",
-                self.entity_type,
-                self.variable_name,
             ),
-            precedence_successors=_required_list_variable_callback(
+            precedence_duration_field=_metadata_field_name(
+                metadata,
+                "precedence_duration_field",
+            ),
+            precedence_successors=_metadata_callback(
                 metadata,
                 "precedence_successors",
-                self.entity_type,
-                self.variable_name,
             ),
-            element_owner=_required_list_variable_callback(
+            precedence_successors_field=_metadata_field_name(
+                metadata,
+                "precedence_successors_field",
+            ),
+            element_owner=_metadata_callback(
                 metadata,
                 "element_owner",
-                self.entity_type,
-                self.variable_name,
+            ),
+            element_owner_field=_metadata_field_name(
+                metadata,
+                "element_owner_field",
             ),
         )
+        if plan.precedence_duration is None and plan.precedence_duration_field is None:
+            msg = f"{self.entity_type.__name__}.{self.variable_name} requires precedence_duration"
+            raise TypeError(msg)
+        if (
+            plan.precedence_successors is None
+            and plan.precedence_successors_field is None
+        ):
+            msg = f"{self.entity_type.__name__}.{self.variable_name} requires precedence_successors"
+            raise TypeError(msg)
+        if plan.element_owner is None and plan.element_owner_field is None:
+            msg = f"{self.entity_type.__name__}.{self.variable_name} requires element_owner"
+            raise TypeError(msg)
+        return plan
 
 
 @dataclass
@@ -464,17 +492,21 @@ def _list_variable_metadata(
     raise TypeError(msg)
 
 
-def _required_list_variable_callback(
+def _metadata_callback(
     metadata: dict[str, object],
     field_name: str,
-    entity_type: type[object],
-    variable_name: str,
-) -> Callable[..., object]:
+) -> Callable[..., object] | None:
     value = metadata.get(field_name)
-    if not callable(value):
-        msg = f"{entity_type.__name__}.{variable_name} requires {field_name}"
-        raise TypeError(msg)
-    return cast(Callable[..., object], value)
+    if callable(value):
+        return cast(Callable[..., object], value)
+    return None
+
+
+def _metadata_field_name(metadata: dict[str, object], field_name: str) -> str | None:
+    value = metadata.get(field_name)
+    if isinstance(value, str) and value:
+        return value
+    return None
 
 
 def _callback_weight_placeholder(score_family: str) -> dict[str, object]:

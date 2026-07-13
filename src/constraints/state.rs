@@ -8,11 +8,16 @@ use solverforge_scoring::api::constraint_set::{
 };
 use solverforge_scoring::ConstraintAnalysis;
 
+use super::compiled::{
+    AttributeJoinPlan, AttributeSource, CompiledConstraintPlan, CompiledConstraintSet,
+    ListCoveragePlan, UnaryPlan,
+};
 use super::evaluate;
 use super::list_precedence::{self, ListPrecedenceDeltaMode, ListPrecedenceStateCache};
-use crate::error::py_err;
+use crate::error::{panic_with_py_err, py_err};
 use crate::score::{dynamic_score_from_native, DynamicScore};
 use crate::state::PyDynamicSolution;
+use crate::value::DynamicValue;
 
 struct PythonRowSet {
     type_name: String,
@@ -291,6 +296,13 @@ struct DynamicGroup {
     aggregate: GroupAggregate,
 }
 
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum JoinKey {
+    None,
+    Int(i64),
+    String(String),
+}
+
 #[derive(Clone, Copy)]
 enum GroupActivity<'a> {
     All,
@@ -308,7 +320,7 @@ struct JoinKeySide<'a> {
 }
 
 pub struct PyDynamicConstraintSet {
-    constraints: Py<PyAny>,
+    compiled: CompiledConstraintSet,
     cached_rows: Option<Vec<PythonRowSet>>,
     join_key_cache: JoinKeyCache,
     join_index_cache: JoinIndexCache,
@@ -325,7 +337,7 @@ unsafe impl Sync for PyDynamicConstraintSet {}
 impl PyDynamicConstraintSet {
     pub fn new(constraints: Py<PyAny>) -> Self {
         Self {
-            constraints,
+            compiled: CompiledConstraintSet::python(constraints),
             cached_rows: None,
             join_key_cache: JoinKeyCache::new(),
             join_index_cache: JoinIndexCache::new(),
@@ -337,16 +349,30 @@ impl PyDynamicConstraintSet {
         }
     }
 
+    pub fn from_solution(py: Python<'_>, solution: &PyDynamicSolution) -> PyResult<Self> {
+        Ok(Self {
+            compiled: CompiledConstraintSet::from_solution(py, solution)?,
+            cached_rows: None,
+            join_key_cache: JoinKeyCache::new(),
+            join_index_cache: JoinIndexCache::new(),
+            balance_count_cache: BalanceCountCache::new(),
+            group_cache: GroupCache::new(),
+            list_unassigned_count_cache: ListUnassignedCountCache::new(),
+            list_precedence_cache: ListPrecedenceStateCache::new(),
+            retracted_entities: RetractedEntitySet::new(),
+        })
+    }
+
     pub fn evaluate_python(
         &self,
         py: Python<'_>,
         py_solution: &Bound<'_, PyAny>,
     ) -> PyResult<DynamicScore> {
-        evaluate::evaluate_constraints(py, py_solution, self.constraints.bind(py))
+        evaluate::evaluate_constraints(py, py_solution, self.compiled.python_plans().bind(py))
     }
 
     pub fn evaluate_solution(&self, solution: &PyDynamicSolution) -> PyResult<DynamicScore> {
-        Python::attach(|py| evaluate_state_constraints(py, solution, self.constraints.bind(py)))
+        Python::attach(|py| evaluate_compiled_constraints(py, solution, &self.compiled))
     }
 
     fn initialize_incremental_state(
@@ -354,13 +380,7 @@ impl PyDynamicConstraintSet {
         solution: &PyDynamicSolution,
     ) -> PyResult<DynamicScore> {
         Python::attach(|py| {
-            let row_sets = python_rows_by_type(py, solution)?;
-            let score = evaluate_state_constraint_plans(
-                py,
-                solution,
-                &row_sets,
-                self.constraints.bind(py),
-            )?;
+            let score = evaluate_compiled_constraints(py, solution, &self.compiled)?;
             self.join_key_cache.clear();
             self.join_index_cache.clear();
             self.balance_count_cache.clear();
@@ -368,14 +388,7 @@ impl PyDynamicConstraintSet {
             self.list_unassigned_count_cache.clear();
             self.list_precedence_cache.clear();
             self.retracted_entities.clear();
-            initialize_list_precedence_cache(
-                py,
-                solution,
-                &row_sets,
-                self.constraints.bind(py),
-                &mut self.list_precedence_cache,
-            )?;
-            self.cached_rows = Some(row_sets);
+            self.cached_rows = None;
             Ok(score)
         })
     }
@@ -394,18 +407,12 @@ impl PyDynamicConstraintSet {
 
 impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
     fn evaluate_all(&self, solution: &PyDynamicSolution) -> DynamicScore {
-        Python::attach(|py| evaluate_state_constraints(py, solution, self.constraints.bind(py)))
-            .unwrap_or_else(|err| panic!("python constraint callback failed: {err:?}"))
+        Python::attach(|py| evaluate_compiled_constraints(py, solution, &self.compiled))
+            .unwrap_or_else(panic_with_py_err)
     }
 
     fn constraint_count(&self) -> usize {
-        Python::attach(|py| {
-            self.constraints
-                .bind(py)
-                .cast::<PyList>()
-                .map(|items| items.len())
-                .unwrap_or(0)
-        })
+        Python::attach(|py| self.compiled.constraint_count(py))
     }
 
     fn constraint_metadata_entries(&self) -> Vec<ConstraintMetadata<'_>> {
@@ -428,7 +435,7 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
 
     fn initialize_all(&mut self, solution: &PyDynamicSolution) -> DynamicScore {
         self.initialize_incremental_state(solution)
-            .unwrap_or_else(|err| panic!("python constraint callback failed: {err:?}"))
+            .unwrap_or_else(panic_with_py_err)
     }
 
     fn on_insert_all(
@@ -438,6 +445,20 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
         descriptor_index: usize,
     ) -> DynamicScore {
         let delta = Python::attach(|py| {
+            if can_score_delta(&self.compiled) {
+                if let Some(delta) = score_delta(
+                    solution,
+                    &self.compiled,
+                    &self.retracted_entities,
+                    DeltaTarget {
+                        entity_index,
+                        descriptor_index,
+                        mode: DeltaMode::Insert,
+                    },
+                )? {
+                    return Ok(delta);
+                }
+            }
             ensure_cached_rows(py, &mut self.cached_rows, solution)?;
             let row_sets = self
                 .cached_rows
@@ -458,7 +479,7 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
                 row_sets,
                 &mut caches,
                 &self.retracted_entities,
-                self.constraints.bind(py),
+                self.compiled.python_plans().bind(py),
                 DeltaTarget {
                     entity_index,
                     descriptor_index,
@@ -466,7 +487,7 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
                 },
             )
         })
-        .unwrap_or_else(|err| panic!("python constraint callback failed: {err:?}"));
+        .unwrap_or_else(panic_with_py_err);
         self.retracted_entities
             .remove(&(descriptor_index, entity_index));
         delta
@@ -479,6 +500,20 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
         descriptor_index: usize,
     ) -> DynamicScore {
         let delta = Python::attach(|py| {
+            if can_score_delta(&self.compiled) {
+                if let Some(delta) = score_delta(
+                    solution,
+                    &self.compiled,
+                    &self.retracted_entities,
+                    DeltaTarget {
+                        entity_index,
+                        descriptor_index,
+                        mode: DeltaMode::Retract,
+                    },
+                )? {
+                    return Ok(delta);
+                }
+            }
             ensure_cached_rows(py, &mut self.cached_rows, solution)?;
             let mut caches = ConstraintStateCaches {
                 join_key: &mut self.join_key_cache,
@@ -496,7 +531,7 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
                     .expect("cached rows must exist after ensure_cached_rows"),
                 &mut caches,
                 &self.retracted_entities,
-                self.constraints.bind(py),
+                self.compiled.python_plans().bind(py),
                 DeltaTarget {
                     entity_index,
                     descriptor_index,
@@ -504,7 +539,7 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
                 },
             )
         })
-        .unwrap_or_else(|err| panic!("python constraint callback failed: {err:?}"));
+        .unwrap_or_else(panic_with_py_err);
         self.retracted_entities
             .insert((descriptor_index, entity_index));
         delta
@@ -522,6 +557,266 @@ fn evaluate_state_constraints(
 ) -> PyResult<DynamicScore> {
     let row_sets = python_rows_by_type(py, solution)?;
     evaluate_state_constraint_plans(py, solution, &row_sets, constraints)
+}
+
+fn evaluate_compiled_constraints(
+    py: Python<'_>,
+    solution: &PyDynamicSolution,
+    compiled: &CompiledConstraintSet,
+) -> PyResult<DynamicScore> {
+    if compiled.plans().is_empty() {
+        return evaluate_state_constraints(py, solution, compiled.python_plans().bind(py));
+    }
+    let mut total = DynamicScore::zero();
+    let mut fallback_rows: Option<Vec<PythonRowSet>> = None;
+    for plan in compiled.plans() {
+        let direct_score = match plan {
+            CompiledConstraintPlan::Unary(plan) => Some(score_unary(solution, plan)),
+            CompiledConstraintPlan::AttributeJoin(plan) => score_attribute_join(solution, plan)?,
+            CompiledConstraintPlan::ListCoverage(plan) => {
+                Some(score_list_coverage(solution, plan)?)
+            }
+            CompiledConstraintPlan::Python(_) => None,
+        };
+        if let Some(score) = direct_score {
+            total = total + score;
+            continue;
+        }
+        ensure_cached_rows(py, &mut fallback_rows, solution)?;
+        let single = PyList::new(py, [plan.python_plan().clone_ref(py)])?;
+        total = evaluate_state_constraint_plans(
+            py,
+            solution,
+            fallback_rows.as_ref().unwrap(),
+            &single,
+        )? + total;
+    }
+    Ok(total)
+}
+
+fn score_unary(solution: &PyDynamicSolution, plan: &UnaryPlan) -> DynamicScore {
+    let count = solution
+        .state
+        .entities
+        .get(plan.entity_index)
+        .map(Vec::len)
+        .unwrap_or(0);
+    plan.impact.apply(score_times(plan.weight, count))
+}
+
+fn score_list_coverage(
+    solution: &PyDynamicSolution,
+    plan: &ListCoveragePlan,
+) -> PyResult<DynamicScore> {
+    let elements = solution
+        .state
+        .list_elements_at(plan.entity_index, plan.variable_index)
+        .ok_or_else(|| py_err("native list-unassigned constraint has no element collection"))?;
+    let rows = solution
+        .state
+        .entities
+        .get(plan.entity_index)
+        .ok_or_else(|| {
+            py_err(format!(
+                "missing state rows for entity index `{}`",
+                plan.entity_index
+            ))
+        })?;
+    let mut assigned = BTreeSet::new();
+    for row in rows {
+        if let Some(values) = row.list_at(plan.variable_index) {
+            assigned.extend(values.iter().copied());
+        }
+    }
+    let unassigned_count = elements
+        .iter()
+        .filter(|element| !assigned.contains(element))
+        .count();
+    Ok(plan
+        .impact
+        .apply(score_times(plan.weight, unassigned_count)))
+}
+
+fn score_attribute_join(
+    solution: &PyDynamicSolution,
+    plan: &AttributeJoinPlan,
+) -> PyResult<Option<DynamicScore>> {
+    let Some(left_rows) = solution.state.entities.get(plan.left_entity_index) else {
+        return Ok(Some(DynamicScore::zero()));
+    };
+    let Some(right_rows) = solution.state.entities.get(plan.right_entity_index) else {
+        return Ok(Some(DynamicScore::zero()));
+    };
+    let mut right_counts = BTreeMap::<Vec<JoinKey>, usize>::new();
+    for row in right_rows {
+        let Some(key) = join_key(row, &plan.joiners, false)? else {
+            return Ok(None);
+        };
+        *right_counts.entry(key).or_insert(0) += 1;
+    }
+    let mut match_count = 0usize;
+    for row in left_rows {
+        let Some(key) = join_key(row, &plan.joiners, true)? else {
+            return Ok(None);
+        };
+        match_count += right_counts.get(&key).copied().unwrap_or(0);
+    }
+    Ok(Some(
+        plan.impact.apply(score_times(plan.weight, match_count)),
+    ))
+}
+
+fn can_score_delta(compiled: &CompiledConstraintSet) -> bool {
+    compiled.plans().iter().all(|plan| match plan {
+        CompiledConstraintPlan::Unary(_) => true,
+        CompiledConstraintPlan::AttributeJoin(plan) => {
+            plan.left_entity_index != plan.right_entity_index
+        }
+        CompiledConstraintPlan::ListCoverage(_) | CompiledConstraintPlan::Python(_) => false,
+    })
+}
+
+fn score_delta(
+    solution: &PyDynamicSolution,
+    compiled: &CompiledConstraintSet,
+    retracted_entities: &RetractedEntitySet,
+    target: DeltaTarget,
+) -> PyResult<Option<DynamicScore>> {
+    let mut total = DynamicScore::zero();
+    for plan in compiled.plans() {
+        let contribution = match plan {
+            CompiledConstraintPlan::Unary(plan) => Some(unary_delta(plan, target)),
+            CompiledConstraintPlan::AttributeJoin(plan) => {
+                attribute_join_delta(solution, plan, retracted_entities, target)?
+            }
+            CompiledConstraintPlan::ListCoverage(_) | CompiledConstraintPlan::Python(_) => {
+                return Ok(None);
+            }
+        };
+        let Some(contribution) = contribution else {
+            return Ok(None);
+        };
+        total = total + contribution;
+    }
+    Ok(Some(total))
+}
+
+fn unary_delta(plan: &UnaryPlan, target: DeltaTarget) -> DynamicScore {
+    if plan.entity_index != target.descriptor_index {
+        return DynamicScore::zero();
+    }
+    let contribution = plan.impact.apply(plan.weight);
+    match target.mode {
+        DeltaMode::Insert => contribution,
+        DeltaMode::Retract => DynamicScore::zero() - contribution,
+    }
+}
+
+fn attribute_join_delta(
+    solution: &PyDynamicSolution,
+    plan: &AttributeJoinPlan,
+    retracted_entities: &RetractedEntitySet,
+    target: DeltaTarget,
+) -> PyResult<Option<DynamicScore>> {
+    if plan.left_entity_index == plan.right_entity_index {
+        return Ok(None);
+    }
+    if target.descriptor_index != plan.left_entity_index
+        && target.descriptor_index != plan.right_entity_index
+    {
+        return Ok(Some(DynamicScore::zero()));
+    }
+    let target_rows = solution
+        .state
+        .entities
+        .get(target.descriptor_index)
+        .ok_or_else(|| py_err("attribute join target entity rows are missing"))?;
+    let Some(target_row) = target_rows.get(target.entity_index) else {
+        return Ok(Some(DynamicScore::zero()));
+    };
+    let target_is_left = target.descriptor_index == plan.left_entity_index;
+    let Some(target_key) = join_key(target_row, &plan.joiners, target_is_left)? else {
+        return Ok(None);
+    };
+    let other_entity_index = if target_is_left {
+        plan.right_entity_index
+    } else {
+        plan.left_entity_index
+    };
+    let Some(other_rows) = solution.state.entities.get(other_entity_index) else {
+        return Ok(Some(DynamicScore::zero()));
+    };
+    let mut match_count = 0usize;
+    for (row_index, row) in other_rows.iter().enumerate() {
+        if retracted_entities.contains(&(other_entity_index, row_index)) {
+            continue;
+        }
+        let Some(other_key) = join_key(row, &plan.joiners, !target_is_left)? else {
+            return Ok(None);
+        };
+        if other_key == target_key {
+            match_count += 1;
+        }
+    }
+    let contribution = plan.impact.apply(score_times(plan.weight, match_count));
+    Ok(Some(match target.mode {
+        DeltaMode::Insert => contribution,
+        DeltaMode::Retract => DynamicScore::zero() - contribution,
+    }))
+}
+
+fn join_key(
+    row: &crate::state::entity_table::DynamicEntityRow,
+    joiners: &[super::compiled::AttributeJoiner],
+    left: bool,
+) -> PyResult<Option<Vec<JoinKey>>> {
+    let mut keys = Vec::with_capacity(joiners.len());
+    for joiner in joiners {
+        let access = if left { &joiner.left } else { &joiner.right };
+        let Some(key) = attribute_key(row, access)? else {
+            return Ok(None);
+        };
+        keys.push(key);
+    }
+    Ok(Some(keys))
+}
+
+fn attribute_key(
+    row: &crate::state::entity_table::DynamicEntityRow,
+    access: &AttributeSource,
+) -> PyResult<Option<JoinKey>> {
+    match access {
+        AttributeSource::Scalar(variable_index) => Ok(match row.scalar_at(*variable_index) {
+            Some(value) => i64::try_from(value).ok().map(JoinKey::Int),
+            None => Some(JoinKey::None),
+        }),
+        AttributeSource::Field(name) => {
+            let Some(value) = row.fields.get(name) else {
+                return Ok(None);
+            };
+            key_from_value(value)
+        }
+        AttributeSource::Unsupported => Ok(None),
+    }
+}
+
+fn key_from_value(value: &DynamicValue) -> PyResult<Option<JoinKey>> {
+    match value {
+        DynamicValue::None => Ok(Some(JoinKey::None)),
+        DynamicValue::Int(value) => Ok(Some(JoinKey::Int(*value))),
+        DynamicValue::String(value) => Ok(Some(JoinKey::String(value.clone()))),
+        DynamicValue::Bool(_) | DynamicValue::Float(_) | DynamicValue::List(_) => Ok(None),
+    }
+}
+
+fn score_times(score: DynamicScore, count: usize) -> DynamicScore {
+    let count = i64::try_from(count).unwrap_or(i64::MAX);
+    DynamicScore {
+        family: score.family,
+        hard: score.hard.saturating_mul(count),
+        medium: score.medium.saturating_mul(count),
+        soft: score.soft.saturating_mul(count),
+    }
 }
 
 fn evaluate_state_constraint_plans(
@@ -682,39 +977,6 @@ fn evaluate_state_constraint_plans(
         }
     }
     Ok(total)
-}
-
-fn initialize_list_precedence_cache(
-    py: Python<'_>,
-    solution: &PyDynamicSolution,
-    row_sets: &[PythonRowSet],
-    constraints: &Bound<'_, PyAny>,
-    cache: &mut ListPrecedenceStateCache,
-) -> PyResult<()> {
-    let constraints = constraints.cast::<PyList>()?;
-    for (plan_index, plan_any) in constraints.iter().enumerate() {
-        let plan = plan_any.cast::<PyDict>()?;
-        if !list_precedence::is_list_precedence_plan(plan)? {
-            continue;
-        }
-        let entity_type = plan
-            .get_item("entity_type")?
-            .ok_or_else(|| py_err("constraint missing entity_type"))?
-            .extract::<String>()?;
-        let entity_index = row_sets
-            .iter()
-            .position(|row_set| row_set.type_name == entity_type)
-            .ok_or_else(|| py_err(format!("unknown constraint entity type `{entity_type}`")))?;
-        list_precedence::initialize_cache_entry(
-            py,
-            cache,
-            plan_index,
-            solution,
-            entity_index,
-            plan,
-        )?;
-    }
-    Ok(())
 }
 
 fn evaluate_impacted_state_constraints(
@@ -1033,7 +1295,8 @@ fn evaluate_list_unassigned_plan(
     weighted: WeightedPlan<'_, '_>,
 ) -> PyResult<DynamicScore> {
     let variable_name = required_plan_string(plan, "variable_name")?;
-    let counts = assigned_list_counts(solution, entity_index, variable_name.as_str(), None)?;
+    let variable_index = list_variable_index(solution, entity_index, variable_name.as_str())?;
+    let counts = assigned_list_counts(solution, entity_index, variable_index, None)?;
     for element in list_elements_for_variable(solution, entity_index, variable_name.as_str())? {
         if counts.get(element).copied().unwrap_or(0) == 0 {
             total = total + list_unassigned_contribution(py, filters, weighted, *element)?;
@@ -1058,12 +1321,13 @@ fn evaluate_list_unassigned_delta(
     retracted_entities: &RetractedEntitySet,
 ) -> PyResult<DynamicScore> {
     let variable_name = required_plan_string(plan, "variable_name")?;
+    let variable_index = list_variable_index(solution, entity_index, variable_name.as_str())?;
     ensure_list_unassigned_counts(
         list_unassigned_count_cache,
         plan_index,
         solution,
         entity_index,
-        variable_name.as_str(),
+        variable_index,
         retracted_entities,
     )?;
     let universe = list_elements_for_variable(solution, entity_index, variable_name.as_str())?;
@@ -1072,7 +1336,7 @@ fn evaluate_list_unassigned_delta(
         .entities
         .get(entity_index)
         .and_then(|rows| rows.get(changed_entity_index))
-        .and_then(|row| row.lists.get(variable_name.as_str()))
+        .and_then(|row| row.list_at(variable_index))
     else {
         return Ok(total);
     };
@@ -1112,7 +1376,7 @@ fn ensure_list_unassigned_counts(
     plan_index: usize,
     solution: &PyDynamicSolution,
     entity_index: usize,
-    variable_name: &str,
+    variable_index: usize,
     retracted_entities: &RetractedEntitySet,
 ) -> PyResult<()> {
     if list_unassigned_count_cache.contains_key(&plan_index) {
@@ -1123,7 +1387,7 @@ fn ensure_list_unassigned_counts(
         assigned_list_counts(
             solution,
             entity_index,
-            variable_name,
+            variable_index,
             Some(retracted_entities),
         )?,
     );
@@ -1133,7 +1397,7 @@ fn ensure_list_unassigned_counts(
 fn assigned_list_counts(
     solution: &PyDynamicSolution,
     entity_index: usize,
-    variable_name: &str,
+    variable_index: usize,
     retracted_entities: Option<&RetractedEntitySet>,
 ) -> PyResult<BTreeMap<usize, i64>> {
     let rows = solution.state.entities.get(entity_index).ok_or_else(|| {
@@ -1147,11 +1411,32 @@ fn assigned_list_counts(
         {
             continue;
         }
-        for element in row.lists.get(variable_name).into_iter().flatten() {
+        for element in row.list_at(variable_index).into_iter().flatten() {
             *counts.entry(*element).or_insert(0) += 1;
         }
     }
     Ok(counts)
+}
+
+fn list_variable_index(
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    variable_name: &str,
+) -> PyResult<usize> {
+    solution
+        .schema()
+        .entities
+        .get(entity_index)
+        .and_then(|entity| {
+            entity.variables.iter().position(|variable| {
+                variable.kind == "planning_list_variable" && variable.name.as_str() == variable_name
+            })
+        })
+        .ok_or_else(|| {
+            py_err(format!(
+                "missing planning list variable `{variable_name}` for entity index `{entity_index}`"
+            ))
+        })
 }
 
 fn list_elements_for_variable<'a>(
@@ -1159,12 +1444,10 @@ fn list_elements_for_variable<'a>(
     entity_index: usize,
     variable_name: &str,
 ) -> PyResult<&'a [usize]> {
+    let variable_index = list_variable_index(solution, entity_index, variable_name)?;
     solution
         .state
-        .list_elements
-        .get(entity_index)
-        .and_then(|variables| variables.get(variable_name))
-        .map(Vec::as_slice)
+        .list_elements_at(entity_index, variable_index)
         .ok_or_else(|| {
             py_err(format!(
                 "planning list variable `{variable_name}` has no element collection"
@@ -1575,17 +1858,19 @@ fn python_rows_by_type(
             python_rows.push(solution.entity_callback_view(py, entity_index, row_index)?);
         }
         rows_by_type.push(PythonRowSet {
-            type_name: solution.schema.entities[entity_index].type_name.clone(),
+            type_name: solution.schema().entities[entity_index].type_name.clone(),
             rows: python_rows,
         });
     }
     for (fact_index, rows) in solution.state.facts.iter().enumerate() {
         let mut python_rows = Vec::with_capacity(rows.len());
+        let types = py.import("types")?;
+        let namespace = types.getattr("SimpleNamespace")?;
         for row in rows {
-            python_rows.push(state_row_to_python_without_variables(py, row)?);
+            python_rows.push(state_row_to_python_without_variables(py, &namespace, row)?);
         }
         rows_by_type.push(PythonRowSet {
-            type_name: solution.schema.facts[fact_index].type_name.clone(),
+            type_name: solution.schema().facts[fact_index].type_name.clone(),
             rows: python_rows,
         });
     }
@@ -1700,12 +1985,7 @@ fn evaluate_equal_join_plan(
     let mut right_by_key = Vec::<(Py<PyAny>, Vec<&Py<PyAny>>)>::new();
     for right in right_rows {
         let right_bound = right.bind(py);
-        let key = joined_key(
-            py,
-            joiners
-                .iter()
-                .map(|joiner| joiner.right_key.bind(py).call1((right_bound,))),
-        )?;
+        let key = equal_join_key_for_bound(py, right_bound, joiners, 1)?;
         if let Some(index) = find_row_group_index(py, &right_by_key, key.bind(py))? {
             right_by_key[index].1.push(*right);
         } else {
@@ -1715,12 +1995,7 @@ fn evaluate_equal_join_plan(
 
     for left in left_rows {
         let left_bound = left.bind(py);
-        let key = joined_key(
-            py,
-            joiners
-                .iter()
-                .map(|joiner| joiner.left_key.bind(py).call1((left_bound,))),
-        )?;
+        let key = equal_join_key_for_bound(py, left_bound, joiners, 0)?;
         let Some(group_index) = find_row_group_index(py, &right_by_key, key.bind(py))? else {
             continue;
         };
@@ -2233,9 +2508,11 @@ fn optional_dict<'py>(
     }
 }
 
-struct EqualJoiner {
-    left_key: Py<PyAny>,
-    right_key: Py<PyAny>,
+enum EqualJoiner {
+    Callable {
+        left_key: Py<PyAny>,
+        right_key: Py<PyAny>,
+    },
 }
 
 fn parse_equal_joiners(joiners: Option<&Bound<'_, PyList>>) -> PyResult<Option<Vec<EqualJoiner>>> {
@@ -2265,7 +2542,7 @@ fn parse_equal_joiners(joiners: Option<&Bound<'_, PyList>>) -> PyResult<Option<V
             .get_item("right_key")?
             .ok_or_else(|| py_err("equal joiner missing `right_key`"))?
             .unbind();
-        parsed.push(EqualJoiner {
+        parsed.push(EqualJoiner::Callable {
             left_key,
             right_key,
         });
@@ -2402,13 +2679,27 @@ fn equal_join_key_for_row(
     side: u8,
 ) -> PyResult<Py<PyAny>> {
     let row = row.bind(py);
+    equal_join_key_for_bound(py, row, joiners, side)
+}
+
+fn equal_join_key_for_bound(
+    py: Python<'_>,
+    row: &Bound<'_, PyAny>,
+    joiners: &[EqualJoiner],
+    side: u8,
+) -> PyResult<Py<PyAny>> {
     joined_key(
         py,
-        joiners.iter().map(|joiner| {
-            if side == 0 {
-                joiner.left_key.bind(py).call1((row,))
-            } else {
-                joiner.right_key.bind(py).call1((row,))
+        joiners.iter().map(|joiner| match joiner {
+            EqualJoiner::Callable {
+                left_key,
+                right_key,
+            } => {
+                if side == 0 {
+                    left_key.bind(py).call1((row,))
+                } else {
+                    right_key.bind(py).call1((row,))
+                }
             }
         }),
     )
@@ -2437,6 +2728,22 @@ fn passes_joiners(
                     .get_item("right_key")?
                     .ok_or_else(|| py_err("equal joiner missing `right_key`"))?
                     .call1((right,))?;
+                if !left_key.eq(right_key)? {
+                    return Ok(false);
+                }
+                continue;
+            }
+            if kind == "equal_attr" {
+                let left_attr = dict
+                    .get_item("left_attr")?
+                    .ok_or_else(|| py_err("attribute joiner missing `left_attr`"))?
+                    .extract::<String>()?;
+                let right_attr = dict
+                    .get_item("right_attr")?
+                    .ok_or_else(|| py_err("attribute joiner missing `right_attr`"))?
+                    .extract::<String>()?;
+                let left_key = left.getattr(left_attr.as_str())?;
+                let right_key = right.getattr(right_attr.as_str())?;
                 if !left_key.eq(right_key)? {
                     return Ok(false);
                 }
@@ -2581,14 +2888,13 @@ fn required_plan_string(plan: &Bound<'_, PyDict>, key: &str) -> PyResult<String>
 
 fn state_row_to_python_without_variables(
     py: Python<'_>,
+    namespace: &Bound<'_, PyAny>,
     row: &crate::state::entity_table::DynamicEntityRow,
 ) -> PyResult<Py<PyAny>> {
     let kwargs = PyDict::new(py);
-    for (name, value) in &row.fields {
+    for (name, value) in row.fields.iter() {
         let value = value.to_python(py)?;
         kwargs.set_item(name, value.bind(py))?;
     }
-    let types = py.import("types")?;
-    let namespace = types.getattr("SimpleNamespace")?;
     Ok(namespace.call((), Some(&kwargs))?.unbind())
 }

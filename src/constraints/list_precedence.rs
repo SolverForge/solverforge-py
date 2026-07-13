@@ -7,6 +7,7 @@ use solverforge_core::score::Score;
 use crate::error::py_err;
 use crate::score::DynamicScore;
 use crate::state::PyDynamicSolution;
+use crate::value::DynamicValue;
 
 type NodeId = usize;
 type OwnerId = usize;
@@ -23,9 +24,18 @@ pub enum ListPrecedenceDeltaMode {
 struct ListPrecedencePlan<'py> {
     score_family: String,
     variable_name: String,
-    duration: Bound<'py, PyAny>,
-    successors: Bound<'py, PyAny>,
+    duration: Option<Bound<'py, PyAny>>,
+    duration_field: Option<String>,
+    successors: Option<Bound<'py, PyAny>>,
+    successors_field: Option<String>,
     expected_owner: Option<Bound<'py, PyAny>>,
+    expected_owner_field: Option<String>,
+}
+
+impl ListPrecedencePlan<'_> {
+    fn uses_callbacks(&self) -> bool {
+        self.duration.is_some() || self.successors.is_some() || self.expected_owner.is_some()
+    }
 }
 
 #[derive(Default)]
@@ -118,11 +128,17 @@ pub fn evaluate_delta(
     if entity_index >= state.owner_edges.len() {
         return Ok(DynamicScore::zero());
     }
+    let variable_index = list_variable_index(solution, descriptor_index, &access.variable_name)?;
     let before = state.score;
     let change = match mode {
-        ListPrecedenceDeltaMode::Insert => {
-            state.add_owner_route(py, solution, descriptor_index, entity_index, &access)?
-        }
+        ListPrecedenceDeltaMode::Insert => state.add_owner_route(
+            py,
+            solution,
+            descriptor_index,
+            entity_index,
+            &access,
+            variable_index,
+        )?,
         ListPrecedenceDeltaMode::Retract => state.remove_owner_route(entity_index),
     };
     let after = state.refresh_score_after_route_change(&change);
@@ -133,9 +149,12 @@ fn parse_plan<'py>(plan: &Bound<'py, PyDict>) -> PyResult<ListPrecedencePlan<'py
     Ok(ListPrecedencePlan {
         score_family: required_plan_string(plan, "score_family")?,
         variable_name: required_plan_string(plan, "variable_name")?,
-        duration: required_plan_callback(plan, "precedence_duration")?,
-        successors: required_plan_callback(plan, "precedence_successors")?,
+        duration: optional_plan_callback(plan, "precedence_duration")?,
+        duration_field: optional_plan_string(plan, "precedence_duration_field")?,
+        successors: optional_plan_callback(plan, "precedence_successors")?,
+        successors_field: optional_plan_string(plan, "precedence_successors_field")?,
         expected_owner: optional_plan_callback(plan, "element_owner")?,
+        expected_owner_field: optional_plan_string(plan, "element_owner_field")?,
     })
 }
 
@@ -146,6 +165,7 @@ fn build_state(
     access: &ListPrecedencePlan<'_>,
     retracted_entities: Option<&std::collections::BTreeSet<(usize, usize)>>,
 ) -> PyResult<DynamicListPrecedenceState> {
+    let variable_index = list_variable_index(solution, descriptor_index, &access.variable_name)?;
     let nodes = list_elements_for_variable(solution, descriptor_index, &access.variable_name)?;
     let node_to_index = nodes
         .iter()
@@ -153,17 +173,14 @@ fn build_state(
         .enumerate()
         .map(|(index, node)| (node, index))
         .collect::<BTreeMap<_, _>>();
-    let callback_solution = solution.to_python_callback_view(py)?;
-    let callback_solution = callback_solution.bind(py);
+    let callback_solution = if access.uses_callbacks() {
+        Some(solution.to_python_callback_view(py)?)
+    } else {
+        None
+    };
     let durations = nodes
         .iter()
-        .map(|node| {
-            access
-                .duration
-                .call1((&callback_solution, *node))?
-                .extract::<usize>()
-                .map(usize_to_i64)
-        })
+        .map(|node| precedence_duration(py, solution, access, callback_solution.as_ref(), *node))
         .collect::<PyResult<Vec<_>>>()?;
     let owner_count = solution
         .state
@@ -179,11 +196,9 @@ fn build_state(
     );
 
     for node in state.nodes.clone() {
-        let result = access.successors.call1((&callback_solution, node))?;
-        if result.is_none() {
-            continue;
-        }
-        for successor in result.extract::<Vec<usize>>()? {
+        let successors =
+            precedence_successors(py, solution, access, callback_solution.as_ref(), node)?;
+        for successor in successors {
             match (state.index_for_node(node), state.index_for_node(successor)) {
                 (Some(from), Some(to)) => {
                     state.add_edge((from, to));
@@ -198,7 +213,14 @@ fn build_state(
         {
             continue;
         }
-        let change = state.add_owner_route(py, solution, descriptor_index, owner, access)?;
+        let change = state.add_owner_route(
+            py,
+            solution,
+            descriptor_index,
+            owner,
+            access,
+            variable_index,
+        )?;
         debug_assert!(change.removed_edges.is_empty());
     }
     state.refresh_score_full();
@@ -327,8 +349,16 @@ impl DynamicListPrecedenceState {
         descriptor_index: usize,
         owner: OwnerId,
         access: &ListPrecedencePlan<'_>,
+        variable_index: usize,
     ) -> PyResult<RouteChange> {
-        let snapshot = self.owner_route_snapshot(py, solution, descriptor_index, owner, access)?;
+        let snapshot = self.owner_route_snapshot(
+            py,
+            solution,
+            descriptor_index,
+            owner,
+            access,
+            variable_index,
+        )?;
         Ok(self.replace_owner_route(owner, snapshot))
     }
 
@@ -343,6 +373,7 @@ impl DynamicListPrecedenceState {
         descriptor_index: usize,
         owner: OwnerId,
         access: &ListPrecedencePlan<'_>,
+        variable_index: usize,
     ) -> PyResult<RouteSnapshot> {
         let mut snapshot = RouteSnapshot::default();
         let values = solution
@@ -350,11 +381,14 @@ impl DynamicListPrecedenceState {
             .entities
             .get(descriptor_index)
             .and_then(|rows| rows.get(owner))
-            .and_then(|row| row.lists.get(access.variable_name.as_str()))
-            .cloned()
+            .and_then(|row| row.list_at(variable_index))
+            .map(<[usize]>::to_vec)
             .unwrap_or_default();
-        let callback_solution = solution.to_python_callback_view(py)?;
-        let callback_solution = callback_solution.bind(py);
+        let callback_solution = if access.expected_owner.is_some() {
+            Some(solution.to_python_callback_view(py)?)
+        } else {
+            None
+        };
         let mut previous = None;
         for value in values {
             let Some(node) = self.index_for_node(value) else {
@@ -363,15 +397,15 @@ impl DynamicListPrecedenceState {
                 continue;
             };
             snapshot.elements.push(node);
-            if let Some(expected_owner) = access.expected_owner.as_ref() {
-                let expected = expected_owner.call1((&callback_solution, value))?;
-                if !expected.is_none()
-                    && expected
-                        .extract::<usize>()
-                        .is_ok_and(|expected| expected != owner)
-                {
-                    snapshot.violation_count += 1;
-                }
+            if expected_owner_mismatch(
+                py,
+                solution,
+                access,
+                callback_solution.as_ref(),
+                owner,
+                value,
+            )? {
+                snapshot.violation_count += 1;
             }
             if let Some(from) = previous {
                 snapshot.edges.push((from, node));
@@ -678,17 +712,36 @@ impl DynamicListPrecedenceState {
     }
 }
 
+fn list_variable_index(
+    solution: &PyDynamicSolution,
+    entity_index: usize,
+    variable_name: &str,
+) -> PyResult<usize> {
+    solution
+        .schema()
+        .entities
+        .get(entity_index)
+        .and_then(|entity| {
+            entity.variables.iter().position(|variable| {
+                variable.kind == "planning_list_variable" && variable.name.as_str() == variable_name
+            })
+        })
+        .ok_or_else(|| {
+            py_err(format!(
+                "missing planning list variable `{variable_name}` for entity index `{entity_index}`"
+            ))
+        })
+}
+
 fn list_elements_for_variable<'a>(
     solution: &'a PyDynamicSolution,
     entity_index: usize,
     variable_name: &str,
 ) -> PyResult<&'a [usize]> {
+    let variable_index = list_variable_index(solution, entity_index, variable_name)?;
     solution
         .state
-        .list_elements
-        .get(entity_index)
-        .and_then(|variables| variables.get(variable_name))
-        .map(Vec::as_slice)
+        .list_elements_at(entity_index, variable_index)
         .ok_or_else(|| {
             py_err(format!(
                 "planning list variable `{variable_name}` has no element collection"
@@ -706,6 +759,124 @@ fn assignment_penalty(count: usize) -> usize {
 
 fn usize_to_i64(value: usize) -> i64 {
     i64::try_from(value).unwrap_or(i64::MAX)
+}
+
+fn precedence_duration(
+    py: Python<'_>,
+    solution: &PyDynamicSolution,
+    access: &ListPrecedencePlan<'_>,
+    callback_solution: Option<&Py<PyAny>>,
+    node: usize,
+) -> PyResult<i64> {
+    if let Some(field_name) = access.duration_field.as_deref() {
+        if let Some(value) = list_metadata_usize(solution, field_name, node) {
+            return Ok(usize_to_i64(value));
+        }
+    }
+    let Some(callback) = access.duration.as_ref() else {
+        return Err(py_err("list precedence duration metadata is missing"));
+    };
+    let Some(callback_solution) = callback_solution else {
+        return Err(py_err("list precedence callback solution is missing"));
+    };
+    callback
+        .call1((callback_solution.bind(py), node))?
+        .extract::<usize>()
+        .map(usize_to_i64)
+}
+
+fn precedence_successors(
+    py: Python<'_>,
+    solution: &PyDynamicSolution,
+    access: &ListPrecedencePlan<'_>,
+    callback_solution: Option<&Py<PyAny>>,
+    node: usize,
+) -> PyResult<Vec<usize>> {
+    if let Some(field_name) = access.successors_field.as_deref() {
+        if let Some(values) = list_metadata_usize_list(solution, field_name, node) {
+            return Ok(values);
+        }
+    }
+    let Some(callback) = access.successors.as_ref() else {
+        return Ok(Vec::new());
+    };
+    let Some(callback_solution) = callback_solution else {
+        return Err(py_err("list precedence callback solution is missing"));
+    };
+    let result = callback.call1((callback_solution.bind(py), node))?;
+    if result.is_none() {
+        Ok(Vec::new())
+    } else {
+        result.extract::<Vec<usize>>()
+    }
+}
+
+fn expected_owner_mismatch(
+    py: Python<'_>,
+    solution: &PyDynamicSolution,
+    access: &ListPrecedencePlan<'_>,
+    callback_solution: Option<&Py<PyAny>>,
+    owner: usize,
+    value: usize,
+) -> PyResult<bool> {
+    if let Some(field_name) = access.expected_owner_field.as_deref() {
+        return Ok(list_metadata_usize(solution, field_name, value)
+            .is_some_and(|expected| expected != owner));
+    }
+    let Some(callback) = access.expected_owner.as_ref() else {
+        return Ok(false);
+    };
+    let Some(callback_solution) = callback_solution else {
+        return Err(py_err("list precedence callback solution is missing"));
+    };
+    let expected = callback.call1((callback_solution.bind(py), value))?;
+    if expected.is_none() {
+        return Ok(false);
+    }
+    Ok(expected
+        .extract::<usize>()
+        .is_ok_and(|expected| expected != owner))
+}
+
+fn list_metadata_value<'a>(
+    solution: &'a PyDynamicSolution,
+    field_name: &str,
+    element: usize,
+) -> Option<&'a DynamicValue> {
+    let DynamicValue::List(values) = solution.state.solution_fields.get(field_name)? else {
+        return None;
+    };
+    values.get(element)
+}
+
+fn list_metadata_usize(
+    solution: &PyDynamicSolution,
+    field_name: &str,
+    element: usize,
+) -> Option<usize> {
+    dynamic_value_i64(list_metadata_value(solution, field_name, element)?)
+        .and_then(|value| usize::try_from(value).ok())
+}
+
+fn list_metadata_usize_list(
+    solution: &PyDynamicSolution,
+    field_name: &str,
+    element: usize,
+) -> Option<Vec<usize>> {
+    let DynamicValue::List(values) = list_metadata_value(solution, field_name, element)? else {
+        return None;
+    };
+    values
+        .iter()
+        .map(|value| dynamic_value_i64(value).and_then(|value| usize::try_from(value).ok()))
+        .collect()
+}
+
+fn dynamic_value_i64(value: &DynamicValue) -> Option<i64> {
+    match value {
+        DynamicValue::Int(value) => Some(*value),
+        _ => None,
+    }
 }
 
 fn precedence_score_for_family(
@@ -736,20 +907,6 @@ fn required_plan_string(plan: &Bound<'_, PyDict>, key: &str) -> PyResult<String>
         .extract::<String>()
 }
 
-fn required_plan_callback<'py>(
-    plan: &Bound<'py, PyDict>,
-    key: &str,
-) -> PyResult<Bound<'py, PyAny>> {
-    let value = plan
-        .get_item(key)?
-        .ok_or_else(|| py_err(format!("constraint missing {key}")))?;
-    if value.is_callable() {
-        Ok(value)
-    } else {
-        Err(py_err(format!("constraint field `{key}` must be callable")))
-    }
-}
-
 fn optional_plan_callback<'py>(
     plan: &Bound<'py, PyDict>,
     key: &str,
@@ -763,5 +920,16 @@ fn optional_plan_callback<'py>(
         Ok(Some(value))
     } else {
         Err(py_err(format!("constraint field `{key}` must be callable")))
+    }
+}
+
+fn optional_plan_string(plan: &Bound<'_, PyDict>, key: &str) -> PyResult<Option<String>> {
+    let Some(value) = plan.get_item(key)? else {
+        return Ok(None);
+    };
+    if value.is_none() {
+        Ok(None)
+    } else {
+        value.extract::<String>().map(Some)
     }
 }

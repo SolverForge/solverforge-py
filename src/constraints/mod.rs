@@ -1,3 +1,4 @@
+pub mod compiled;
 pub mod evaluate;
 pub mod incremental;
 pub mod list_precedence;
