@@ -2,8 +2,8 @@
 
 Python port of the `uc-deliveries` example. It models deliveries as problem
 facts, vehicles as route-owning planning entities, and uses SolverForge Python
-planning-list variables with CVRP route hooks and shadow-variable refresh
-callbacks.
+planning-list variables with declarative CVRP route/savings metadata and
+shadow-variable refresh callbacks.
 
 It demonstrates:
 
@@ -11,14 +11,18 @@ It demonstrates:
   windows.
 - `Vehicle` planning entities with `Vehicle.delivery_order` as a planning list
   variable over `delivery_indices`.
-- route callbacks for depot lookup, metric class, travel time, and feasibility.
+- independent `ListRouteHooks` and `ListSavingsHooks` bundles whose depot,
+  per-vehicle metric class, and per-vehicle distance matrix are explicit
+  `RowField` sources, with route feasibility supplied as a `SolutionCallback`.
 - route shadow metrics for total demand, capacity overage, travel time, and time
   window violations.
 - stock `ConstraintFactory.for_each_unassigned_element(...)` scoring for
   unassigned deliveries.
-- seeded `PHILADELPHIA`, `HARTFORD`, and `FIRENZE` data sets.
-- list cheapest-insertion construction, list k-opt construction polish, and
-  late-acceptance list change/swap/reverse local search.
+- seeded `PHILADELPHIA`, `HARTFORD`, and `FIRENZE` data sets whose routes begin
+  unassigned.
+- the reproducible seed-42 config: three-second and one-second-unimproved
+  termination, list cheapest-insertion construction, list k-opt polish with
+  `k = 2`, and 100-step late-acceptance list change/swap/reverse local search.
 - a FastAPI app with retained `SolverManager` jobs, live SSE, exact snapshots,
   route snapshots, analysis, pause, resume, cancel, terminal-job delete, and
   delivery-insertion recommendations.
@@ -37,13 +41,13 @@ For a terminal-only solve:
 make deliveries-solve
 ```
 
-After the verified `0.5.0` artifacts are approved and published to PyPI, the
+After the coordinated `0.6.0` artifacts are approved and published to PyPI, the
 same source-checkout example can be run against the installed package:
 
 ```sh
 python3.14 -m venv .venv-deliveries
 . .venv-deliveries/bin/activate
-python -m pip install "solverforge[examples]==0.5.0"
+python -m pip install "solverforge[examples]==0.6.0"
 python -m examples.solverforge_deliveries
 ```
 
@@ -65,7 +69,8 @@ The Python example mirrors the Rust `uc-deliveries/src` ownership tree:
 - `src/domain`: `Delivery`, `Vehicle`, `DeliveryPlan`, route metrics, route
   snapshots, and insertion ranking.
 - `src/constraints`: declarative stock SolverForge constraints.
-- `src/data/data_seed`: seeded city fixtures and initial route assignment.
+- `src/data/data_seed`: seeded city fixtures. Routes start unassigned and are
+  constructed by the configured SolverForge phase.
 - `src/solver/service`: retained-job orchestration and event payloads.
 - `src/api`: DTO conversion, FastAPI routes, and SSE streaming.
 

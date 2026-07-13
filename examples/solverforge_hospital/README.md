@@ -12,10 +12,15 @@ It demonstrates:
 - hard constraints for assigned shifts, required skills, employee
   unavailability, overlapping shifts, one shift per day, and 10-hour rest.
 - soft constraints for undesired days, desired days, and workload balance.
-- the canonical `LARGE` dataset: 50 employees, 688 unassigned shifts, and the
-  original 30-second solver config.
-- dynamic scalar cheapest-insertion construction plus the original nearby
-  change/swap late-acceptance local search.
+- the canonical `LARGE` dataset: 50 employees and 688 initially unassigned
+  shifts.
+- a row candidate callback that excludes employees without the required skill
+  or with overlapping unavailability before construction, while row-backed
+  candidate/distance metadata drives nearby search.
+- the reproducible seed-1 solver config: 30-second and 5-second-unimproved
+  termination, cheapest-insertion construction with
+  `assign_when_candidate_exists`, and max-10 nearby change/swap late-acceptance
+  local search with a first-best-score-improving forager.
 - the hospital browser shell, by-location and by-employee schedule tabs, shared
   SolverForge UI assets served from the native `solverforge-ui` bridge, and the
   same retained async `/jobs` lifecycle used by the Rust app: background
@@ -36,13 +41,13 @@ For a terminal-only solve:
 make hospital-solve
 ```
 
-After the verified `0.5.0` artifacts are approved and published to PyPI, the
+After the coordinated `0.6.0` artifacts are approved and published to PyPI, the
 same source-checkout example can be run against the installed package:
 
 ```sh
 python3.14 -m venv .venv-hospital
 . .venv-hospital/bin/activate
-python -m pip install "solverforge[examples]==0.5.0"
+python -m pip install "solverforge[examples]==0.6.0"
 python -m examples.solverforge_hospital
 ```
 

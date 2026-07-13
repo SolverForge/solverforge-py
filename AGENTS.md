@@ -73,12 +73,42 @@ bridge seams. This checkout consumes public upstream crates through exact
 registry pins in `Cargo.toml` and `Cargo.lock`; do not add private upstream
 module dependencies or local path overrides for release work.
 
+One compiled schema owns one immutable runtime plan: parsed schema, descriptor,
+upstream `RuntimeModel`, assignment bindings, constraints, and candidate metrics.
+Direct solves, retained jobs, snapshots, clones, and resumes must use that same
+plan; do not recreate wrapper-local phases, selector trees, move types, TLS slot
+state, or fallback construction paths. Schema caching is allowed only for
+structurally stable, capture-free callback state; stateful callbacks compile per
+invocation.
+
 Python callbacks are the only constraint authoring surface. Callback exceptions
 must preserve actionable Python tracebacks. Callback solution views must expose
 ordinary solution-level lookup context while projecting entity/fact collections
 from Rust-owned state. Callback code may be called many times and from multiple
 worker threads on CPython 3.14 free-threaded, so treat solution-level lookup
 context as immutable during a solve.
+
+`@candidate_metric` callbacks are the Python surface for named sorted or
+probabilistic selector metrics. Register them through
+`@planning_solution(..., candidate_metrics=[...])`; they receive the callback
+solution view plus a canonical candidate identity and must return finite numeric
+values. `selection_metric` is valid only with `sorted` or `probabilistic`
+selection order, and probabilistic weights must be non-negative.
+
+Ordinary dynamic scalar construction supports `first_fit` and
+`cheapest_insertion`. Assignment-group construction also supports the decreasing,
+weakest-fit, and strongest-fit scalar variants when their declared `entity_order`
+and `value_order` capabilities satisfy the upstream compiler. Dynamic list
+construction supports round-robin, cheapest/regret insertion, Clarke-Wright, and
+K-opt; route-aware variants require their explicit savings or route metadata.
+
+Candidate traces are bounded, opt-in retained diagnostics. Keep them out of
+synchronous `Solver.solve`, ordinary statuses, and events; expose them only
+through the atomic `SolverManager.telemetry_detail` payload. Qualified traces
+require an explicit per-job `QualifiedCandidateTraceProvenance` with five
+lowercase SHA-256 digests and a non-blank external producer. Never infer those
+values from a solution, environment, callback, or file, and never accept
+qualified provenance through serializable `SolverConfig`.
 
 Do not fake unsupported behavior. Top-level `ConstraintFactory.join`,
 `group_by`, `if_exists`, `if_not_exists`, and `flattened` remain explicit
@@ -92,7 +122,9 @@ claimed as Python-bindable without a public upstream seam.
 example dependencies, project URLs, classifiers, and maturin module settings.
 `Cargo.toml` owns native crate metadata and the SolverForge Rust dependency
 base; the package version must match `pyproject.toml`. `Cargo.lock` locks
-reproducible Rust builds. The `Makefile` owns local release targets,
+reproducible Rust builds. The current release line is package/crate `0.6.0` on
+the six SolverForge `0.18.0` registry crates and `solverforge-ui` `0.7.0`;
+`make release-base-check` must stay green. The `Makefile` owns local release targets,
 dependency-base checks, distribution builds, artifact validation, browser system
 dependency setup, and `pre-release`. `.github/workflows/ci.yml` validates source
 checkouts on GitHub and Forgejo, installs Playwright system dependencies on

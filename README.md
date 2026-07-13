@@ -8,51 +8,52 @@ The native extension owns the working solution state in Rust so SolverForge can
 clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
-The package targets CPython 3.14 and Rust 1.95.0. This checkout pins upstream
-SolverForge Rust crates to `0.17.2` and `solverforge-ui` to `0.7.0` through
-`Cargo.toml` and `Cargo.lock`. The `solverforge` `0.5.x` line is the current
-dynamic binding architecture and intentionally supersedes the older incompatible
-`0.2.x` and `0.3.0` artifacts in the same PyPI namespace. Those older artifacts
-exposed `SolverFactory`, `PlanningVariable`, Java service requirements, and
-other APIs that are not part of this package.
+The package targets CPython 3.14 and Rust 1.95.0. This checkout consumes the
+published SolverForge Rust crates `0.18.0` and pins `solverforge-ui` to `0.7.0`
+through exact crates.io versions in `Cargo.toml` and registry checksums in
+`Cargo.lock`; it has no local path or Git dependency override. The `solverforge`
+`0.6.x` line is the current dynamic binding architecture and intentionally
+supersedes the older incompatible `0.2.x` and `0.3.0` artifacts in the same PyPI
+namespace. Those older artifacts exposed `SolverFactory`, `PlanningVariable`,
+Java service requirements, and other APIs that are not part of this package.
 
 ## Installation
 
-This checkout builds `solverforge` `0.5.0`. As of July 4, 2026, the `v0.5.0`
-tagged release artifacts have passed GitHub release verification and are waiting
-at the reviewed PyPI publish environment; PyPI and TestPyPI still resolve
-`solverforge` to `0.4.0`. Use the root Makefile targets for source-current
-validation until that publish approval completes.
+This checkout is the unreleased `solverforge` `0.6.0` source on SolverForge
+Rust `0.18.0`. The exact registry dependency base is published, locked, and
+ready for source builds. The earlier `v0.5.0` artifact pipeline built and
+verified its distributions, but its PyPI publish did not complete. PyPI and
+TestPyPI still resolve `solverforge` to `0.4.0` as of July 13, 2026.
 
-After the release approval completes:
+After `solverforge` `0.6.0` is published to PyPI:
 
 ```sh
-python3.14 -m pip install "solverforge==0.5.0"
+python3.14 -m pip install "solverforge==0.6.0"
 ```
 
 The installable wheel contains the core `solverforge` package, native extension,
-and embedded shared `solverforge-ui` assets exposed through `solverforge.ui`.
+and embedded shared `solverforge-ui` assets exposed through
+`solverforge.ui.asset()` and `solverforge.ui.asset_paths()`.
 Source-checkout examples, including the hospital and deliveries FastAPI apps and
 their app-specific static files, are maintained in this repository rather than
 installed into the runtime wheel.
 
 ## Examples
 
-Run source-current examples through the root Makefile while the `0.5.0` PyPI
-publish job is awaiting approval:
+Run source-current examples through the root Makefile:
 
 ```sh
 make hospital-run
 make deliveries-run PORT=7861
 ```
 
-After `0.5.0` is published to PyPI, the same source-checkout examples can be run
+After `0.6.0` is published to PyPI, the same source-checkout examples can be run
 against the installed package without `PYTHONPATH` or an editable checkout:
 
 ```sh
 python3.14 -m venv .venv-examples
 . .venv-examples/bin/activate
-python -m pip install "solverforge[examples]==0.5.0"
+python -m pip install "solverforge[examples]==0.6.0"
 python examples/nqueens.py
 python -m examples.solverforge_hospital
 python -m examples.solverforge_deliveries
@@ -137,8 +138,8 @@ Run `make help` for focused targets such as `make test-hospital`,
 - No private upstream SolverForge modules; bindings use the public dynamic bridge
   contract.
 - No fixed pre-modeled JSON-only backends.
-- No upstream SolverForge mutation in this repository; upstream bridge work must
-  land upstream first and then be consumed through released crates.
+- Public bridge work belongs upstream; the wrapper consumes only public seams
+  rather than private upstream modules or a wrapper-owned solver path.
 
 ## Current Support
 
@@ -149,44 +150,127 @@ Run `make help` for focused targets such as `make test-hospital`,
   `seconds_spent_limit`, `minutes_spent_limit`, `best_score_limit`,
   `step_count_limit`, `unimproved_step_count_limit`, and
   `unimproved_seconds_spent_limit`.
-- Synchronous and retained scalar/list construction solves use upstream
-  SolverForge. Dynamic scalar construction binds first-fit, cheapest insertion,
-  and assignment-group first-fit or cheapest insertion phases when the
-  construction phase declares `group_name`; dynamic list construction binds list
-  cheapest insertion, list regret insertion, list Clarke-Wright, and list k-opt
-  phases where the model supplies the required list or route hooks.
+- Synchronous and retained scalar/list construction solves use one upstream
+  compiled runtime runner. Ordinary dynamic scalar construction supports
+  `first_fit` and `cheapest_insertion`. A declared assignment group additionally
+  supports `first_fit_decreasing`, `weakest_fit`, `weakest_fit_decreasing`,
+  `strongest_fit`, and `strongest_fit_decreasing`; the decreasing variants
+  require `entity_order`, while weakest/strongest variants require
+  `value_order`. Dynamic list construction supports `list_round_robin`,
+  `list_cheapest_insertion`, `list_regret_insertion`, `list_clarke_wright`, and
+  `list_k_opt`, with the final two requiring their respective savings and route
+  metadata bundles. These are core graph nodes over the immutable runtime
+  model. An explicit `group_name` phase obeys its configured obligation and
+  termination; required-only completion belongs solely to upstream omitted
+  defaults. Default local search is assembled only when the top-level
+  termination has an effective finite limit, so an empty or invalid termination
+  cannot accidentally create an unbounded solve. There is no wrapper assignment
+  placer, required stream, phase tree, TLS slot state, synthetic metric, or
+  fallback path.
 - `SolverManager` is backed by upstream retained jobs, statuses, events, and
   snapshots. `SolverManager.solve(...)` returns `JobHandle(job_id=...)`; the
-  manager supports pause, resume, cancel, delete, exact snapshot reads, and
-  retained event payloads whose current score is read from the attached solution
-  snapshot when present.
+  manager supports pause, resume, cancel, delete, and exact snapshot reads.
+  Retained event payloads read current score from the attached solution snapshot
+  when present. Long-running phases publish progress at the shared upstream
+  cadence, and telemetry includes the current phase type, index, counters, and
+  generation/evaluation time. `telemetry_detail(job_id)` returns one atomic
+  `status` with detailed telemetry plus an optional `candidate_trace`; ordinary
+  status/event polling remains compact.
+- Candidate tracing is an opt-in retained-job diagnostic configured as
+  `candidate_trace = { max_entries = N }`, where `N` must be non-zero. The core
+  records the total pull count after the bounded identity prefix is full and
+  marks truncation explicitly. Synchronous `Solver.solve(...)` rejects
+  `candidate_trace` because only `SolverManager.telemetry_detail(...)` can return
+  it. Trace format 3 exposes canonical configured input, execution policy,
+  resolved phase-plan provenance, candidate identities and dispositions, prefix
+  digests, completeness flags, and the explicit
+  `candidate_index_scope = "source_local_only"` contract.
+  `QualifiedCandidateTraceProvenance(...)` accepts keyword-only lowercase
+  SHA-256 values for the schema, instance, initial state, core tree, and loaded
+  build plus a non-blank external producer. Pass it per job as
+  `SolverManager.solve(..., qualified_candidate_trace_provenance=...)`; it is
+  rejected before schema discovery unless that manager has candidate tracing
+  enabled. The provenance is never inferred from a solution or accepted through
+  serializable solver config, and ordinary traces remain explicitly
+  `not_requested` rather than being upgraded by the presence of digest fields.
+- `@candidate_metric("name")` registers a named numeric move-ranking callback
+  through `@planning_solution(..., candidate_metrics=[...])`. A metric receives
+  a read-only solution callback view and the core candidate's canonical logical
+  identity. Leaf selectors with `selection_order = "sorted"` or
+  `"probabilistic"` must name a registered `selection_metric`; other selection
+  orders reject that field. Sorted metrics are ascending. Metric values must be
+  finite, and probabilistic weights must also be non-negative, with zero-weight
+  candidates omitted.
 - `planning_variable(...)` supports row candidate callbacks and nearby value or
-  entity candidate/distance callbacks for dynamic scalar construction and nearby
-  scalar local search.
+  entity candidate/distance metadata for dynamic scalar construction and nearby
+  scalar local search. Each nearby metadata parameter has exactly one source:
+  either a Python callback or a row field name. Dual raw-schema sources are
+  rejected at compilation, while immutable row metadata can be supplied without
+  per-query Python callbacks. Provider-backed value ranges are imported once per
+  variable and shared across rows in Rust-owned state; row candidate callbacks
+  remain row-specific.
 - `scalar_assignment_group(...)` declares assignment-aware scalar groups for
   grouped scalar local search and assignment-group construction. Group metadata
   covers required entities, capacity keys, assignment rules, ordering callbacks,
   callback synchronization policy, and `ScalarGroupLimits`. Assignment callbacks
   receive a solution view whose entity/fact collections reflect Rust-owned
   planning state and whose ordinary solution-level attributes remain available
-  for read-only lookup context such as capacity tables.
+  for read-only lookup context such as capacity tables. For invariant row
+  metadata, `required_entity_field`, `capacity_key_field`,
+  `position_key_field`, and `sequence_key_field` are explicit alternatives to
+  their callbacks: required is a row bool, position and sequence are row
+  integers, and capacity is a row list indexed by candidate value. A field
+  alternative is mutually exclusive with its callback and avoids
+  per-candidate Python transitions without caching or changing callback behavior.
+  The compiled schema retains one immutable runtime plan (schema, descriptor,
+  and model), reused by direct solves, manager jobs, snapshots, and resumes;
+  instance rows, callback views, seeds, and moves remain per solve.
+  An assignment-owned planning variable is exclusively edited through its
+  declared grouped construction and `grouped_scalar_move_selector`; a raw
+  scalar, nearby, ruin, or conflict-repair selector targeting that same
+  variable is rejected instead of creating a second search path. Generic
+  `@scalar_group` and conflict-repair callbacks are rejected in a local-search
+  phase that could reach an assignment-owned slot: their returned edits are
+  unscoped, so accepting them would recreate a second ownership path. Multiple
+  declarative assignment groups can still compose in selector combinators.
 - `planning_list_variable(...)` supports `element_owner`,
-  `construction_element_order_key`, `precedence_duration`,
-  `precedence_successors`, route callbacks
-  (`route_depot`, `route_metric_class`, `route_distance`, `route_feasible`),
-  and entity-scoped route callbacks
-  (`route_depot_entity`, `route_metric_class_entity`,
-  `route_distance_entity`, `route_feasible_entity`) for owner-aware list moves,
-  JSSP-style precedence/makespan scoring, and CVRP-style route construction.
-  CVRP-style models with immutable row data can avoid per-query Python callbacks
-  by passing
-  `route_depot_field`, `route_metric_class_field`,
-  `route_distance_matrix_field`, `route_capacity_field`, and
-  `route_demand_field`; the Rust route phases read those fields through the
-  active cursor and keep the callback options as fallbacks.
+  `construction_element_order_key`, `precedence_duration`, and
+  `precedence_successors` for owner-aware list moves and JSSP-style
+  precedence/makespan scoring. Its route-related metadata has one canonical,
+  nested declaration form: `route=ListRouteHooks(...)`,
+  `savings=ListSavingsHooks(...)`, plus independent
+  `cross_position_distance=` and `intra_position_distance=` sources. Route and
+  savings are complete, independent bundles: a route bundle never implicitly
+  enables savings construction.
+  The owner, construction-order, duration, and successor metadata parameters
+  each accept either a Python callback or the name of a solution-level sequence
+  indexed by element ID; string sources let the native runtime read immutable
+  element metadata without per-element Python calls. A declared sequence is
+  mandatory before state import: owner entries are `None` or non-negative
+  integers, order entries are integers, durations are non-negative integers,
+  and successor entries are ordered sequences of non-negative integers. Missing
+  or malformed sequences fail import; they never become an unrestricted owner,
+  default order, or missing precedence edge. Nested route sources use explicit
+  source wrappers rather than unscoped strings or callbacks.
+  In a nested list bundle, `RowField("...")`, `SolutionField("...")`,
+  `EntityCallback(...)`, and `SolutionCallback(...)` make the source scope
+  explicit. `RowField` reads only the declared entity row; `SolutionField` reads
+  only the declared immutable solution-root value. Neither falls back to the
+  other scope. Capacity feasibility is an explicit
+  `CapacityRouteFeasibility(capacity=..., demand=...)` source whose two fields
+  are independently scoped. A new nested declaration therefore never infers
+  callback scope from arity or shares a route source with savings.
+
+  Nearby list neighborhoods require their own
+  `cross_position_distance` and `intra_position_distance` sources, and neither
+  is inferred from a route distance. A matrix source for either metric is
+  indexed by the actual list values at the two positions, never by their row or
+  position indexes.
   `shadow_variable_updates(...)` registers post-update listeners whose
   native-owned fields are refreshed during solve/analyze and exported back to
-  Python objects.
+  Python objects. Attached callback solution views synchronize dirty rows after
+  the first full view sync instead of rewriting every entity row for repeated
+  full-solution callbacks.
 - Supported score families are `SoftScore`, `HardSoftScore`,
   `HardSoftDecimalScore`, and `HardMediumSoftScore`.
 - Python callback constraints are evaluated from Rust-owned dynamic state.
@@ -197,15 +281,32 @@ Run `make help` for focused targets such as `make test-hospital`,
   `list_precedence_makespan(owner_entity_type, variable_name)`. Ordinary
   penalize/reward streams support fixed or callback-computed score weights; list
   precedence/makespan scoring is computed natively from owner, duration, and
-  successor callbacks. `indexed_presence(...)` is available as a grouped
-  collector for run/range presence scoring. `joiner.equal(...)` and
-  `joiner.equal_bi(...)` preserve Python equality semantics.
+  successor metadata callbacks or field-name metadata. `indexed_presence(...)`
+  is available as a grouped collector for run/range presence scoring.
+  `joiner.equal(...)` and `joiner.equal_bi(...)` accept either Python key
+  callbacks or attribute-name strings. Callback keys preserve Python equality
+  semantics. String keys specialize to native equality only for planning scalar
+  slots and stable fields stored directly on every imported row; properties,
+  shadow-derived attributes, containers, and unsupported scalar values use live
+  Python attribute lookup and equality.
+  Schema/runtime plans reuse only capture-free functions with canonical module
+  namespace provenance and no defaults or function-owned metadata. A callback
+  from a different module namespace never shares a plan merely because its code
+  object matches; mutable values in the same callback namespace remain live.
+  Closures, bound defaults, partials, methods, callable instances, and other
+  stateful callbacks compile per invocation rather than being retained across solves.
+  Constraint plans specialize after state import; simple fixed-weight unary,
+  list-unassigned, and proven string-key equality joins can evaluate directly
+  from Rust-owned state while callback filters, callback weights, computed
+  attributes, and unsupported key values use the Python callback surface.
 - Dynamic scalar local search is available through upstream-style dynamic
   `change_move_selector`, `swap_move_selector`, `nearby_change_move_selector`,
   `nearby_swap_move_selector`, `pillar_change_move_selector`,
   `pillar_swap_move_selector`, `ruin_recreate_move_selector`,
   `grouped_scalar_move_selector`, `conflict_repair_move_selector`, and
   `compound_conflict_repair_move_selector` phases.
+  Raw scalar selectors exclude variables owned by `scalar_assignment_group(...)`;
+  use that group's `grouped_scalar_move_selector` for its assignment variable.
 - Dynamic list local search is available through upstream-style
   `list_change_move_selector`, `nearby_list_change_move_selector`,
   `list_swap_move_selector`, `nearby_list_swap_move_selector`,
@@ -215,16 +316,28 @@ Run `make help` for focused targets such as `make test-hospital`,
   `list_ruin_move_selector` phases.
 - `limited_neighborhood`, `union_move_selector`, and two-child
   `cartesian_product_move_selector` compose supported dynamic scalar and list
-  selectors.
+  selectors. Dynamic neighborhoods are opened as resumable cursor trees: union
+  children, limits, Cartesian branches, pillar windows, and k-opt reconnections
+  advance only when the solver requests the next candidate. Nearby candidate
+  callbacks may return any Python iterable; candidates are consumed once into
+  an exact bounded top-k rather than copied into a full ranked neighborhood.
+  Stable candidate IDs remain borrowable for evaluation, losing candidates are
+  released as soon as the forager no longer needs them, and only the selected
+  move crosses the ownership boundary. Exact sorting, shuffling, and probability
+  decorators retain the compact global ordering data their documented semantics
+  require.
 - `examples/solverforge_hospital` is a 1:1 Python model of the Rust hospital
   use case's public dataset/config surface: `LARGE` has 50 employees, 688
-  shifts, retained jobs, snapshots, analysis, pause/resume/cancel, and a
+  initially unassigned shifts, skill/availability-aware construction candidates,
+  retained jobs, snapshots, analysis, pause/resume/cancel, and a reproducible
   30-second hard-feasible terminal solve when installed with the release native
   extension.
 - `examples/solverforge_deliveries` is the Python port of the deliveries use
-  case: route-owning vehicles, delivery facts, CVRP route callbacks, route
-  shadow metrics, unassigned-delivery scoring, retained jobs, route snapshots,
-  analysis, and delivery-insertion recommendations.
+  case: initially unassigned delivery facts, route-owning vehicles, independent
+  row-backed `ListRouteHooks` and `ListSavingsHooks` bundles with
+  solution-scoped feasibility, route shadow metrics, unassigned-delivery
+  scoring, retained jobs, route snapshots, analysis, and delivery-insertion
+  recommendations.
 - Top-level `ConstraintFactory.join`, `group_by`, `if_exists`, `if_not_exists`,
   and `flattened` remain explicit unsupported methods until the native callback
   stream planner has public bridge support for those top-level semantics. Use
@@ -241,9 +354,13 @@ Python callbacks are the only constraint authoring surface. Filter callbacks
 return `bool`; weight callbacks return a score object or integer; grouped scalar
 callbacks return scalar edit candidates for `@scalar_group`; conflict repair
 callbacks return scalar edit candidates for constraints declared with
-`@conflict_repair`; value range providers return ordered finite collections;
-distance callbacks return numeric distances; and owner hooks used by list
-selectors return an owner index or `None`.
+`@conflict_repair`; candidate-metric callbacks return finite numeric ranking
+values; value range providers return ordered finite collections; nearby
+candidate callbacks return Python iterables; distance callbacks return numeric
+distances; and owner hooks used by list selectors return an owner index or
+`None`. Candidate metrics receive the callback solution view plus an operation
+or composite identity dictionary; they rank an already generated core move and
+do not rebuild or execute a second selector.
 
 Callback exceptions are surfaced as SolverForge Python exceptions with the
 original Python traceback. Callback solution views include non-private,
@@ -262,21 +379,23 @@ used inside callbacks may still impose their own synchronization constraints.
 ## Release State
 
 This repository publishes the `solverforge` package on PyPI. The current
-checkout is `0.5.0`, carrying the SolverForge Rust dependency base forward to
-`0.17.2`. The `v0.5.0` tag points at the source-current release head, GitHub CI
-and Forgejo CI are green for that head, and the GitHub release workflow has built
-and verified the source distribution plus Linux, macOS, and Windows wheels. As
-of July 4, 2026, the release workflow is waiting at the reviewed `pypi`
-environment before publishing.
+checkout is the unreleased `0.6.0`, carrying the SolverForge Rust dependency
+base forward to the published `0.18.0` crates and `solverforge-ui` `0.7.0`.
+`Cargo.lock` resolves those exact crates from crates.io, and
+`make release-base-check` is green. The historical `v0.5.0` pipeline built and
+verified its source distribution and platform wheels, but the PyPI approval job
+did not complete. There is no `v0.6.0` tag or published `0.6.0` artifact.
 
 PyPI latest for `solverforge` is still `0.4.0`, with published versions `0.2.2`,
 `0.2.3`, `0.2.4`, `0.2.5`, `0.2.6`, `0.3.0`, and `0.4.0`; TestPyPI also has
-`0.4.0`. The old PyPI artifacts describe a different API and architecture,
-including `SolverFactory`, `PlanningVariable`, and Java-service requirements.
+only `0.4.0` as of July 13, 2026. The old PyPI artifacts describe a different
+API and architecture, including `SolverFactory`, `PlanningVariable`, and
+Java-service requirements.
 
 Release rules:
 
-- Publish the verified final `0.5.0`, not a prerelease.
+- Publish the verified final `0.6.0`, not a prerelease, from the exact locked
+  SolverForge `0.18.0` and `solverforge-ui` `0.7.0` registry base.
 - Keep `requires-python = ">=3.14"`.
 - Build wheels and the source distribution from this repository, with the
   SolverForge Rust dependency base declared in `Cargo.toml` and locked in
@@ -285,10 +404,10 @@ Release rules:
   Tagged `v*.*.*` pushes build and verify release artifacts, then publish to
   PyPI only after the reviewed `pypi` environment approves the job.
 - After PyPI publication, verify `python3.14 -m pip install solverforge`
-  resolves to `0.5.0`.
-- After `0.5.0` is published and smoke-tested, yank PyPI `0.2.2` through
+  resolves to `0.6.0`.
+- After `0.6.0` is published and smoke-tested, yank PyPI `0.2.2` through
   `0.3.0` with the reason
-  `Superseded by solverforge 0.5.0 dynamic Python binding architecture.`
+  `Superseded by solverforge 0.6.0 dynamic Python binding architecture.`
 
 Trusted publishing should trust owner `SolverForge`, repository
 `solverforge-py`, workflow `release.yml`, TestPyPI environment `testpypi`, and

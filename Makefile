@@ -43,7 +43,7 @@ SOLVERFORGE_RELEASE_VERSION := $(shell $(HOST_PYTHON) scripts/verify_solverforge
 MYPY_PATHS := python/solverforge examples/solverforge_hospital examples/solverforge_deliveries
 PY_STYLE_PATHS := python tests examples scripts
 DOC_CHECK_PATHS := README.md AGENTS.md WIREFRAME.md examples/solverforge_hospital/README.md examples/solverforge_deliveries/README.md
-DOC_STALE_PATTERNS := move_count_limit|bounded scalar assignment fallback|currently contains scaffolding|owner-aware, nearby, swap, sublist, reverse, k-opt, and ruin selectors .*not yet|no committed history yet|/home/pvd/dev/solverforge|next release from this checkout|As of 2026-07-03|Install the published package and run
+DOC_STALE_PATTERNS := move_count_limit|bounded scalar assignment fallback|currently contains scaffolding|owner-aware, nearby, swap, sublist, reverse, k-opt, and ruin selectors .*not yet|no committed history yet|/home/pvd|/srv/lab/dev/solverforge|next release from this checkout|As of 2026-07-03|Install the published package and run|0\.17\.2|0\.18\.0.*not published|unpublished.*0\.18\.0|registry-backed builds remain intentionally blocked|release-base gate red|exact SolverForge.*registry dependencies are available|CVRP route callbacks|route callbacks for depot lookup|July 11, 2026
 PY_DEPS_STAMP := $(VENV)/.solverforge-py-deps
 PLAYWRIGHT_BROWSERS_STAMP := $(VENV)/.solverforge-py-playwright-chromium
 PY_LIBDIR := $(shell $(HOST_PYTHON) -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')
@@ -246,6 +246,17 @@ docs-check:
 	@test -f examples/solverforge_hospital/README.md
 	@test -f examples/solverforge_deliveries/README.md
 	@! rg -n "$(DOC_STALE_PATTERNS)" $(DOC_CHECK_PATHS)
+	@rg -q '@candidate_metric' README.md
+	@rg -q 'QualifiedCandidateTraceProvenance' README.md
+	@rg -q '@candidate_metric' AGENTS.md
+	@rg -q 'QualifiedCandidateTraceProvenance' AGENTS.md
+	@rg -q '@candidate_metric' WIREFRAME.md
+	@rg -q 'QualifiedCandidateTraceProvenance' WIREFRAME.md
+	@rg -q 'list_round_robin' README.md WIREFRAME.md
+	@rg -q 'weakest_fit_decreasing' README.md WIREFRAME.md
+	@rg -q 'ui.asset_paths' README.md WIREFRAME.md
+	@rg -q 'assign_when_candidate_exists' examples/solverforge_hospital/README.md
+	@rg -q 'RowField' examples/solverforge_deliveries/README.md
 	@printf -- "$(GREEN)$(CHECK) Documentation surface looks current$(RESET)\n"
 
 release-base-check:
