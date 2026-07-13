@@ -41,8 +41,8 @@ For a terminal-only solve:
 make deliveries-solve
 ```
 
-After the coordinated `0.6.0` artifacts are approved and published to PyPI, the
-same source-checkout example can be run against the installed package:
+The same source-checkout example can be run against the published `0.6.0`
+package:
 
 ```sh
 python3.14 -m venv .venv-deliveries

@@ -131,9 +131,9 @@ checkouts on GitHub and Forgejo, installs Playwright system dependencies on
 Linux, and retries network toolchain bootstraps for transient runner DNS misses.
 `.github/workflows/release.yml` builds sdists/wheels, verifies release
 artifacts, publishes to TestPyPI only from manual workflow dispatch, and
-publishes to PyPI only from a matching `v*.*.*` tag after the reviewed `pypi`
-environment approves the job. `scripts/verify_release_artifacts.py` checks
-deterministic artifact metadata/content, and
+publishes to PyPI automatically from a matching `v*.*.*` tag.
+`scripts/verify_release_artifacts.py` checks deterministic artifact
+metadata/content, and
 `tests/python/test_release_metadata.py` guards release metadata drift.
 
 ## Commit & Pull Request Guidelines

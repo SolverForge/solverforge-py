@@ -423,12 +423,9 @@ checksums. Release automation verifies that manifest/lockfile source of truth
 instead of inspecting a mutable sibling checkout, and
 `make release-base-check` is green.
 
-The historical `v0.5.0` artifact pipeline built and verified its source
-distribution plus Linux, macOS, and Windows wheels, but its PyPI approval job
-did not complete. This checkout is the unreleased `0.6.0` source on the exact
-SolverForge `0.18.0` crate boundary. There is no `v0.6.0` tag or published
-`0.6.0` artifact; public PyPI and TestPyPI still report `0.4.0` as the latest
-package as of July 13, 2026.
+The current package and crate release is `0.6.0` on the exact SolverForge
+`0.18.0` crate boundary. Its artifact set is one source distribution plus
+Linux, macOS, and Windows wheels, verified together before release.
 
 ## Makefile And Validation Flow
 

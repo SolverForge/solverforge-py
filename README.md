@@ -19,13 +19,8 @@ Java service requirements, and other APIs that are not part of this package.
 
 ## Installation
 
-This checkout is the unreleased `solverforge` `0.6.0` source on SolverForge
-Rust `0.18.0`. The exact registry dependency base is published, locked, and
-ready for source builds. The earlier `v0.5.0` artifact pipeline built and
-verified its distributions, but its PyPI publish did not complete. PyPI and
-TestPyPI still resolve `solverforge` to `0.4.0` as of July 13, 2026.
-
-After `solverforge` `0.6.0` is published to PyPI:
+Install the `solverforge` `0.6.0` release, built on the exact published and
+locked SolverForge Rust `0.18.0` registry dependency base:
 
 ```sh
 python3.14 -m pip install "solverforge==0.6.0"
@@ -47,8 +42,8 @@ make hospital-run
 make deliveries-run PORT=7861
 ```
 
-After `0.6.0` is published to PyPI, the same source-checkout examples can be run
-against the installed package without `PYTHONPATH` or an editable checkout:
+The same source-checkout examples can be run against the installed package
+without `PYTHONPATH` or an editable checkout:
 
 ```sh
 python3.14 -m venv .venv-examples
@@ -376,46 +371,12 @@ solution state, safe to run concurrently, and treat solution-level lookup contex
 as immutable for the duration of a solve. Third-party Python extension modules
 used inside callbacks may still impose their own synchronization constraints.
 
-## Release State
+## Release
 
-This repository publishes the `solverforge` package on PyPI. The current
-checkout is the unreleased `0.6.0`, carrying the SolverForge Rust dependency
-base forward to the published `0.18.0` crates and `solverforge-ui` `0.7.0`.
-`Cargo.lock` resolves those exact crates from crates.io, and
-`make release-base-check` is green. The historical `v0.5.0` pipeline built and
-verified its source distribution and platform wheels, but the PyPI approval job
-did not complete. There is no `v0.6.0` tag or published `0.6.0` artifact.
-
-PyPI latest for `solverforge` is still `0.4.0`, with published versions `0.2.2`,
-`0.2.3`, `0.2.4`, `0.2.5`, `0.2.6`, `0.3.0`, and `0.4.0`; TestPyPI also has
-only `0.4.0` as of July 13, 2026. The old PyPI artifacts describe a different
-API and architecture, including `SolverFactory`, `PlanningVariable`, and
-Java-service requirements.
-
-Release rules:
-
-- Publish the verified final `0.6.0`, not a prerelease, from the exact locked
-  SolverForge `0.18.0` and `solverforge-ui` `0.7.0` registry base.
-- Keep `requires-python = ">=3.14"`.
-- Build wheels and the source distribution from this repository, with the
-  SolverForge Rust dependency base declared in `Cargo.toml` and locked in
-  `Cargo.lock`.
-- Publish to TestPyPI only from `workflow_dispatch` through trusted publishing.
-  Tagged `v*.*.*` pushes build and verify release artifacts, then publish to
-  PyPI only after the reviewed `pypi` environment approves the job.
-- After PyPI publication, verify `python3.14 -m pip install solverforge`
-  resolves to `0.6.0`.
-- After `0.6.0` is published and smoke-tested, yank PyPI `0.2.2` through
-  `0.3.0` with the reason
-  `Superseded by solverforge 0.6.0 dynamic Python binding architecture.`
-
-Trusted publishing should trust owner `SolverForge`, repository
-`solverforge-py`, workflow `release.yml`, TestPyPI environment `testpypi`, and
-PyPI environment `pypi`. The `pypi` GitHub environment should require manual
-approval, and the workflow uses OIDC rather than long-lived PyPI tokens. Run
-`make pre-release` before publishing; it checks the SolverForge dependency base,
-runs local CI, builds release artifacts, runs `twine check`, and verifies
-artifact contents.
+The current package and crate version is `0.6.0`, built on the published
+SolverForge `0.18.0` crates and `solverforge-ui` `0.7.0`. `Cargo.lock` resolves
+those exact crates from crates.io. Maintainers run `make pre-release` to verify
+the dependency base, local CI, distribution metadata, and artifact contents.
 
 ## License
 
