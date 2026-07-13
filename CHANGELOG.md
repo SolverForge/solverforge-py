@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.6.0](///compare/v0.5.0...v0.6.0) (2026-07-13)
+
+
+### Features
+
+* **manager:** retain qualified solve diagnostics c6445ec
+* **model:** declare explicit runtime metadata ad41f94
+
 ## [0.5.0](https://github.com/SolverForge/solverforge-py/compare/v0.4.1...v0.5.0) (2026-07-03)
 
 
