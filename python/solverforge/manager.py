@@ -6,8 +6,7 @@ from typing import Any
 
 from . import _native
 from .config import SolverConfig, _resolve_config
-from .model import build_schema
-
+from .model import _compiled_schema_for_solution
 
 TERMINAL_STATES = {"COMPLETED", "CANCELLED", "FAILED"}
 
@@ -21,12 +20,39 @@ class SolverManager:
     def __init__(self, config: SolverConfig | dict[str, Any] | None = None) -> None:
         self._native = _native.SolverManager(_resolve_config(config))
 
-    def solve(self, solution: object) -> JobHandle:
-        schema = build_schema(solution)
-        return JobHandle(job_id=self._native.solve(solution, schema))
+    def solve(
+        self,
+        solution: object,
+        *,
+        qualified_candidate_trace_provenance: (
+            _native.QualifiedCandidateTraceProvenance | None
+        ) = None,
+    ) -> JobHandle:
+        if qualified_candidate_trace_provenance is not None:
+            self._native._preflight_qualified_candidate_trace_provenance(
+                qualified_candidate_trace_provenance=qualified_candidate_trace_provenance
+            )
+        schema = _compiled_schema_for_solution(solution)
+        return JobHandle(
+            job_id=self._native.solve(
+                solution,
+                schema,
+                qualified_candidate_trace_provenance=qualified_candidate_trace_provenance,
+            )
+        )
 
     def get_status(self, job_id: int) -> dict[str, object]:
         return self._native.get_status(job_id)
+
+    def telemetry_detail(self, job_id: int) -> dict[str, object]:
+        """Return one atomic retained diagnostic view for a job.
+
+        ``status`` contains the lifecycle snapshot and detailed ``telemetry``.
+        ``candidate_trace`` is ``None`` unless the solver was configured with
+        a bounded ``candidate_trace``; ordinary status polling and events never
+        materialize detailed telemetry or the candidate trace.
+        """
+        return self._native.telemetry_detail(job_id)
 
     def events(self, job_id: int) -> list[dict[str, object]]:
         return self._native.drain_events(job_id)

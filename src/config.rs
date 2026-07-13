@@ -9,8 +9,33 @@ pub fn config_from_python(config: Option<&Bound<'_, PyDict>>) -> PyResult<Solver
     let Some(config) = config else {
         return Ok(SolverConfig::default());
     };
-    serde_json::from_value(py_to_json(&config.clone().into_any())?)
+    let config = py_to_json(&config.clone().into_any())?;
+    reject_reserved_retained_diagnostic_fields(&config)?;
+    serde_json::from_value(config)
         .map_err(|error| py_err(format!("invalid solver config: {error}")))
+}
+
+fn reject_reserved_retained_diagnostic_fields(value: &Value) -> PyResult<()> {
+    match value {
+        Value::Object(object) => {
+            if object.contains_key("qualified_candidate_trace_provenance") {
+                return Err(py_err(concat!(
+                    "`qualified_candidate_trace_provenance` is a retained-diagnostics-only ",
+                    "argument to SolverManager.solve(), not a SolverConfig field"
+                )));
+            }
+            for child in object.values() {
+                reject_reserved_retained_diagnostic_fields(child)?;
+            }
+        }
+        Value::Array(values) => {
+            for child in values {
+                reject_reserved_retained_diagnostic_fields(child)?;
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
+    Ok(())
 }
 
 fn py_to_json(value: &Bound<'_, PyAny>) -> PyResult<Value> {
@@ -55,4 +80,34 @@ fn py_to_json(value: &Bound<'_, PyAny>) -> PyResult<Value> {
     Err(py_err(format!(
         "solver config contains unsupported value {value:?}"
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::reject_reserved_retained_diagnostic_fields;
+
+    #[test]
+    fn qualified_trace_provenance_is_rejected_at_any_config_depth() {
+        assert!(reject_reserved_retained_diagnostic_fields(&json!({
+            "qualified_candidate_trace_provenance": {"producer": "wrong-place"}
+        }))
+        .is_err());
+        assert!(reject_reserved_retained_diagnostic_fields(&json!({
+            "phases": [{
+                "type": "local_search",
+                "qualified_candidate_trace_provenance": {"producer": "wrong-place"}
+            }]
+        }))
+        .is_err());
+    }
+
+    #[test]
+    fn ordinary_candidate_trace_config_remains_a_solver_config() {
+        reject_reserved_retained_diagnostic_fields(&json!({
+            "candidate_trace": {"max_entries": 128}
+        }))
+        .expect("ordinary trace settings are not provenance");
+    }
 }

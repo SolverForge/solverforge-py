@@ -6,7 +6,6 @@ from os import PathLike
 from pathlib import Path
 from typing import Any
 
-
 _TERMINATION_FIELDS = {
     "seconds_spent_limit",
     "minutes_spent_limit",
@@ -15,6 +14,11 @@ _TERMINATION_FIELDS = {
     "unimproved_step_count_limit",
     "unimproved_seconds_spent_limit",
 }
+
+# Qualified candidate-trace attestation is per retained job, not solver
+# configuration. Keeping it out of a serializable config prevents a saved TOML
+# or dict from silently claiming provenance for a different imported instance.
+_RESERVED_RETAINED_DIAGNOSTIC_FIELDS = {"qualified_candidate_trace_provenance"}
 
 
 @dataclass
@@ -67,6 +71,7 @@ class SolverConfig:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SolverConfig:
+        _reject_reserved_retained_diagnostic_fields(data)
         termination_data = _termination_data_from_config_dict(data)
         termination = TerminationConfig.from_dict(termination_data)
         extra = {
@@ -110,7 +115,9 @@ class SolverConfig:
         return data
 
 
-def _resolve_config(config: SolverConfig | dict[str, Any] | None) -> dict[str, Any] | None:
+def _resolve_config(
+    config: SolverConfig | dict[str, Any] | None,
+) -> dict[str, Any] | None:
     if isinstance(config, SolverConfig):
         return config.to_dict()
     if config is not None:
@@ -155,6 +162,23 @@ def _normalize_phases(phases: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 dict(phase_copy["termination"])
             ).to_dict()
         if "child_phases" in phase_copy:
-            phase_copy["child_phases"] = _normalize_phases(list(phase_copy["child_phases"]))
+            phase_copy["child_phases"] = _normalize_phases(
+                list(phase_copy["child_phases"])
+            )
         normalized.append(phase_copy)
     return normalized
+
+
+def _reject_reserved_retained_diagnostic_fields(value: object) -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key in _RESERVED_RETAINED_DIAGNOSTIC_FIELDS:
+                msg = (
+                    f"`{key}` is a retained-diagnostics-only argument to "
+                    "SolverManager.solve(), not a SolverConfig field"
+                )
+                raise ValueError(msg)
+            _reject_reserved_retained_diagnostic_fields(child)
+    elif isinstance(value, list):
+        for child in value:
+            _reject_reserved_retained_diagnostic_fields(child)
