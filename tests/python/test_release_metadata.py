@@ -164,14 +164,7 @@ def test_latest_sdist_carries_locked_project_sources_when_present() -> None:
         f"{prefix}/src/lib.rs",
         f"{prefix}/python/solverforge/__init__.py",
     }
-    nested_project_layout = {
-        f"{prefix}/solverforge-py/Cargo.lock",
-        f"{prefix}/solverforge-py/Cargo.toml",
-        f"{prefix}/solverforge-py/src/lib.rs",
-        f"{prefix}/python/solverforge/__init__.py",
-    }
-
-    assert direct_layout <= names or nested_project_layout <= names
+    assert direct_layout <= names
 
 
 def test_release_artifact_verifier_accepts_registry_ui_sdist(
@@ -183,13 +176,40 @@ def test_release_artifact_verifier_accepts_registry_ui_sdist(
     write_tgz(
         sdist,
         {
+            f"{prefix}/Cargo.lock",
+            f"{prefix}/Cargo.toml",
             f"{prefix}/python/solverforge/__init__.py",
-            f"{prefix}/solverforge-py/Cargo.lock",
-            f"{prefix}/solverforge-py/Cargo.toml",
-            f"{prefix}/solverforge-py/src/bindings.rs",
-            f"{prefix}/solverforge-py/src/lib.rs",
+            f"{prefix}/src/bindings.rs",
+            f"{prefix}/src/lib.rs",
         },
     )
     verifier = load_release_artifact_verifier()
 
     verifier.assert_sdist(sdist, version)
+
+
+def test_release_artifact_verifier_rejects_repository_operations(
+    tmp_path: Path,
+) -> None:
+    version = str(load_toml(ROOT / "pyproject.toml")["project"]["version"])
+    prefix = f"solverforge-{version}"
+    sdist = tmp_path / f"{prefix}.tar.gz"
+    write_tgz(
+        sdist,
+        {
+            f"{prefix}/Cargo.lock",
+            f"{prefix}/Cargo.toml",
+            f"{prefix}/python/solverforge/__init__.py",
+            f"{prefix}/src/bindings.rs",
+            f"{prefix}/src/lib.rs",
+            f"{prefix}/.github/workflows/release.yml",
+        },
+    )
+    verifier = load_release_artifact_verifier()
+
+    try:
+        verifier.assert_sdist(sdist, version)
+    except SystemExit as error:
+        assert "non-package file" in str(error)
+    else:
+        raise AssertionError("repository operations must not enter the source archive")

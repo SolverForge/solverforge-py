@@ -28,7 +28,19 @@ REQUIRED_SDIST_PROJECT_PATHS = {
 REQUIRED_SDIST_PYTHON_PATHS = {
     "python/solverforge/__init__.py",
 }
-SDIST_PROJECT_ROOTS = ("", "solverforge-py/")
+ALLOWED_SDIST_FILES = {
+    "Cargo.lock",
+    "Cargo.toml",
+    "LICENSE",
+    "PKG-INFO",
+    "README.md",
+    "pyproject.toml",
+    "rust-toolchain.toml",
+}
+ALLOWED_SDIST_PREFIXES = (
+    "python/solverforge/",
+    "src/",
+)
 
 
 def fail(message: str) -> None:
@@ -153,6 +165,26 @@ def assert_sdist(path: Path, version: str) -> None:
     with tarfile.open(path, "r:gz") as sdist:
         names = set(sdist.getnames())
 
+    invalid_prefixes = sorted(
+        name for name in names if not name.startswith(expected_prefix)
+    )
+    if invalid_prefixes:
+        fail(f"sdist contains path outside {expected_prefix}: {invalid_prefixes[0]}")
+
+    relative_names = {name.removeprefix(expected_prefix) for name in names}
+    unexpected = sorted(
+        name
+        for name in relative_names
+        if name
+        and name not in ALLOWED_SDIST_FILES
+        and not any(
+            name == prefix.removesuffix("/") or name.startswith(prefix)
+            for prefix in ALLOWED_SDIST_PREFIXES
+        )
+    )
+    if unexpected:
+        fail(f"sdist contains non-package file {unexpected[0]}")
+
     required_python = {
         expected_prefix + suffix for suffix in REQUIRED_SDIST_PYTHON_PATHS
     }
@@ -160,15 +192,11 @@ def assert_sdist(path: Path, version: str) -> None:
     if missing_python:
         fail(f"sdist is missing {', '.join(sorted(missing_python))}")
 
-    project_layouts = [
-        {expected_prefix + root + suffix for suffix in REQUIRED_SDIST_PROJECT_PATHS}
-        for root in SDIST_PROJECT_ROOTS
-    ]
-    if not any(layout <= names for layout in project_layouts):
-        missing = min(
-            (layout.difference(names) for layout in project_layouts),
-            key=len,
-        )
+    required_project = {
+        expected_prefix + suffix for suffix in REQUIRED_SDIST_PROJECT_PATHS
+    }
+    if not required_project <= names:
+        missing = required_project.difference(names)
         fail(f"sdist is missing {', '.join(sorted(missing))}")
 
     forbidden_fragments = ("/target/", "/.venv/", "__pycache__")

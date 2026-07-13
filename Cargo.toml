@@ -9,6 +9,17 @@ readme = "README.md"
 repository = "https://github.com/SolverForge/solverforge-py"
 homepage = "https://solverforge.org"
 documentation = "https://docs.solverforge.org"
+include = [
+    "/Cargo.lock",
+    "/LICENSE",
+    "/README.md",
+    "/pyproject.toml",
+    "/python/solverforge/*.py",
+    "/python/solverforge/*.pyi",
+    "/python/solverforge/py.typed",
+    "/rust-toolchain.toml",
+    "/src/**",
+]
 
 [lib]
 name = "solverforge_py"
