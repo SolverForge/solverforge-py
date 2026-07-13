@@ -371,13 +371,6 @@ solution state, safe to run concurrently, and treat solution-level lookup contex
 as immutable for the duration of a solve. Third-party Python extension modules
 used inside callbacks may still impose their own synchronization constraints.
 
-## Release
-
-The current package and crate version is `0.6.0`, built on the published
-SolverForge `0.18.0` crates and `solverforge-ui` `0.7.0`. `Cargo.lock` resolves
-those exact crates from crates.io. Maintainers run `make pre-release` to verify
-the dependency base, local CI, distribution metadata, and artifact contents.
-
 ## License
 
 SolverForge Python is licensed under the Apache License, Version 2.0. See

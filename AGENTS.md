@@ -126,14 +126,8 @@ reproducible Rust builds. The current release line is package/crate `0.6.0` on
 the six SolverForge `0.18.0` registry crates and `solverforge-ui` `0.7.0`;
 `make release-base-check` must stay green. The `Makefile` owns local release targets,
 dependency-base checks, distribution builds, artifact validation, browser system
-dependency setup, and `pre-release`. `.github/workflows/ci.yml` validates source
-checkouts on GitHub and Forgejo, installs Playwright system dependencies on
-Linux, and retries network toolchain bootstraps for transient runner DNS misses.
-`.github/workflows/release.yml` builds sdists/wheels, verifies release
-artifacts, publishes to TestPyPI only from manual workflow dispatch, and
-publishes to PyPI automatically from a matching `v*.*.*` tag.
-`scripts/verify_release_artifacts.py` checks deterministic artifact
-metadata/content, and
+dependency setup, and `pre-release`. `scripts/verify_release_artifacts.py`
+checks deterministic artifact metadata/content, and
 `tests/python/test_release_metadata.py` guards release metadata drift.
 
 ## Commit & Pull Request Guidelines

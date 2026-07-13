@@ -415,13 +415,12 @@ The native extension embeds shared `solverforge-ui` assets and exposes them via
 `solverforge.ui.asset()` and `solverforge.ui.asset_paths()` for example
 applications and other Python HTTP hosts.
 
-The source distribution also carries the repository tests and examples.
-SolverForge Rust dependencies and shared UI assets are declared from exact
-release versions in `Cargo.toml`; `Cargo.lock` resolves the six SolverForge
-crates at `0.18.0` and `solverforge-ui` at `0.7.0` from crates.io with registry
-checksums. Release automation verifies that manifest/lockfile source of truth
-instead of inspecting a mutable sibling checkout, and
-`make release-base-check` is green.
+The source distribution is limited to the metadata and Python/Rust sources
+needed to build the package. Repository-only tests, examples, guidance, and
+tooling remain available from the source checkout. SolverForge Rust dependencies
+and shared UI assets are declared from exact release versions in `Cargo.toml`;
+`Cargo.lock` resolves the six SolverForge crates at `0.18.0` and
+`solverforge-ui` at `0.7.0` from crates.io with registry checksums.
 
 The current package and crate release is `0.6.0` on the exact SolverForge
 `0.18.0` crate boundary. Its artifact set is one source distribution plus
