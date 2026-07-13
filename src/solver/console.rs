@@ -22,22 +22,22 @@ fn scalar_candidate_count(solution: &PyDynamicSolution) -> usize {
     let mut total_slots = 0usize;
     let mut total_candidates = 0usize;
 
-    for (entity_index, entity) in solution.schema.entities.iter().enumerate() {
+    for (entity_index, entity) in solution.schema().entities.iter().enumerate() {
         let Some(rows) = solution.state.entities.get(entity_index) else {
             continue;
         };
-        for variable in entity
+        for (variable_index, _variable) in entity
             .variables
             .iter()
-            .filter(|variable| variable.kind == "planning_variable")
+            .enumerate()
+            .filter(|(_, variable)| variable.kind == "planning_variable")
         {
             total_slots += rows.len();
             total_candidates += rows
                 .iter()
                 .map(|row| {
-                    row.candidates
-                        .get(variable.name.as_str())
-                        .map(Vec::len)
+                    row.candidates_at(variable_index)
+                        .map(<[usize]>::len)
                         .unwrap_or(0)
                 })
                 .sum::<usize>();
@@ -54,22 +54,21 @@ fn list_scale(solution: &PyDynamicSolution) -> (usize, usize) {
     let mut entity_count = 0usize;
     let mut element_count = 0usize;
 
-    for (entity_index, entity) in solution.schema.entities.iter().enumerate() {
+    for (entity_index, entity) in solution.schema().entities.iter().enumerate() {
         let Some(rows) = solution.state.entities.get(entity_index) else {
             continue;
         };
-        let Some(list_elements) = solution.state.list_elements.get(entity_index) else {
-            continue;
-        };
-        for variable in entity
+        for (variable_index, _variable) in entity
             .variables
             .iter()
-            .filter(|variable| variable.kind == "planning_list_variable")
+            .enumerate()
+            .filter(|(_, variable)| variable.kind == "planning_list_variable")
         {
             entity_count += rows.len();
-            element_count += list_elements
-                .get(variable.name.as_str())
-                .map(Vec::len)
+            element_count += solution
+                .state
+                .list_elements_at(entity_index, variable_index)
+                .map(<[usize]>::len)
                 .unwrap_or(0);
         }
     }

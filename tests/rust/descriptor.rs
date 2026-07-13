@@ -4,6 +4,7 @@ use pyo3::Python;
 use solverforge_bridge::EntityClassId;
 use solverforge_core::domain::SolutionDescriptor;
 use solverforge_py::schema::build::solution_descriptor;
+use solverforge_py::schema::runtime_plan::CompiledRuntimePlan;
 use solverforge_py::schema::{DynamicSchema, EntitySchema};
 use solverforge_py::state::callback_view::PythonCallbackView;
 use solverforge_py::state::entity_table::{DynamicEntityRow, DynamicState};
@@ -33,12 +34,17 @@ fn dynamic_descriptor_extracts_multiple_logical_classes_from_one_row_type() {
             scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
             assignment_scalar_groups: Vec::new(),
             conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
+            candidate_metrics: pyo3::types::PyList::empty(py).unbind().into_any(),
             shadow_updates: Vec::new(),
         });
         let descriptor: SolutionDescriptor = solution_descriptor(&schema);
-        let solution = PyDynamicSolution {
-            schema,
-            state: DynamicState {
+        let runtime_plan = Arc::new(
+            CompiledRuntimePlan::from_schema(schema)
+                .expect("test dynamic schema should compile into one runtime plan"),
+        );
+        let solution = PyDynamicSolution::from_runtime_plan(
+            runtime_plan,
+            DynamicState {
                 entities: vec![
                     vec![DynamicEntityRow::default(), DynamicEntityRow::default()],
                     vec![DynamicEntityRow::default()],
@@ -47,11 +53,11 @@ fn dynamic_descriptor_extracts_multiple_logical_classes_from_one_row_type() {
                 list_elements: Vec::new(),
                 ..DynamicState::default()
             },
-            callback_view: PythonCallbackView::default(),
-            score: None,
-            solver_config: solverforge_config::SolverConfig::default(),
-            revision: 0,
-        };
+            PythonCallbackView::default(),
+            None,
+            solverforge_config::SolverConfig::default(),
+            0,
+        );
 
         assert_eq!(descriptor.entity_descriptor_count(), 2);
         assert_eq!(descriptor.total_entity_count(&solution), Some(3));

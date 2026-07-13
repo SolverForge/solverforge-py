@@ -27,8 +27,14 @@ fn _native(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
         crate::schema::parse::validate_schema,
         module
     )?)?;
+    module.add_function(wrap_pyfunction!(
+        crate::schema::compiled::compile_schema,
+        module
+    )?)?;
+    module.add_class::<crate::schema::compiled::CompiledSchema>()?;
     module.add_function(wrap_pyfunction!(crate::ui::ui_asset, module)?)?;
     module.add_function(wrap_pyfunction!(crate::ui::ui_asset_paths, module)?)?;
+    module.add_class::<crate::manager::PyQualifiedCandidateTraceProvenance>()?;
     module.add_class::<crate::manager::NativeSolverManager>()?;
     Ok(())
 }
