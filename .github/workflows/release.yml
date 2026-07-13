@@ -150,7 +150,6 @@ jobs:
     environment: testpypi
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Download verified distributions
         uses: actions/download-artifact@v8
@@ -162,6 +161,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
 
   publish-pypi:
     name: publish to PyPI
@@ -176,7 +176,6 @@ jobs:
     environment: pypi
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Checkout solverforge-py
         uses: actions/checkout@v6
@@ -209,3 +208,5 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

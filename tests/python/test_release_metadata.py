@@ -130,13 +130,10 @@ def test_release_workflow_validates_only_tagged_pypi_publish() -> None:
     pypi_job = workflow_job(workflow, "publish-pypi")
 
     assert "github.event.inputs.repository" not in workflow
-    assert "PYPI_API_TOKEN" not in workflow
-    assert "TEST_PYPI_API_TOKEN" not in workflow
-
     assert "Validate tag version" not in testpypi_job
     assert "repository-url: https://test.pypi.org/legacy/" in testpypi_job
-    assert "id-token: write" in testpypi_job
-    assert "password:" not in testpypi_job
+    assert "id-token: write" not in testpypi_job
+    assert "password: ${{ secrets.TEST_PYPI_API_TOKEN }}" in testpypi_job
 
     assert "Validate tag version" in pypi_job
     assert "workflow_dispatch" not in pypi_job
@@ -145,8 +142,8 @@ def test_release_workflow_validates_only_tagged_pypi_publish() -> None:
     assert "GITHUB_REF_NAME" in pypi_job
     assert "GITHUB_EVENT_NAME" not in pypi_job
     assert "pyproject.toml" in pypi_job
-    assert "id-token: write" in pypi_job
-    assert "password:" not in pypi_job
+    assert "id-token: write" not in pypi_job
+    assert "password: ${{ secrets.PYPI_API_TOKEN }}" in pypi_job
     assert pypi_job.index("Validate tag version") < pypi_job.index("Publish to PyPI")
 
 
