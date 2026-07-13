@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pyo3::prelude::*;
 
 #[derive(Debug)]
@@ -13,6 +15,138 @@ pub struct FactSchema {
     pub collection: String,
 }
 
+/// A declared field source for list metadata.  A row field and a solution-root
+/// field remain distinct in the compiled schema so neither can silently fall
+/// back to the other scope.
+#[derive(Debug, Clone)]
+pub enum ListMetadataFieldSourceSchema {
+    Row(String),
+    SolutionField(String),
+}
+
+impl ListMetadataFieldSourceSchema {
+    pub fn row(&self) -> Option<&str> {
+        match self {
+            Self::Row(field) => Some(field.as_str()),
+            Self::SolutionField(_) => None,
+        }
+    }
+
+    pub fn solution_field(&self) -> Option<&str> {
+        match self {
+            Self::Row(_) => None,
+            Self::SolutionField(field) => Some(field.as_str()),
+        }
+    }
+}
+
+/// One explicitly scoped source used by a list metadata hook.
+#[derive(Debug, Clone)]
+pub enum ListMetadataSourceSchema {
+    Row(String),
+    SolutionField(String),
+    EntityCallback(Arc<Py<PyAny>>),
+    SolutionCallback(Arc<Py<PyAny>>),
+    Capacity(ListCapacityFeasibilitySchema),
+}
+
+impl ListMetadataSourceSchema {
+    pub fn row(&self) -> Option<&str> {
+        match self {
+            Self::Row(field) => Some(field.as_str()),
+            Self::SolutionField(_)
+            | Self::EntityCallback(_)
+            | Self::SolutionCallback(_)
+            | Self::Capacity(_) => None,
+        }
+    }
+
+    pub fn solution_field(&self) -> Option<&str> {
+        match self {
+            Self::SolutionField(field) => Some(field.as_str()),
+            Self::Row(_)
+            | Self::EntityCallback(_)
+            | Self::SolutionCallback(_)
+            | Self::Capacity(_) => None,
+        }
+    }
+
+    pub fn capacity(&self) -> Option<&ListCapacityFeasibilitySchema> {
+        match self {
+            Self::Capacity(capacity) => Some(capacity),
+            Self::Row(_)
+            | Self::SolutionField(_)
+            | Self::EntityCallback(_)
+            | Self::SolutionCallback(_) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ListCapacityFeasibilitySchema {
+    pub capacity: ListMetadataFieldSourceSchema,
+    pub demand: ListMetadataFieldSourceSchema,
+}
+
+/// The independently complete route bundle used by route-local construction
+/// and neighborhood phases.
+#[derive(Debug, Clone)]
+pub struct ListRouteMetadataSchema {
+    pub depot: ListMetadataSourceSchema,
+    pub distance: ListMetadataSourceSchema,
+    pub feasible: ListMetadataSourceSchema,
+}
+
+/// The independently complete Clarke-Wright/savings bundle.  It is never
+/// inferred from the route bundle at runtime.
+#[derive(Debug, Clone)]
+pub struct ListSavingsMetadataSchema {
+    pub depot: ListMetadataSourceSchema,
+    pub metric_class: ListMetadataSourceSchema,
+    pub distance: ListMetadataSourceSchema,
+    pub feasible: ListMetadataSourceSchema,
+}
+
+/// Canonical schema provenance for one planning-list variable.
+#[derive(Debug, Default, Clone)]
+pub struct ListMetadataSchema {
+    pub route: Option<ListRouteMetadataSchema>,
+    pub savings: Option<ListSavingsMetadataSchema>,
+    pub cross_position_distance: Option<ListMetadataSourceSchema>,
+    pub intra_position_distance: Option<ListMetadataSourceSchema>,
+}
+
+impl ListMetadataSchema {
+    pub fn is_configured(&self) -> bool {
+        self.route.is_some()
+            || self.savings.is_some()
+            || self.cross_position_distance.is_some()
+            || self.intra_position_distance.is_some()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum MetadataSourceSchema {
+    Row(String),
+    Callback(Arc<Py<PyAny>>),
+}
+
+impl MetadataSourceSchema {
+    pub fn row(&self) -> Option<&str> {
+        match self {
+            Self::Row(field) => Some(field.as_str()),
+            Self::Callback(_) => None,
+        }
+    }
+
+    pub fn callback(&self) -> Option<&Py<PyAny>> {
+        match self {
+            Self::Row(_) => None,
+            Self::Callback(callback) => Some(callback.as_ref()),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct VariableSchema {
     pub name: String,
@@ -20,29 +154,27 @@ pub struct VariableSchema {
     pub kind: String,
     pub value_range_provider: Option<String>,
     pub candidate_values: Option<Py<PyAny>>,
-    pub nearby_value_candidates: Option<Py<PyAny>>,
-    pub nearby_entity_candidates: Option<Py<PyAny>>,
-    pub nearby_value_distance_meter: Option<Py<PyAny>>,
-    pub nearby_entity_distance_meter: Option<Py<PyAny>>,
+    /// The one ordered source for nearby values: either a row field or a
+    /// Python callback. The parsed schema never retains both forms.
+    pub nearby_value_candidates: Option<MetadataSourceSchema>,
+    /// The one ordered source for nearby entities: either a row field or a
+    /// Python callback. The parsed schema never retains both forms.
+    pub nearby_entity_candidates: Option<MetadataSourceSchema>,
+    /// The one distance source for nearby values: either a row field or a
+    /// Python callback. `None` preserves source-order distance semantics.
+    pub nearby_value_distance_meter: Option<MetadataSourceSchema>,
+    /// The one distance source for nearby entities: either a row field or a
+    /// Python callback. `None` preserves source-order distance semantics.
+    pub nearby_entity_distance_meter: Option<MetadataSourceSchema>,
     pub allows_unassigned: bool,
     pub element_collection: Option<String>,
-    pub element_owner: Option<Py<PyAny>>,
-    pub construction_element_order_key: Option<Py<PyAny>>,
-    pub precedence_duration: Option<Py<PyAny>>,
-    pub precedence_successors: Option<Py<PyAny>>,
-    pub route_depot: Option<Py<PyAny>>,
-    pub route_depot_entity: Option<Py<PyAny>>,
-    pub route_depot_field: Option<String>,
-    pub route_metric_class: Option<Py<PyAny>>,
-    pub route_metric_class_entity: Option<Py<PyAny>>,
-    pub route_metric_class_field: Option<String>,
-    pub route_distance: Option<Py<PyAny>>,
-    pub route_distance_entity: Option<Py<PyAny>>,
-    pub route_distance_matrix_field: Option<String>,
-    pub route_feasible: Option<Py<PyAny>>,
-    pub route_feasible_entity: Option<Py<PyAny>>,
-    pub route_capacity_field: Option<String>,
-    pub route_demand_field: Option<String>,
+    pub element_owner: Option<MetadataSourceSchema>,
+    pub construction_element_order: Option<MetadataSourceSchema>,
+    pub precedence_duration: Option<MetadataSourceSchema>,
+    pub precedence_successors: Option<MetadataSourceSchema>,
+    /// Present exactly for planning-list variables.  The nested object is the
+    /// sole source of route, savings, and position-metric provenance.
+    pub list_metadata: Option<ListMetadataSchema>,
 }
 
 #[derive(Debug)]
@@ -65,11 +197,11 @@ pub struct AssignmentScalarGroupSchema {
     pub name: String,
     pub entity_class: String,
     pub variable_name: String,
-    pub required_entity: Option<Py<PyAny>>,
-    pub capacity_key: Option<Py<PyAny>>,
+    pub required_entity: Option<MetadataSourceSchema>,
+    pub capacity_key: Option<MetadataSourceSchema>,
     pub assignment_rule: Option<Py<PyAny>>,
-    pub position_key: Option<Py<PyAny>>,
-    pub sequence_key: Option<Py<PyAny>>,
+    pub position_key: Option<MetadataSourceSchema>,
+    pub sequence_key: Option<MetadataSourceSchema>,
     pub entity_order: Option<Py<PyAny>>,
     pub value_order: Option<Py<PyAny>>,
     pub sync_solution_before_callbacks: bool,
@@ -85,6 +217,7 @@ pub struct DynamicSchema {
     pub scalar_groups: Py<PyAny>,
     pub assignment_scalar_groups: Vec<AssignmentScalarGroupSchema>,
     pub conflict_repairs: Py<PyAny>,
+    pub candidate_metrics: Py<PyAny>,
     pub shadow_updates: Vec<ShadowUpdateSchema>,
 }
 
@@ -108,5 +241,26 @@ impl DynamicSchema {
         self.assignment_scalar_groups
             .iter()
             .find(|group| group.name == group_name)
+    }
+
+    pub fn entity_index_by_type(&self, type_name: &str) -> Option<usize> {
+        self.entities
+            .iter()
+            .position(|entity| entity.type_name == type_name)
+    }
+
+    pub fn variable_index(
+        &self,
+        entity_index: usize,
+        variable_name: &str,
+        kind: Option<&str>,
+    ) -> Option<usize> {
+        self.entities
+            .get(entity_index)?
+            .variables
+            .iter()
+            .position(|variable| {
+                variable.name == variable_name && kind.is_none_or(|kind| variable.kind == kind)
+            })
     }
 }
