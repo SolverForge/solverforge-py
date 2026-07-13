@@ -245,18 +245,18 @@ docs-check:
 	@test ! -d docs
 	@test -f examples/solverforge_hospital/README.md
 	@test -f examples/solverforge_deliveries/README.md
-	@! rg -n "$(DOC_STALE_PATTERNS)" $(DOC_CHECK_PATHS)
-	@rg -q '@candidate_metric' README.md
-	@rg -q 'QualifiedCandidateTraceProvenance' README.md
-	@rg -q '@candidate_metric' AGENTS.md
-	@rg -q 'QualifiedCandidateTraceProvenance' AGENTS.md
-	@rg -q '@candidate_metric' WIREFRAME.md
-	@rg -q 'QualifiedCandidateTraceProvenance' WIREFRAME.md
-	@rg -q 'list_round_robin' README.md WIREFRAME.md
-	@rg -q 'weakest_fit_decreasing' README.md WIREFRAME.md
-	@rg -q 'ui.asset_paths' README.md WIREFRAME.md
-	@rg -q 'assign_when_candidate_exists' examples/solverforge_hospital/README.md
-	@rg -q 'RowField' examples/solverforge_deliveries/README.md
+	@! grep -En "$(DOC_STALE_PATTERNS)" $(DOC_CHECK_PATHS)
+	@grep -Eq '@candidate_metric' README.md
+	@grep -Eq 'QualifiedCandidateTraceProvenance' README.md
+	@grep -Eq '@candidate_metric' AGENTS.md
+	@grep -Eq 'QualifiedCandidateTraceProvenance' AGENTS.md
+	@grep -Eq '@candidate_metric' WIREFRAME.md
+	@grep -Eq 'QualifiedCandidateTraceProvenance' WIREFRAME.md
+	@grep -Eq 'list_round_robin' README.md WIREFRAME.md
+	@grep -Eq 'weakest_fit_decreasing' README.md WIREFRAME.md
+	@grep -Eq 'ui.asset_paths' README.md WIREFRAME.md
+	@grep -Eq 'assign_when_candidate_exists' examples/solverforge_hospital/README.md
+	@grep -Eq 'RowField' examples/solverforge_deliveries/README.md
 	@printf -- "$(GREEN)$(CHECK) Documentation surface looks current$(RESET)\n"
 
 release-base-check:
