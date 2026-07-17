@@ -9,7 +9,7 @@ clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
 The package targets CPython 3.14 and Rust 1.95.0. This checkout consumes the
-published SolverForge Rust crates `0.18.0` and pins `solverforge-ui` to `0.7.0`
+published SolverForge Rust crates `0.19.0` and pins `solverforge-ui` to `0.7.0`
 through exact crates.io versions in `Cargo.toml` and registry checksums in
 `Cargo.lock`; it has no local path or Git dependency override. The `solverforge`
 `0.6.x` line is the current dynamic binding architecture and intentionally
@@ -19,11 +19,12 @@ Java service requirements, and other APIs that are not part of this package.
 
 ## Installation
 
-Install the `solverforge` `0.6.1` release, built on the exact published and
-locked SolverForge Rust `0.18.0` registry dependency base:
+The package version prepared by this checkout is `solverforge` `0.6.2`, built
+on the exact published and locked SolverForge Rust `0.19.0` registry dependency
+base. Install the matching package after publication with:
 
 ```sh
-python3.14 -m pip install "solverforge==0.6.1"
+python3.14 -m pip install "solverforge==0.6.2"
 ```
 
 The installable wheel contains the core `solverforge` package, native extension,
@@ -42,13 +43,13 @@ make hospital-run
 make deliveries-run PORT=7861
 ```
 
-The same source-checkout examples can be run against the installed package
-without `PYTHONPATH` or an editable checkout:
+After publication, the same source-checkout examples can be run against the
+installed package without `PYTHONPATH` or an editable checkout:
 
 ```sh
 python3.14 -m venv .venv-examples
 . .venv-examples/bin/activate
-python -m pip install "solverforge[examples]==0.6.1"
+python -m pip install "solverforge[examples]==0.6.2"
 python examples/nqueens.py
 python -m examples.solverforge_hospital
 python -m examples.solverforge_deliveries

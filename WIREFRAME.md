@@ -35,7 +35,8 @@ shape, and source-checkout example UI/API surfaces.
 
 The package exports `Solver`, `SolverManager`, `JobHandle`, `SolverConfig`,
 `TerminationConfig`, `QualifiedCandidateTraceProvenance`, `ConstraintFactory`,
-score classes, stable package error classes (`SolverForgeError`, `CallbackError`,
+`SoftScore`, `HardSoftScore`, `HardSoftDecimalScore`, `HardMediumSoftScore`,
+stable package error classes (`SolverForgeError`, `CallbackError`,
 `ModelValidationError`, and `NativeBridgeError`), `joiner`, `console`, `ui`, and
 the `__version__` string, plus decorators/helpers for model authoring:
 
@@ -366,9 +367,9 @@ controls.
 The app serves `/sf/{path}` from the native `solverforge-ui` bridge and serves
 only app-specific files from `examples/solverforge_hospital/static`.
 
-The hospital app is source-checkout example material. It is included in the
-source distribution for reproducible builds and development, but it is not
-installed into the runtime wheel.
+The hospital app is source-checkout example material. It remains available in
+the repository for development, but it is intentionally excluded from both the
+build-only source distribution and the runtime wheel.
 
 ## Deliveries Example UI/API
 
@@ -419,11 +420,11 @@ The source distribution is limited to the metadata and Python/Rust sources
 needed to build the package. Repository-only tests, examples, guidance, and
 tooling remain available from the source checkout. SolverForge Rust dependencies
 and shared UI assets are declared from exact release versions in `Cargo.toml`;
-`Cargo.lock` resolves the six SolverForge crates at `0.18.0` and
+`Cargo.lock` resolves the six SolverForge crates at `0.19.0` and
 `solverforge-ui` at `0.7.0` from crates.io with registry checksums.
 
-The current package and crate release is `0.6.1` on the exact SolverForge
-`0.18.0` crate boundary. Its artifact set is one source distribution plus
+The current package and crate version is `0.6.2` on the exact SolverForge
+`0.19.0` crate boundary. Its artifact set is one source distribution plus
 Linux, macOS, and Windows wheels, verified together before release.
 
 ## Makefile And Validation Flow
