@@ -30,12 +30,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
 
 [[package]]
-name = "bytes"
-version = "1.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ae3f5d315924270530207e2a68396c3cc547f6dca3fbdca317cfb1a51edb593"
-
-[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -103,16 +97,6 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
-
-[[package]]
-name = "errno"
-version = "0.3.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
-dependencies = [
- "libc",
- "windows-sys",
-]
 
 [[package]]
 name = "getrandom"
@@ -231,17 +215,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "mio"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02bd0af71c67b473010cbbc60715ee815645a4dc942899111f494b4b737d6fda"
-dependencies = [
- "libc",
- "wasi",
- "windows-sys",
 ]
 
 [[package]]
@@ -580,36 +553,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "signal-hook-registry"
-version = "1.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
-dependencies = [
- "errno",
- "libc",
-]
-
-[[package]]
 name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
-name = "socket2"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51"
-dependencies = [
- "libc",
- "windows-sys",
-]
-
-[[package]]
 name = "solverforge-bridge"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9c592f73f90c14ca2af38b80ba6371ff4d41b6aaebafe341086225161836353"
+checksum = "f47d5b1bc4e9ea86acf24e3e71f971161bc5c1eba09d4b7105a25542045ed59a"
 dependencies = [
  "solverforge-config",
  "solverforge-core",
@@ -619,9 +572,9 @@ dependencies = [
 
 [[package]]
 name = "solverforge-config"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cb6e55b036aaff944d1c772ca6e51524c1dfe8dfa704342c2319b47665b8834"
+checksum = "a94f2ff36fc3513dd17473fea8402a7908470b0d18132862e938b402d4cc3dce"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -632,9 +585,9 @@ dependencies = [
 
 [[package]]
 name = "solverforge-console"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e100997cd6d2fbafc8eb8e1d84bf60149a1386b89e8562a81d9408085a00520c"
+checksum = "5ecece452a5533bda0f129188cf5284b06b5f0f4b32b6334521e5dbcefa2a318"
 dependencies = [
  "num-format",
  "owo-colors",
@@ -644,18 +597,18 @@ dependencies = [
 
 [[package]]
 name = "solverforge-core"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d922c9a0ee10e0ba68c7c9b98e38d07399820358dc0d10d238a9e6641ef45d27"
+checksum = "75396bba5cd24cd16c77477e7ef93dac5643026998904aa862c1bd3f70a5a04f"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "solverforge-scoring"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40a4b4eb8031ba04556106ae1bb13533c4f50ab206b3c5844c4e0284e42bd4f2"
+checksum = "85df4f001bed630512b2205334113c1766d80ac8b7f4a5da1c2c63f680db1494"
 dependencies = [
  "solverforge-core",
  "thiserror",
@@ -663,9 +616,9 @@ dependencies = [
 
 [[package]]
 name = "solverforge-solver"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a5b5a898495984107de03cdc9c151c39ec9b4d70cfa509950cbe58c263953a4"
+checksum = "606d50e70307c448f09370028d7ec02172066899896fd8142dd59886b0cb555e"
 dependencies = [
  "rand",
  "rand_chacha",
@@ -691,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "solverforge_py"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "indexmap",
  "once_cell",
@@ -767,26 +720,7 @@ version = "1.52.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
 dependencies = [
- "bytes",
- "libc",
- "mio",
- "parking_lot",
  "pin-project-lite",
- "signal-hook-registry",
- "socket2",
- "tokio-macros",
- "windows-sys",
-]
-
-[[package]]
-name = "tokio-macros"
-version = "2.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -936,12 +870,6 @@ name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
-
-[[package]]
-name = "wasi"
-version = "0.11.1+wasi-snapshot-preview1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "windows-link"
