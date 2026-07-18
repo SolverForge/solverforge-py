@@ -81,6 +81,13 @@ state, or fallback construction paths. Schema caching is allowed only for
 structurally stable, capture-free callback state; stateful callbacks compile per
 invocation.
 
+Configured termination limits remain binding during construction. The compiled
+runtime must not publish a best solution, completed output, or snapshot until
+every list element, required assignment row, and non-optional scalar variable is
+assigned. If a limit is reached first, direct solving raises and retained solving
+uses the existing `FAILED` lifecycle; a pre-completion pause remains internal and
+resumable without exposing a partial snapshot.
+
 Python callbacks are the only constraint authoring surface. Callback exceptions
 must preserve actionable Python tracebacks. Callback solution views must expose
 ordinary solution-level lookup context while projecting entity/fact collections

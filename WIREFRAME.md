@@ -299,8 +299,13 @@ one live entity-placer cursor. Assignment scalar groups are compiled into the
 canonical upstream `ScalarGroupBinding` and use that same upstream
 grouped-construction cursor and grouped selector; the wrapper owns no
 assignment cursor, required stream, phase, or fallback. Explicit group phases
-obey their configured limits, while required-only completion is an upstream
-default-construction concern. Default local search is assembled only when the
+obey their configured limits. The compiled runtime withholds best/completed
+solutions and snapshots until every list element, required assignment row, and
+non-optional scalar variable is assigned. Reaching a configured limit first
+raises from a direct solve or uses the retained `FAILED` lifecycle; a pause
+before completion remains resumable without exposing a partial snapshot.
+Omitted construction still owns required/optional stage resolution, but no
+required work bypasses configured termination. Default local search is assembled only when the
 top-level termination has an effective finite limit. Exact global decorators
 retain only the candidate/index metadata required to preserve their documented
 ordering, seeded randomness, and probability semantics.

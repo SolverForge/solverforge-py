@@ -156,9 +156,13 @@ Run `make help` for focused targets such as `make test-hospital`,
   `list_cheapest_insertion`, `list_regret_insertion`, `list_clarke_wright`, and
   `list_k_opt`, with the final two requiring their respective savings and route
   metadata bundles. These are core graph nodes over the immutable runtime
-  model. An explicit `group_name` phase obeys its configured obligation and
-  termination; required-only completion belongs solely to upstream omitted
-  defaults. Default local search is assembled only when the top-level
+  model. All configured limits remain binding during construction. A solve
+  publishes a best or completed solution only after every list element,
+  required assignment row, and non-optional scalar variable is assigned; if a
+  limit is reached first, a direct solve raises and a retained job enters
+  `FAILED` without exposing a partial snapshot. Omitted construction still
+  resolves required and optional stages in core, but required work never
+  bypasses a configured limit. Default local search is assembled only when the top-level
   termination has an effective finite limit, so an empty or invalid termination
   cannot accidentally create an unbounded solve. There is no wrapper assignment
   placer, required stream, phase tree, TLS slot state, synthetic metric, or
@@ -166,6 +170,8 @@ Run `make help` for focused targets such as `make test-hospital`,
 - `SolverManager` is backed by upstream retained jobs, statuses, events, and
   snapshots. `SolverManager.solve(...)` returns `JobHandle(job_id=...)`; the
   manager supports pause, resume, cancel, delete, and exact snapshot reads.
+  A pause before mandatory construction completes remains resumable internal
+  state and does not expose an incomplete solution snapshot.
   Retained event payloads read current score from the attached solution snapshot
   when present. Long-running phases publish progress at the shared upstream
   cadence, and telemetry includes the current phase type, index, counters, and
