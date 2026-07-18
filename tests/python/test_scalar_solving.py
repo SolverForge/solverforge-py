@@ -375,8 +375,11 @@ def test_dynamic_scalar_local_search_uses_upstream_move_selector() -> None:
 
 
 def test_dynamic_limited_neighborhood_wraps_scalar_selector() -> None:
+    input_plan = WorkerPlan()
+    input_plan.tasks[0].worker = 0
+
     plan = Solver.solve(
-        WorkerPlan(),
+        input_plan,
         {
             "phases": [
                 {
@@ -405,8 +408,11 @@ def test_dynamic_limited_neighborhood_wraps_scalar_selector() -> None:
 
 
 def test_dynamic_scalar_local_search_uses_default_acceptor_when_omitted() -> None:
+    input_plan = WorkerPlan()
+    input_plan.tasks[0].worker = 0
+
     plan = Solver.solve(
-        WorkerPlan(),
+        input_plan,
         {
             "phases": [
                 {
@@ -1743,6 +1749,10 @@ def mixed_assignment_constraints(factory: ConstraintFactory):
         .filter(lambda task: task.preference != 1)
         .penalize(HardSoftScore.ONE_SOFT)
         .named("mixed preference"),
+        factory.for_each(MixedAssignmentTask)
+        .filter(lambda task: task.nurse != 0)
+        .penalize(HardSoftScore.ONE_SOFT)
+        .named("mixed nurse preference"),
     ]
 
 
@@ -1880,6 +1890,14 @@ def two_assignment_group_constraints(factory: ConstraintFactory):
         .filter(lambda task: task.right is None)
         .penalize(HardSoftScore.ONE_HARD)
         .named("right assignment required"),
+        factory.for_each(TwoAssignmentGroupTask)
+        .filter(lambda task: task.left != 0)
+        .penalize(HardSoftScore.ONE_SOFT)
+        .named("prefer left assignment zero"),
+        factory.for_each(TwoAssignmentGroupTask)
+        .filter(lambda task: task.right != 1)
+        .penalize(HardSoftScore.ONE_SOFT)
+        .named("prefer right assignment one"),
     ]
 
 
@@ -1991,9 +2009,9 @@ class RichAssignmentShift:
         self.nurse: int | None = None
 
 
-def rich_assignment_required(_solution, _entity_index):
+def rich_assignment_required(_solution, entity_index):
     rich_assignment_metadata_calls.add("required")
-    return True
+    return entity_index != 0
 
 
 def rich_assignment_capacity_key(_solution, _entity_index, nurse_idx):
@@ -2030,7 +2048,7 @@ def rich_assignment_rule(_solution, left_entity, left_nurse, right_entity, right
 def rich_assignment_constraints(factory: ConstraintFactory):
     return [
         factory.for_each(RichAssignmentShift)
-        .filter(lambda shift: shift.nurse is None)
+        .filter(lambda shift: shift.ordinal != 0 and shift.nurse is None)
         .penalize(HardSoftScore.ONE_HARD)
         .named("rich assignment required"),
         factory.for_each(RichAssignmentShift)
@@ -2350,7 +2368,7 @@ def test_scalar_assignment_group_callback_metadata_preserves_rich_core_ordering(
         "assignment_rule",
     } <= rich_assignment_metadata_calls
     assert plan.score == Solver.analyze(plan)
-    assert plan.score["levels"] == [-1, 0]
+    assert plan.score["levels"] == [0, 0]
 
     rich_assignment_metadata_calls.clear()
     plan = Solver.solve(
@@ -2388,8 +2406,12 @@ def test_scalar_assignment_group_rejects_callback_and_field_for_same_metadata() 
 
 
 def test_grouped_scalar_assignment_selector_solves_python_model() -> None:
+    input_schedule = AssignmentSchedule()
+    input_schedule.shifts[0].nurse = 0
+    input_schedule.shifts[1].nurse = 0
+
     plan = Solver.solve(
-        AssignmentSchedule(),
+        input_schedule,
         {
             "phases": [
                 {
@@ -2470,26 +2492,27 @@ def test_assignment_group_metadata_binds_to_each_declared_group() -> None:
 @pytest.mark.parametrize(
     "construction_heuristic_type", ["first_fit", "cheapest_insertion"]
 )
-def test_scalar_assignment_group_explicit_construction_obeys_expired_step_limit(
+def test_scalar_assignment_group_expired_step_limit_rejects_incomplete_solution(
     construction_heuristic_type: str,
 ) -> None:
-    plan = Solver.solve(
-        AssignmentSchedule(),
-        {
-            "phases": [
-                {
-                    "type": "construction_heuristic",
-                    "construction_heuristic_type": construction_heuristic_type,
-                    "group_name": "shift_nurse_assignment",
-                    "termination": {"step_count_limit": 0},
-                }
-            ]
-        },
-    )
+    plan = AssignmentSchedule()
+    with pytest.raises(RuntimeError, match="mandatory planning work incomplete"):
+        Solver.solve(
+            plan,
+            {
+                "phases": [
+                    {
+                        "type": "construction_heuristic",
+                        "construction_heuristic_type": construction_heuristic_type,
+                        "group_name": "shift_nurse_assignment",
+                        "termination": {"step_count_limit": 0},
+                    }
+                ]
+            },
+        )
 
     assert [shift.nurse for shift in plan.shifts] == [None, None]
-    assert plan.score == Solver.analyze(plan)
-    assert plan.score["levels"] == [-2, 0]
+    assert plan.score is None
 
 
 def test_scalar_assignment_group_default_construction_completes_required_assignments() -> (
@@ -2617,8 +2640,12 @@ def test_assignment_group_callback_exception_preserves_python_error() -> None:
 
 
 def test_grouped_scalar_assignment_selector_composes_in_union() -> None:
+    input_schedule = TwoAssignmentGroupSchedule()
+    input_schedule.tasks[0].left = 1
+    input_schedule.tasks[0].right = 0
+
     plan = Solver.solve(
-        TwoAssignmentGroupSchedule(),
+        input_schedule,
         {
             "random_seed": 1,
             "phases": [
@@ -2986,9 +3013,11 @@ def test_assignment_group_core_phase_does_not_open_unreached_nearby_callback() -
     """A core-routed union keeps the dynamic nearby source lazy per selector."""
     mixed_nearby_candidate_calls.clear()
     mixed_nearby_distance_calls.clear()
+    input_schedule = MixedAssignmentSchedule()
+    input_schedule.tasks[0].nurse = 1
 
     plan = Solver.solve(
-        MixedAssignmentSchedule(),
+        input_schedule,
         {
             "random_seed": 1,
             "phases": [

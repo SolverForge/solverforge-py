@@ -239,7 +239,7 @@ def test_manager_preserves_declared_score_family_across_publications(
     manager.delete(handle.job_id)
 
 
-def test_manager_assignment_group_zero_step_phase_preserves_callbacks_and_snapshot() -> (
+def test_manager_assignment_group_zero_step_phase_fails_without_partial_snapshot() -> (
     None
 ):
     plan = AssignmentSchedule()
@@ -258,19 +258,21 @@ def test_manager_assignment_group_zero_step_phase_preserves_callbacks_and_snapsh
 
     handle = manager.solve(plan)
     status = manager.wait(handle.job_id)
-    snapshot = manager.snapshot(handle.job_id)
 
-    assert status["lifecycle_state"] == "COMPLETED"
+    assert status["lifecycle_state"] == "FAILED"
+    assert status["latest_snapshot_revision"] is None
     telemetry = status["telemetry"]
     assert isinstance(telemetry, dict)
     assert telemetry["step_count"] == 0
     assert [shift.nurse for shift in plan.shifts] == [None, None]
     assert plan.score is None
-    assert [shift.nurse for shift in snapshot.shifts] == [None, None]
-    assert snapshot.score == Solver.analyze(snapshot)
-    assert snapshot.score["levels"] == [-2, 0]
+    with pytest.raises(RuntimeError):
+        manager.snapshot(handle.job_id)
     events = manager.events(handle.job_id)
-    assert [event["event_type"] for event in terminal_events(events)] == ["COMPLETED"]
+    failed = [event for event in events if event["event_type"] == "FAILED"]
+    assert len(failed) == 1
+    assert "mandatory planning work incomplete" in failed[0]["error"]
+    assert [event["event_type"] for event in terminal_events(events)] == ["FAILED"]
 
 
 def test_manager_assignment_group_missing_group_fails_before_job_starts() -> None:
