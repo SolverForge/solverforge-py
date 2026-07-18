@@ -41,13 +41,13 @@ For a terminal-only solve:
 make deliveries-solve
 ```
 
-After `0.6.2` is published, the same source-checkout example can be run against
+After `0.6.3` is published, the same source-checkout example can be run against
 the matching package:
 
 ```sh
 python3.14 -m venv .venv-deliveries
 . .venv-deliveries/bin/activate
-python -m pip install "solverforge[examples]==0.6.2"
+python -m pip install "solverforge[examples]==0.6.3"
 python -m examples.solverforge_deliveries
 ```
 

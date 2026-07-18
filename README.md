@@ -8,10 +8,10 @@ The native extension owns the working solution state in Rust so SolverForge can
 clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
-The package targets CPython 3.14 and Rust 1.95.0. This checkout consumes the
-published SolverForge Rust crates `0.19.0` and pins `solverforge-ui` to `0.7.0`
-through exact crates.io versions in `Cargo.toml` and registry checksums in
-`Cargo.lock`; it has no local path or Git dependency override. The `solverforge`
+The package targets CPython 3.14 and Rust 1.95.0. This checkout targets the
+SolverForge Rust crates `0.19.1` and pins `solverforge-ui` to `0.7.0` through
+exact crates.io versions in `Cargo.toml` and registry checksums in `Cargo.lock`.
+There is no local path or Git dependency override. The `solverforge`
 `0.6.x` line is the current dynamic binding architecture and intentionally
 supersedes the older incompatible `0.2.x` and `0.3.0` artifacts in the same PyPI
 namespace. Those older artifacts exposed `SolverFactory`, `PlanningVariable`,
@@ -19,12 +19,12 @@ Java service requirements, and other APIs that are not part of this package.
 
 ## Installation
 
-The package version prepared by this checkout is `solverforge` `0.6.2`, built
-on the exact published and locked SolverForge Rust `0.19.0` registry dependency
-base. Install the matching package after publication with:
+The package version prepared by this checkout is `solverforge` `0.6.3`, targeting
+the published and locked SolverForge Rust `0.19.1` registry dependency base.
+Install the matching package after its Python release with:
 
 ```sh
-python3.14 -m pip install "solverforge==0.6.2"
+python3.14 -m pip install "solverforge==0.6.3"
 ```
 
 The installable wheel contains the core `solverforge` package, native extension,
@@ -49,7 +49,7 @@ installed package without `PYTHONPATH` or an editable checkout:
 ```sh
 python3.14 -m venv .venv-examples
 . .venv-examples/bin/activate
-python -m pip install "solverforge[examples]==0.6.2"
+python -m pip install "solverforge[examples]==0.6.3"
 python examples/nqueens.py
 python -m examples.solverforge_hospital
 python -m examples.solverforge_deliveries
