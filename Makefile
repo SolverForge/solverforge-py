@@ -32,6 +32,7 @@ BLACK ?= $(PYTHON) -m black --line-length 100 --target-version py314
 PLAYWRIGHT ?= $(PYTHON) -m playwright
 MATURIN_VERSION := 1.13.3
 BLACK_VERSION := 26.5.1
+RUFF_VERSION := 0.15.14
 PRE_COMMIT ?= $(PYTHON) -m pre_commit
 TWINE ?= $(PYTHON) -m twine
 PYTEST_ARGS ?=
@@ -92,7 +93,7 @@ $(PY_DEPS_STAMP): pyproject.toml Makefile | venv
 	@printf -- "$(PROGRESS) Installing Python runtime and developer tools...\n"
 	@PIP_DISABLE_PIP_VERSION_CHECK=1 "$(PIP)" install \
 		"maturin==$(MATURIN_VERSION)" "fastapi>=0.115,<1" "uvicorn>=0.32,<1" \
-		"playwright>=1.55,<2" pytest mypy ruff "black==$(BLACK_VERSION)" pre-commit twine
+		"playwright>=1.55,<2" pytest mypy "ruff==$(RUFF_VERSION)" "black==$(BLACK_VERSION)" pre-commit twine
 	@touch "$(PY_DEPS_STAMP)"
 	@printf -- "$(GREEN)$(CHECK) Python dependencies installed$(RESET)\n\n"
 
