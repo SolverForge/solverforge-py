@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "solverforge_py"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "indexmap",
  "once_cell",
