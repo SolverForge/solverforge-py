@@ -26,7 +26,7 @@ name = "solverforge_py"
 crate-type = ["cdylib", "rlib"]
 
 [package.metadata.solverforge]
-version = "0.19.1"
+version = "0.19.2"
 
 [dependencies]
 indexmap = "2.12.1"
@@ -42,12 +42,12 @@ toml = "0.9.8"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
-solverforge-config = { version = "=0.19.1" }
-solverforge-bridge = { version = "=0.19.1" }
-solverforge-console = { version = "=0.19.1", features = ["verbose-logging"] }
-solverforge-core = { version = "=0.19.1" }
-solverforge-scoring = { version = "=0.19.1" }
-solverforge-solver = { version = "=0.19.1" }
+solverforge-config = { version = "=0.19.2" }
+solverforge-bridge = { version = "=0.19.2" }
+solverforge-console = { version = "=0.19.2", features = ["verbose-logging"] }
+solverforge-core = { version = "=0.19.2" }
+solverforge-scoring = { version = "=0.19.2" }
+solverforge-solver = { version = "=0.19.2" }
 solverforge-ui = { version = "=0.7.0", default-features = false }
 
 [dev-dependencies]
