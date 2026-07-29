@@ -424,11 +424,11 @@ applications and other Python HTTP hosts.
 The source distribution is limited to the metadata and Python/Rust sources
 needed to build the package. Repository-only tests, examples, guidance, and
 tooling remain available from the source checkout. `Cargo.toml` pins the six
-SolverForge crates to the exact published `0.19.2` registry base and
+SolverForge crates to the exact published `0.19.3` registry base and
 `solverforge-ui` to `0.7.0`; `Cargo.lock` records their crates.io checksums.
 
-The current package and crate version is `0.6.4`, targeting the exact SolverForge
-`0.19.2` crate boundary. Its artifact set is one source distribution plus
+The current package and crate version is `0.6.5`, targeting the exact SolverForge
+`0.19.3` crate boundary. Its artifact set is one source distribution plus
 Linux, macOS, and Windows wheels, verified together before release.
 
 ## Makefile And Validation Flow
