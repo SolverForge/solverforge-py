@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.6.5](///compare/v0.6.4...v0.6.5) (2026-07-29)
+
+
+### Bug Fixes
+
+* **ci:** pin Ruff to the lint contract a639112
+* **deps:** consume SolverForge 0.19.3 rotation repair 544c31b
+
 ## [0.6.4](///compare/v0.6.3...v0.6.4) (2026-07-26)
 
 
