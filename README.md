@@ -19,12 +19,12 @@ Java service requirements, and other APIs that are not part of this package.
 
 ## Installation
 
-The current published Python package is `solverforge` `0.6.5`; the native
-`solverforge_py` crate metadata shares that version and targets the published
-and locked SolverForge Rust `0.19.3` registry dependency base. Install it with:
+The package version prepared by this checkout is `solverforge` `0.6.6`, targeting
+the published and locked SolverForge Rust `0.19.3` registry dependency base.
+Install the matching package after its Python release with:
 
 ```sh
-python3.14 -m pip install "solverforge==0.6.5"
+python3.14 -m pip install "solverforge==0.6.6"
 ```
 
 The installable wheel contains the core `solverforge` package, native extension,
@@ -49,7 +49,7 @@ without `PYTHONPATH` or an editable checkout:
 ```sh
 python3.14 -m venv .venv-examples
 . .venv-examples/bin/activate
-python -m pip install "solverforge[examples]==0.6.5"
+python -m pip install "solverforge[examples]==0.6.6"
 python examples/nqueens.py
 python -m examples.solverforge_hospital
 python -m examples.solverforge_deliveries
