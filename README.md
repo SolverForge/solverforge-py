@@ -19,9 +19,9 @@ Java service requirements, and other APIs that are not part of this package.
 
 ## Installation
 
-The package version prepared by this checkout is `solverforge` `0.6.5`, targeting
-the published and locked SolverForge Rust `0.19.3` registry dependency base.
-Install the matching package after its Python release with:
+The current published Python package is `solverforge` `0.6.5`; the native
+`solverforge_py` crate metadata shares that version and targets the published
+and locked SolverForge Rust `0.19.3` registry dependency base. Install it with:
 
 ```sh
 python3.14 -m pip install "solverforge==0.6.5"
@@ -43,8 +43,8 @@ make hospital-run
 make deliveries-run PORT=7861
 ```
 
-After publication, the same source-checkout examples can be run against the
-installed package without `PYTHONPATH` or an editable checkout:
+The same source-checkout examples can be run against the published package
+without `PYTHONPATH` or an editable checkout:
 
 ```sh
 python3.14 -m venv .venv-examples

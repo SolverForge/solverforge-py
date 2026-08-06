@@ -41,8 +41,8 @@ For a terminal-only solve:
 make deliveries-solve
 ```
 
-After `0.6.5` is published, the same source-checkout example can be run against
-the matching package:
+The same source-checkout example can be run against the published `0.6.5`
+package:
 
 ```sh
 python3.14 -m venv .venv-deliveries

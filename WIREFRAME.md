@@ -28,8 +28,9 @@ shape, and source-checkout example UI/API surfaces.
   Versioned `/sf/*` asset names are served only when the pinned `solverforge-ui`
   crate owns that exact file; stale versioned asset requests fail instead of
   aliasing to current bytes.
-- Documentation is intentionally kept in `README.md`, `AGENTS.md`, this
-  wireframe, and the example READMEs. There is no separate `docs/` directory.
+- Current contract documentation is intentionally kept in `README.md`,
+  `AGENTS.md`, this wireframe, and the example READMEs. `CHANGELOG.md` remains
+  tool-managed release history; there is no separate `docs/` directory.
 
 ## Python Package API
 
@@ -415,21 +416,24 @@ The installable wheel contains only:
 - `solverforge/_native.*`
 - `solverforge/_native.pyi`
 - `solverforge/py.typed`
-- `solverforge-*.dist-info/`
+- `solverforge-*.dist-info/`, including metadata, the license, and the generated
+  CycloneDX SBOM
 
 The native extension embeds shared `solverforge-ui` assets and exposes them via
 `solverforge.ui.asset()` and `solverforge.ui.asset_paths()` for example
 applications and other Python HTTP hosts.
 
-The source distribution is limited to the metadata and Python/Rust sources
-needed to build the package. Repository-only tests, examples, guidance, and
-tooling remain available from the source checkout. `Cargo.toml` pins the six
-SolverForge crates to the exact published `0.19.3` registry base and
-`solverforge-ui` to `0.7.0`; `Cargo.lock` records their crates.io checksums.
+The source distribution contains package metadata, the README and license, the
+locked Cargo manifests and Rust toolchain, and the Python/Rust sources needed to
+build the package. Repository-only tests, examples, maintainer guidance,
+wireframes, and tooling remain available from the source checkout. `Cargo.toml`
+pins the six SolverForge crates to the exact published `0.19.3` registry base
+and `solverforge-ui` to `0.7.0`; `Cargo.lock` records their crates.io checksums.
 
-The current package and crate version is `0.6.5`, targeting the exact SolverForge
-`0.19.3` crate boundary. Its artifact set is one source distribution plus
-Linux, macOS, and Windows wheels, verified together before release.
+The current published Python package and native `solverforge_py` crate metadata
+are version `0.6.5`, targeting the exact SolverForge `0.19.3` crate boundary.
+The artifact set is one source distribution plus Linux, macOS, and Windows
+wheels, verified together before release.
 
 ## Makefile And Validation Flow
 
