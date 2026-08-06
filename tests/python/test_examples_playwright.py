@@ -181,9 +181,9 @@ def test_browser_imports_solverforge_ui_module_assets() -> None:
                 assert browser_errors == []
 
                 for path in (
-                    "/sf/sf.0.6.5.css",
-                    "/sf/sf.0.6.5.js",
-                    "/sf/sf.0.6.5.mjs",
+                    "/sf/sf.0.6.6.css",
+                    "/sf/sf.0.6.6.js",
+                    "/sf/sf.0.6.6.mjs",
                     "/sf/sf.0.7.0.mjs",
                 ):
                     try:

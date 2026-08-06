@@ -36,9 +36,9 @@ def test_solverforge_ui_assets_serve_current_versioned_bundle() -> None:
 def test_solverforge_ui_assets_do_not_alias_stale_or_synthetic_versioned_bundles() -> (
     None
 ):
-    assert asset("sf.0.6.5.css") is None
-    assert asset("sf.0.6.5.js") is None
-    assert asset("sf.0.6.5.mjs") is None
+    assert asset("sf.0.6.6.css") is None
+    assert asset("sf.0.6.6.js") is None
+    assert asset("sf.0.6.6.mjs") is None
     assert asset("sf.0.7.0.mjs") is None
 
 
@@ -119,7 +119,7 @@ def test_solverforge_ui_asset_paths_are_available() -> None:
     assert "modules/sf-map.js" in paths
     assert "vendor/leaflet/leaflet.js" in paths
 
-    assert "sf.0.6.5.css" not in paths
-    assert "sf.0.6.5.js" not in paths
-    assert "sf.0.6.5.mjs" not in paths
+    assert "sf.0.6.6.css" not in paths
+    assert "sf.0.6.6.js" not in paths
+    assert "sf.0.6.6.mjs" not in paths
     assert "sf.0.7.0.mjs" not in paths

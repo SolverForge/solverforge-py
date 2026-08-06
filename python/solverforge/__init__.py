@@ -40,7 +40,7 @@ from .manager import JobHandle, SolverManager
 from .score import HardMediumSoftScore, HardSoftDecimalScore, HardSoftScore, SoftScore
 from .solver import Solver
 
-__version__ = "0.6.5"
+__version__ = "0.6.6"
 
 __all__ = [
     "CallbackError",
