@@ -159,6 +159,7 @@ fn parse_assignment_scalar_groups(
             )?,
             capacity_key: optional_metadata_source(group, "capacity_key", "capacity_key_field")?,
             assignment_rule: optional_callable(group, "assignment_rule")?,
+            same_value_conflict_field: optional_str(group, "same_value_conflict_field")?,
             position_key: optional_metadata_source(group, "position_key", "position_key_field")?,
             sequence_key: optional_metadata_source(group, "sequence_key", "sequence_key_field")?,
             entity_order: optional_callable(group, "entity_order")?,

@@ -100,6 +100,18 @@ fn build_assignment_group(
             group.name
         ));
     }
+    if group.assignment_rule.is_some() && group.same_value_conflict_field.is_some() {
+        return Err(format!(
+            "assignment scalar group `{}` cannot declare both assignment_rule and same_value_conflict_field",
+            group.name
+        ));
+    }
+    if group.same_value_conflict_field.is_some() && group.sequence_key.is_none() {
+        return Err(format!(
+            "assignment scalar group `{}` declares same_value_conflict_field but no sequence_key",
+            group.name
+        ));
+    }
 
     let slot = DynamicScalarVariableSlot::new(
         EntityClassId(entity_index),
@@ -368,6 +380,14 @@ impl PyDynamicAssignmentMetadata {
         right_entity: usize,
         right_value: usize,
     ) -> bool {
+        if let Some(field_name) = self.group().same_value_conflict_field.as_deref() {
+            if left_value != right_value {
+                return true;
+            }
+            return !self
+                .same_value_conflicts(solution, field_name, left_entity, right_entity)
+                .unwrap_or_else(panic_with_py_err);
+        }
         self.callback_value(
             solution,
             "assignment_rule",
@@ -376,6 +396,63 @@ impl PyDynamicAssignmentMetadata {
         )
         .unwrap_or_else(panic_with_py_err)
         .unwrap_or(true)
+    }
+
+    fn same_value_conflicts(
+        &self,
+        solution: &PyDynamicSolution,
+        field_name: &str,
+        left_entity: usize,
+        right_entity: usize,
+    ) -> PyResult<bool> {
+        Ok(
+            self.row_conflicts_with(solution, field_name, left_entity, right_entity)?
+                || self.row_conflicts_with(solution, field_name, right_entity, left_entity)?,
+        )
+    }
+
+    fn row_conflicts_with(
+        &self,
+        solution: &PyDynamicSolution,
+        field_name: &str,
+        entity_index: usize,
+        other_entity_index: usize,
+    ) -> PyResult<bool> {
+        let value = solution
+            .state
+            .entities
+            .get(self.entity_index)
+            .and_then(|rows| rows.get(entity_index))
+            .and_then(|row| row.fields.get(field_name))
+            .ok_or_else(|| {
+                py_err(format!(
+                    "assignment scalar group `{}` field `{field_name}` is missing on row {entity_index}",
+                    self.group().name
+                ))
+            })?;
+        let DynamicValue::List(conflicts) = value else {
+            return Err(py_err(format!(
+                "assignment scalar group `{}` same_value_conflict_field `{field_name}` must be a list of entity indices",
+                self.group().name
+            )));
+        };
+        let other_entity_index = i64::try_from(other_entity_index).map_err(|_| {
+            py_err(format!(
+                "assignment entity index `{other_entity_index}` does not fit in a field integer"
+            ))
+        })?;
+        for conflict in conflicts {
+            let DynamicValue::Int(conflict) = conflict else {
+                return Err(py_err(format!(
+                    "assignment scalar group `{}` same_value_conflict_field `{field_name}` must contain only entity indices",
+                    self.group().name
+                )));
+            };
+            if *conflict == other_entity_index {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }
 
@@ -389,7 +466,8 @@ impl DynamicScalarAssignmentMetadata<PyDynamicSolution> for PyDynamicAssignmentM
             sequence_key: group.sequence_key.is_some(),
             entity_order: group.entity_order.is_some(),
             value_order: group.value_order.is_some(),
-            assignment_rule: group.assignment_rule.is_some(),
+            assignment_rule: group.assignment_rule.is_some()
+                || group.same_value_conflict_field.is_some(),
         }
     }
 

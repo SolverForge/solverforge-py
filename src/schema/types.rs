@@ -200,6 +200,7 @@ pub struct AssignmentScalarGroupSchema {
     pub required_entity: Option<MetadataSourceSchema>,
     pub capacity_key: Option<MetadataSourceSchema>,
     pub assignment_rule: Option<Py<PyAny>>,
+    pub same_value_conflict_field: Option<String>,
     pub position_key: Option<MetadataSourceSchema>,
     pub sequence_key: Option<MetadataSourceSchema>,
     pub entity_order: Option<Py<PyAny>>,

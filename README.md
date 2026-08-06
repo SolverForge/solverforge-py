@@ -209,8 +209,9 @@ Run `make help` for focused targets such as `make test-hospital`,
   either a Python callback or a row field name. Dual raw-schema sources are
   rejected at compilation, while immutable row metadata can be supplied without
   per-query Python callbacks. Provider-backed value ranges are imported once per
-  variable and shared across rows in Rust-owned state; row candidate callbacks
-  remain row-specific.
+  variable and shared across rows in Rust-owned state. Row candidate callbacks
+  remain row-specific and define move legality throughout construction and local
+  search, including assignment-group swaps and rematches.
 - `scalar_assignment_group(...)` declares assignment-aware scalar groups for
   grouped scalar local search and assignment-group construction. Group metadata
   covers required entities, capacity keys, assignment rules, ordering callbacks,
@@ -221,9 +222,12 @@ Run `make help` for focused targets such as `make test-hospital`,
   metadata, `required_entity_field`, `capacity_key_field`,
   `position_key_field`, and `sequence_key_field` are explicit alternatives to
   their callbacks: required is a row bool, position and sequence are row
-  integers, and capacity is a row list indexed by candidate value. A field
-  alternative is mutually exclusive with its callback and avoids
-  per-candidate Python transitions without caching or changing callback behavior.
+  integers, and capacity is a row list indexed by candidate value.
+  `same_value_conflict_field` is the native alternative for a static
+  `assignment_rule`: each row lists adjacent-sequence entity indexes that
+  cannot hold the same assigned value, and the group still requires sequence
+  metadata. Field alternatives avoid per-candidate Python transitions without
+  caching or changing callback behavior.
   The compiled schema retains one immutable runtime plan (schema, descriptor,
   and model), reused by direct solves, manager jobs, snapshots, and resumes;
   instance rows, callback views, seeds, and moves remain per solve.

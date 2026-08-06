@@ -216,7 +216,13 @@ impl DynamicScalarAccess<PyDynamicSolution> for PyDynamicScalarAccess {
             .unwrap_or(&[])
     }
 
-    fn value_is_legal(&self, solution: &PyDynamicSolution, _row: usize, value: usize) -> bool {
+    fn value_is_legal(&self, solution: &PyDynamicSolution, row: usize, value: usize) -> bool {
+        if let Some(candidates) = self
+            .row(solution, row)
+            .and_then(|row| row.candidates_at(self.variable.0))
+        {
+            return candidates.contains(&value);
+        }
         solution
             .state
             .scalar_value_range_at(self.entity.0, self.variable.0)

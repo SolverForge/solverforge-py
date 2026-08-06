@@ -79,10 +79,15 @@ a Python callback or a row field name for nearby scalar construction and local
 search; a source cannot be both. Raw schemas that supply both forms are rejected
 at compilation. Shared value-range providers are stored once per variable in
 Rust-owned state and row candidate callbacks remain row-specific.
+Their imported candidate sets are also the native legality boundary for every
+scalar move, so local-search swaps cannot cross one row's candidate domain.
 Assignment-aware scalar groups may likewise declare invariant required,
 capacity, position, and sequence metadata as row fields instead of callbacks.
-Those field sources are read from Rust-owned rows on every use; they do not add
-a result cache or alter the delivery of any remaining Python callbacks.
+`same_value_conflict_field` holds a per-row list of adjacent-sequence entity
+indexes that cannot share its assigned value, avoiding an `assignment_rule`
+callback for static conflict graphs. Those field sources are read from
+Rust-owned rows on every use; they do not add a result cache or alter the
+delivery of any remaining Python callbacks.
 List variables may declare element-owner, construction-order, precedence
 duration, and precedence-successor metadata with either Python callbacks or
 solution-level sequence names indexed by element ID. Route-related metadata is

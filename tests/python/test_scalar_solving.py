@@ -465,6 +465,50 @@ class SwapPlan:
         self.score = None
 
 
+def row_filtered_swap_candidates(task):
+    return task.allowed_workers
+
+
+@planning_entity
+class RowFilteredSwapTask:
+    worker = planning_variable(
+        value_range_provider="workers",
+        candidate_values=row_filtered_swap_candidates,
+    )
+
+    def __init__(self, name: str, worker: int) -> None:
+        self.name = name
+        self.allowed_workers = [worker]
+        self.worker = worker
+
+
+@constraint_provider
+def prefer_row_filtered_swap(factory: ConstraintFactory):
+    return [
+        factory.for_each(RowFilteredSwapTask)
+        .filter(lambda task: task.name == "left" and task.worker != 1)
+        .penalize(SoftScore.of(10))
+        .named("row-filtered left worker"),
+        factory.for_each(RowFilteredSwapTask)
+        .filter(lambda task: task.name == "right" and task.worker != 0)
+        .penalize(SoftScore.of(10))
+        .named("row-filtered right worker"),
+    ]
+
+
+@planning_solution(score=SoftScore, constraints=prefer_row_filtered_swap)
+class RowFilteredSwapPlan:
+    tasks: list[RowFilteredSwapTask]
+
+    def __init__(self) -> None:
+        self.tasks = [
+            RowFilteredSwapTask("left", 0),
+            RowFilteredSwapTask("right", 1),
+        ]
+        self.workers = [0, 1]
+        self.score = None
+
+
 def test_dynamic_scalar_swap_supports_tabu_acceptor() -> None:
     plan = Solver.solve(
         SwapPlan(),
@@ -490,6 +534,34 @@ def test_dynamic_scalar_swap_supports_tabu_acceptor() -> None:
 
     assert [task.worker for task in plan.tasks] == [1, 0]
     assert all(level == 0 for level in plan.score["levels"])
+
+
+def test_dynamic_scalar_swap_preserves_row_candidate_domains() -> None:
+    plan = Solver.solve(
+        RowFilteredSwapPlan(),
+        {
+            "phases": [
+                {
+                    "type": "local_search",
+                    "local_search_type": "acceptor_forager",
+                    "move_selector": {
+                        "type": "swap_move_selector",
+                        "selection_order": "original",
+                        "entity_class": "RowFilteredSwapTask",
+                        "variable_name": "worker",
+                    },
+                    "acceptor": {"type": "hill_climbing"},
+                    "forager": {"type": "best_score"},
+                    "score_tie_break": "first",
+                    "termination": {"step_count_limit": 2},
+                }
+            ]
+        },
+    )
+
+    assert [task.worker for task in plan.tasks] == [0, 1]
+    assert plan.score == Solver.analyze(plan)
+    assert plan.score["levels"] == [-20]
 
 
 @constraint_provider
@@ -1997,6 +2069,59 @@ class FieldAssignmentSchedule:
         self.score = None
 
 
+@planning_entity
+class ConflictFieldAssignmentShift:
+    nurse = planning_variable(value_range_provider="nurses", allows_unassigned=True)
+
+    def __init__(self, index: int, conflicts: list[int]) -> None:
+        self.required = True
+        self.sequence = index
+        self.conflicts = conflicts
+        self.nurse: int | None = None
+
+
+@constraint_provider
+def conflict_field_assignment_constraints(factory: ConstraintFactory):
+    return [
+        factory.for_each(ConflictFieldAssignmentShift)
+        .filter(lambda shift: shift.nurse is None)
+        .penalize(HardSoftScore.ONE_HARD)
+        .named("conflict field assignment required"),
+        factory.for_each(ConflictFieldAssignmentShift)
+        .filter(lambda shift: shift.nurse != 0)
+        .penalize(HardSoftScore.ONE_SOFT)
+        .named("prefer conflict field assignment zero"),
+    ]
+
+
+@planning_solution(
+    score=HardSoftScore,
+    constraints=conflict_field_assignment_constraints,
+    scalar_groups=[
+        scalar_assignment_group(
+            "conflict_field_assignment",
+            entity_class="ConflictFieldAssignmentShift",
+            variable_name="nurse",
+            required_entity_field="required",
+            same_value_conflict_field="conflicts",
+            sequence_key_field="sequence",
+            sync_solution_before_callbacks=False,
+        )
+    ],
+)
+class ConflictFieldAssignmentSchedule:
+    shifts: list[ConflictFieldAssignmentShift]
+
+    def __init__(self, conflicts: list[list[int]] | None = None) -> None:
+        row_conflicts = [[1], [0]] if conflicts is None else conflicts
+        self.shifts = [
+            ConflictFieldAssignmentShift(index, row_conflicts[index])
+            for index in range(2)
+        ]
+        self.nurses = [0, 1]
+        self.score = None
+
+
 rich_assignment_metadata_calls: set[str] = set()
 
 
@@ -2150,6 +2275,54 @@ class CountingAssignmentSchedule:
             CountingAssignmentShift(shift_index) for shift_index in range(shift_count)
         ]
         self.nurses = list(range(shift_count))
+        self.score = None
+
+
+def row_candidate_assignment_values(shift):
+    return shift.allowed_nurses
+
+
+@planning_entity
+class RowCandidateAssignmentShift:
+    nurse = planning_variable(
+        value_range_provider="nurses",
+        candidate_values=row_candidate_assignment_values,
+        allows_unassigned=True,
+    )
+
+    def __init__(self, shift_index: int) -> None:
+        self.shift_index = shift_index
+        self.allowed_nurses = [shift_index]
+        self.nurse: int | None = shift_index
+
+
+@constraint_provider
+def row_candidate_assignment_constraints(factory: ConstraintFactory):
+    return [
+        factory.for_each(RowCandidateAssignmentShift)
+        .filter(lambda shift: shift.nurse != 1 - shift.shift_index)
+        .penalize(HardSoftScore.ONE_SOFT)
+        .named("prefer row-forbidden assignment swap")
+    ]
+
+
+@planning_solution(
+    score=HardSoftScore,
+    constraints=row_candidate_assignment_constraints,
+    scalar_groups=[
+        scalar_assignment_group(
+            "row_candidate_assignment",
+            entity_class="RowCandidateAssignmentShift",
+            variable_name="nurse",
+        )
+    ],
+)
+class RowCandidateAssignmentSchedule:
+    shifts: list[RowCandidateAssignmentShift]
+
+    def __init__(self) -> None:
+        self.shifts = [RowCandidateAssignmentShift(0), RowCandidateAssignmentShift(1)]
+        self.nurses = [0, 1]
         self.score = None
 
 
@@ -2322,6 +2495,36 @@ def test_scalar_assignment_group_field_metadata_solves_with_rule_callback() -> N
     assert plan.score["levels"] == [0, 0]
 
 
+def test_scalar_assignment_group_same_value_conflict_field_stays_native() -> None:
+    schema = build_schema(ConflictFieldAssignmentSchedule())
+    group = schema["scalar_groups"][0]
+
+    assert group["assignment_rule"] is None
+    assert group["same_value_conflict_field"] == "conflicts"
+
+    plan = Solver.solve(
+        ConflictFieldAssignmentSchedule(),
+        {
+            "phases": [
+                {
+                    "type": "construction_heuristic",
+                    "construction_heuristic_type": "first_fit",
+                    "group_name": "conflict_field_assignment",
+                }
+            ]
+        },
+    )
+
+    assert sorted(shift.nurse for shift in plan.shifts) == [0, 1]
+    assert plan.score == Solver.analyze(plan)
+    assert plan.score["levels"] == [0, -1]
+
+
+def test_scalar_assignment_group_same_value_conflict_field_validates_indices() -> None:
+    with pytest.raises(RuntimeError, match="out-of-range entity index 2"):
+        Solver.solve(ConflictFieldAssignmentSchedule([[2], []]))
+
+
 def test_scalar_assignment_group_field_metadata_rejects_missing_candidate_capacity() -> (
     None
 ):
@@ -2403,6 +2606,42 @@ def test_scalar_assignment_group_rejects_callback_and_field_for_same_metadata() 
             required_entity=lambda _solution, _entity_index: True,
             required_entity_field="required",
         )
+
+    with pytest.raises(
+        TypeError,
+        match="assignment_rule and same_value_conflict_field",
+    ):
+        scalar_assignment_group(
+            "invalid_conflict_field_assignment_group",
+            entity_class="FieldAssignmentShift",
+            variable_name="nurse",
+            assignment_rule=field_assignment_rule,
+            same_value_conflict_field="conflicts",
+            sequence_key_field="sequence",
+        )
+
+    @planning_solution(
+        scalar_groups=[
+            scalar_assignment_group(
+                "missing_sequence_conflict_field_assignment_group",
+                entity_class="FieldAssignmentShift",
+                variable_name="nurse",
+                same_value_conflict_field="conflicts",
+            )
+        ]
+    )
+    class MissingSequenceConflictFieldSchedule:
+        shifts: list[FieldAssignmentShift]
+
+        def __init__(self) -> None:
+            self.shifts = [FieldAssignmentShift(True, [0], 0)]
+            self.nurses = [0]
+            self.score = None
+
+    with pytest.raises(
+        ModelValidationError, match="same-value conflict groups need sequence"
+    ):
+        build_schema(MissingSequenceConflictFieldSchedule())
 
 
 def test_grouped_scalar_assignment_selector_solves_python_model() -> None:
@@ -2545,6 +2784,35 @@ def test_scalar_assignment_group_bounds_core_required_candidate_callbacks() -> N
     assert plan.score == Solver.analyze(plan)
     assert plan.score["levels"] == [0, 0]
     assert _counting_assignment_candidate_calls <= 2 * len(plan.shifts) + 1
+
+
+def test_grouped_scalar_local_search_preserves_row_candidate_domains() -> None:
+    plan = Solver.solve(
+        RowCandidateAssignmentSchedule(),
+        {
+            "random_seed": 1,
+            "phases": [
+                {
+                    "type": "local_search",
+                    "local_search_type": "acceptor_forager",
+                    "move_selector": {
+                        "type": "grouped_scalar_move_selector",
+                        "selection_order": "original",
+                        "group_name": "row_candidate_assignment",
+                        "max_moves_per_step": 64,
+                    },
+                    "acceptor": {"type": "hill_climbing"},
+                    "forager": {"type": "best_score"},
+                    "score_tie_break": "first",
+                    "termination": {"step_count_limit": 3},
+                }
+            ],
+        },
+    )
+
+    assert [shift.nurse for shift in plan.shifts] == [0, 1]
+    assert plan.score == Solver.analyze(plan)
+    assert plan.score["levels"] == [0, -2]
 
 
 def test_scalar_assignment_group_construction_preserves_solution_context_in_previews() -> (

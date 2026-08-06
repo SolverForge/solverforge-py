@@ -671,10 +671,19 @@ impl DynamicModelBackend for PyDynamicSolution {
     fn scalar_value_is_legal(
         &self,
         entity: EntityClassId,
-        _row: usize,
+        row: usize,
         variable: VariableId,
         value: usize,
     ) -> bool {
+        if let Some(candidates) = self
+            .state
+            .entities
+            .get(entity.0)
+            .and_then(|rows| rows.get(row))
+            .and_then(|row| row.candidates_at(variable.0))
+        {
+            return candidates.contains(&value);
+        }
         self.state
             .scalar_value_range_at(entity.0, variable.0)
             .is_some_and(|values| values.contains(&value))

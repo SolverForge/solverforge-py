@@ -436,6 +436,9 @@ fn row_metadata_fields(schema: &DynamicSchema) -> BTreeSet<String> {
                 field_names.insert(field.clone());
             }
         }
+        if let Some(field) = group.same_value_conflict_field.as_ref() {
+            field_names.insert(field.clone());
+        }
     }
     field_names
 }
@@ -499,10 +502,12 @@ fn validate_assignment_group_field_metadata(
             .sequence_key
             .as_ref()
             .and_then(MetadataSourceSchema::row);
+        let same_value_conflict_field = group.same_value_conflict_field.as_deref();
         if required_field.is_none()
             && capacity_field.is_none()
             && position_field.is_none()
             && sequence_field.is_none()
+            && same_value_conflict_field.is_none()
         {
             continue;
         }
@@ -558,6 +563,35 @@ fn validate_assignment_group_field_metadata(
                         "assignment scalar group `{}` field `{field}` on row {row_index} must be a non-negative integer",
                         group.name
                     )));
+                }
+            }
+            if let Some(field) = same_value_conflict_field {
+                let value = assignment_metadata_field(row, &group.name, row_index, field)?;
+                let DynamicValue::List(conflicts) = value else {
+                    return Err(crate::error::py_err(format!(
+                        "assignment scalar group `{}` field `{field}` on row {row_index} must be a list of entity indices",
+                        group.name
+                    )));
+                };
+                for conflict in conflicts {
+                    let DynamicValue::Int(conflict) = conflict else {
+                        return Err(crate::error::py_err(format!(
+                            "assignment scalar group `{}` field `{field}` on row {row_index} must contain only entity indices",
+                            group.name
+                        )));
+                    };
+                    let Ok(conflict) = usize::try_from(*conflict) else {
+                        return Err(crate::error::py_err(format!(
+                            "assignment scalar group `{}` field `{field}` on row {row_index} contains invalid entity index {conflict}",
+                            group.name
+                        )));
+                    };
+                    if conflict >= rows.len() {
+                        return Err(crate::error::py_err(format!(
+                            "assignment scalar group `{}` field `{field}` on row {row_index} contains out-of-range entity index {conflict}",
+                            group.name
+                        )));
+                    }
                 }
             }
             if let Some(field) = capacity_field {

@@ -222,6 +222,16 @@ def _scalar_groups(callbacks: object) -> list[dict[str, object]]:
                     "assignment-rule groups need sequence metadata"
                 )
                 raise ModelValidationError(msg)
+            if (
+                item.same_value_conflict_field is not None
+                and item.sequence_key is None
+                and item.sequence_key_field is None
+            ):
+                msg = (
+                    f"{item!r} declares a same_value_conflict_field but no sequence_key; "
+                    "same-value conflict groups need sequence metadata"
+                )
+                raise ModelValidationError(msg)
             if item.name in names:
                 msg = f"scalar group name `{item.name}` is declared more than once"
                 raise ModelValidationError(msg)

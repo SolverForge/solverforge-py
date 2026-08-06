@@ -51,6 +51,7 @@ class ScalarAssignmentGroup:
     capacity_key: Callable[..., object] | None = None
     capacity_key_field: str | None = None
     assignment_rule: Callable[..., object] | None = None
+    same_value_conflict_field: str | None = None
     position_key: Callable[..., object] | None = None
     position_key_field: str | None = None
     sequence_key: Callable[..., object] | None = None
@@ -95,6 +96,20 @@ class ScalarAssignmentGroup:
                 raise TypeError(
                     f"{field_name} must be a non-empty string when provided"
                 )
+        if (
+            self.assignment_rule is not None
+            and self.same_value_conflict_field is not None
+        ):
+            raise TypeError(
+                "assignment_rule and same_value_conflict_field cannot both be configured"
+            )
+        if self.same_value_conflict_field is not None and (
+            not isinstance(self.same_value_conflict_field, str)
+            or not self.same_value_conflict_field
+        ):
+            raise TypeError(
+                "same_value_conflict_field must be a non-empty string when provided"
+            )
 
     def to_native(self) -> dict[str, Any]:
         return {
@@ -107,6 +122,7 @@ class ScalarAssignmentGroup:
             "capacity_key": self.capacity_key,
             "capacity_key_field": self.capacity_key_field,
             "assignment_rule": self.assignment_rule,
+            "same_value_conflict_field": self.same_value_conflict_field,
             "position_key": self.position_key,
             "position_key_field": self.position_key_field,
             "sequence_key": self.sequence_key,
@@ -128,6 +144,7 @@ def scalar_assignment_group(
     capacity_key: Callable[..., object] | None = None,
     capacity_key_field: str | None = None,
     assignment_rule: Callable[..., object] | None = None,
+    same_value_conflict_field: str | None = None,
     position_key: Callable[..., object] | None = None,
     position_key_field: str | None = None,
     sequence_key: Callable[..., object] | None = None,
@@ -145,6 +162,9 @@ def scalar_assignment_group(
     callback transitions while preserving the declared metadata values. The declaration compiles
     into one immutable native runtime plan rather than a Python-side assignment search path. Its
     target variable is exclusively searched through the resulting grouped selector.
+    ``same_value_conflict_field`` names a row list of adjacent-sequence entity indices that may
+    not share the same assigned value, providing a native conflict-graph alternative to
+    ``assignment_rule``.
     """
 
     return ScalarAssignmentGroup(
@@ -156,6 +176,7 @@ def scalar_assignment_group(
         capacity_key=capacity_key,
         capacity_key_field=capacity_key_field,
         assignment_rule=assignment_rule,
+        same_value_conflict_field=same_value_conflict_field,
         position_key=position_key,
         position_key_field=position_key_field,
         sequence_key=sequence_key,

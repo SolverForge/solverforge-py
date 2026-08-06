@@ -58,6 +58,28 @@ pub fn validate_dynamic_schema(schema: &DynamicSchema) -> Result<(), pyo3::PyErr
                 group.name
             )));
         }
+        if group.assignment_rule.is_some() && group.same_value_conflict_field.is_some() {
+            return Err(py_err(format!(
+                "assignment scalar group `{}` cannot declare both assignment_rule and same_value_conflict_field",
+                group.name
+            )));
+        }
+        if group
+            .same_value_conflict_field
+            .as_ref()
+            .is_some_and(String::is_empty)
+        {
+            return Err(py_err(format!(
+                "assignment scalar group `{}` has an empty same_value_conflict_field",
+                group.name
+            )));
+        }
+        if group.same_value_conflict_field.is_some() && group.sequence_key.is_none() {
+            return Err(py_err(format!(
+                "assignment scalar group `{}` declares same_value_conflict_field but no sequence_key",
+                group.name
+            )));
+        }
     }
     Ok(())
 }
