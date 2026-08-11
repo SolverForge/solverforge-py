@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.6.6](///compare/v0.6.5...v0.6.6) (2026-08-11)
+
+### Bug Fixes
+
+* **scalar:** enforce native assignment hard domains 128a864
 ## [0.6.5](///compare/v0.6.4...v0.6.5) (2026-07-29)
 
 
