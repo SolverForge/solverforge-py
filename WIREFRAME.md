@@ -435,10 +435,10 @@ wireframes, and tooling remain available from the source checkout. `Cargo.toml`
 pins the six SolverForge crates to the exact published `0.19.4` registry base
 and `solverforge-ui` to `0.7.0`; `Cargo.lock` records their crates.io checksums.
 
-The current checkout prepares Python package and native `solverforge_py` crate
-metadata version `0.6.6`, targeting the exact SolverForge `0.19.4` crate
-boundary. Its artifact set is one source distribution plus Linux, macOS, and
-Windows wheels, verified together before release.
+The current published Python package and native `solverforge_py` crate metadata
+are version `0.6.6`, targeting the exact SolverForge `0.19.4` crate boundary.
+The artifact set is one source distribution plus Linux, macOS, and Windows
+wheels, verified together before release.
 
 ## Makefile And Validation Flow
 

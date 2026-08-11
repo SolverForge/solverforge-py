@@ -8,22 +8,21 @@ The native extension owns the working solution state in Rust so SolverForge can
 clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
-The package targets CPython 3.14 and Rust 1.95.0. This release-preparation
-checkout pins the six published SolverForge Rust dependencies to `0.19.4` and
-`solverforge-ui` to `0.7.0` through exact crates.io requirements in
-`Cargo.toml` and registry checksums in `Cargo.lock`. There is no local path or
-Git dependency override. The `solverforge` `0.6.x` line is the current dynamic
-binding architecture and intentionally supersedes the older incompatible
-`0.2.x` and `0.3.0` artifacts in the same PyPI namespace. Those older artifacts
-exposed `SolverFactory`, `PlanningVariable`, Java service requirements, and
-other APIs that are not part of this package.
+The package targets CPython 3.14 and Rust 1.95.0. The current published
+`solverforge` `0.6.6` package pins the six published SolverForge Rust
+dependencies to `0.19.4` and `solverforge-ui` to `0.7.0` through exact
+crates.io requirements in `Cargo.toml` and registry checksums in `Cargo.lock`.
+There is no local path or Git dependency override. The `solverforge` `0.6.x`
+line is the current dynamic binding architecture and intentionally supersedes
+the older incompatible `0.2.x` and `0.3.0` artifacts in the same PyPI namespace.
+Those older artifacts exposed `SolverFactory`, `PlanningVariable`, Java service
+requirements, and other APIs that are not part of this package.
 
 ## Installation
 
-The package version prepared by this checkout is `solverforge` `0.6.6`. Its
-release-quality build requires the published and registry-locked SolverForge
-Rust `0.19.4` dependency base. Install the matching package after its Python
-release with:
+The current published Python package is `solverforge` `0.6.6`; the native
+`solverforge_py` crate metadata shares that version and targets the published
+and registry-locked SolverForge Rust `0.19.4` dependency base. Install it with:
 
 ```sh
 python3.14 -m pip install "solverforge==0.6.6"

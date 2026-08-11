@@ -41,8 +41,8 @@ For a terminal-only solve:
 make hospital-solve
 ```
 
-After `0.6.6` is published, the same source-checkout example can be run against
-the matching package:
+The same source-checkout example can be run against the published `0.6.6`
+package:
 
 ```sh
 python3.14 -m venv .venv-hospital
