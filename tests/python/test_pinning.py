@@ -183,6 +183,31 @@ class RequiredSchedule:
 
 
 @planning_entity
+class RequiredFreeShift:
+    """The same required variable with no pin declaration, as a control."""
+
+    nurse = planning_variable(value_range_provider="nurses")
+
+    def __init__(self) -> None:
+        self.nurse: int | None = None
+
+
+@constraint_provider
+def required_free_constraints(factory: ConstraintFactory):
+    return []
+
+
+@planning_solution(score=HardSoftScore, constraints=required_free_constraints)
+class RequiredFreeSchedule:
+    shifts: list[RequiredFreeShift]
+
+    def __init__(self) -> None:
+        self.shifts = [RequiredFreeShift()]
+        self.nurses = [0, 1]
+        self.score = None
+
+
+@planning_entity
 class OptionalShift:
     pinned = planning_pin()
     nurse = planning_variable(value_range_provider="nurses", allows_unassigned=True)
@@ -343,7 +368,8 @@ def test_a_problem_fact_cannot_declare_a_pin_field() -> None:
 
 def test_a_hand_built_schema_cannot_declare_two_pin_fields() -> None:
     # `build_schema` aliases the class's own field list, so a caller that mutates
-    # a schema copies the containers first.
+    # a schema copies the containers first. The appended entry carries only the
+    # keys the pin branch reads, which is all a hand-built schema needs.
     schema = build_schema(Schedule([Shift(pinned=True)]))
     entity = dict(schema["entities"][0])
     fields = [dict(field) for field in entity["fields"]]
@@ -420,11 +446,21 @@ def test_unpinned_control_route_is_rebuilt() -> None:
         FreeRoutes([FreeVehicle(visits=[0, 1]), FreeVehicle()]), STEP_LIMITS
     )
 
-    # Without the pin declaration the first route is no longer the input route.
+    # Without the pin declaration the first route no longer holds exactly the
+    # input route. This is not an incidental search outcome: the only soft
+    # penalty is one count per owner carrying more than one visit, so the best
+    # score needs every visit on a single owner, which the input split cannot
+    # satisfy while the first owner keeps [0, 1].
     assert solved.vehicles[0].visits != [0, 1]
 
 
 def test_pinned_required_scalar_left_unassigned_fails_completion() -> None:
+    # The unpinned twin is assigned by construction, so the failure below is
+    # caused by pinning excluding the row from construction — not by a model that
+    # could never be completed in the first place.
+    assigned = Solver.solve(RequiredFreeSchedule(), STEP_LIMITS)
+    assert assigned.shifts[0].nurse is not None
+
     # Pinning preserves input state; it does not exempt a required row from the
     # mandatory-completion gate when nothing assigned it.
     with pytest.raises(RuntimeError, match="mandatory planning work incomplete"):

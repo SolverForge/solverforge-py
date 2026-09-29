@@ -128,7 +128,12 @@ fn dynamic_descriptor_attaches_the_declared_entity_pin_predicate() {
             DynamicState {
                 entities: vec![
                     vec![pinned_row, DynamicEntityRow::default()],
-                    vec![DynamicEntityRow::default()],
+                    // The undeclared entity's row is pinned too, so the
+                    // assertions below prove the predicate is what decides.
+                    vec![DynamicEntityRow {
+                        pinned: true,
+                        ..DynamicEntityRow::default()
+                    }],
                 ],
                 facts: Vec::new(),
                 list_elements: Vec::new(),
@@ -152,7 +157,8 @@ fn dynamic_descriptor_attaches_the_declared_entity_pin_predicate() {
         // The predicate reads the per-row flag rather than the declaration.
         assert!(declared.is_pinned(&solution, 0));
         assert!(!declared.is_pinned(&solution, 1));
-        // An undeclared entity is never pinned, wherever its row flag sits.
+        // An entity that declares no pin field is never pinned, even though its
+        // row flag is set: only the declaration attaches the predicate.
         assert!(!undeclared.is_pinned(&solution, 0));
 
         // Every clone carries the resolved flag.
