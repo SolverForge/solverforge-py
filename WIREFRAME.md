@@ -451,7 +451,7 @@ pins the six SolverForge crates to the exact published `0.19.7` registry base
 and `solverforge-ui` to `0.9.0`; `Cargo.lock` records their crates.io checksums.
 
 The current checkout prepares Python package and native `solverforge_py` crate
-metadata version `0.6.8`, targeting the exact SolverForge `0.19.7` crate
+metadata version `0.6.9`, targeting the exact SolverForge `0.19.7` crate
 boundary. Its artifact set is one source distribution plus Linux, macOS, and
 Windows wheels, verified together before release.
 

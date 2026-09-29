@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.6.9](https://github.com/SolverForge/solverforge-py/compare/v0.6.8...v0.6.9) (2026-09-29)
+
+### Features
+
+* **model:** pin planning entities with planning_pin() ba34dbf
+
+### Bug Fixes
+
+* **marshal:** keep the cause when a pin attribute cannot be read 47d0eb0
+* **schema:** reject a pin name that collides with a variable 2a38af7
+
+### Tests
+
+* **descriptor:** initialize the pinned row in its initializer a63e183
+* **pinning:** strengthen the controls the review found weak 5330f1a
+
+### Documentation and release
+
+* **pinning:** correct the claims the review found wrong 860844c
+* **pinning:** document the entity pin contract and add an example 19ddb53
+* **pinning:** record the version the release tooling computes d98e8f4
+
 ## [0.6.8](https://github.com/SolverForge/solverforge-py/compare/v0.6.7...v0.6.8) (2026-09-29)
 
 ### Tests

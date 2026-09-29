@@ -135,7 +135,7 @@ claimed as Python-bindable without a public upstream seam.
 example dependencies, project URLs, classifiers, and maturin module settings.
 `Cargo.toml` owns native crate metadata and the SolverForge Rust dependency
 base; the package version must match `pyproject.toml`. `Cargo.lock` locks
-reproducible Rust builds. The current checkout prepares package/crate `0.6.8`
+reproducible Rust builds. The current checkout prepares package/crate `0.6.9`
 targeting the six published SolverForge `0.19.7` registry crates and
 `solverforge-ui` `0.9.0` through exact manifest and lock requirements.
 `make release-base-check` and `make pre-release` must pass. Do not use committed
