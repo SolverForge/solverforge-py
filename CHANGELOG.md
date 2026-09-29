@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.6.8](https://github.com/SolverForge/solverforge-py/compare/v0.6.7...v0.6.8) (2026-09-29)
+
+### Tests
+
+* **assets:** derive the synthetic bundle guard from the package version 2a06fd5
+* **release:** guard the declared release version surfaces 097fc25
+
+### Documentation and release
+
+* **release:** document the release commit and tag tooling 5af585b
+* **release:** repair the changelog compare links 3d0e17e
+
 ## [0.6.7](https://github.com/SolverForge/solverforge-py/compare/v0.6.6...v0.6.7) (2026-09-29)
 
 
