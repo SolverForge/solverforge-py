@@ -11,12 +11,12 @@ All notable changes to this project will be documented in this file. See [commit
 * **schema:** reject the unsupported pinning flag d201a51
 * **ui:** serve the solverforge-ui 0.9.0 asset bundle b3d52d7
 
-## [0.6.6](///compare/v0.6.5...v0.6.6) (2026-08-11)
+## [0.6.6](https://github.com/SolverForge/solverforge-py/compare/v0.6.5...v0.6.6) (2026-08-11)
 
 ### Bug Fixes
 
 * **scalar:** enforce native assignment hard domains 128a864
-## [0.6.5](///compare/v0.6.4...v0.6.5) (2026-07-29)
+## [0.6.5](https://github.com/SolverForge/solverforge-py/compare/v0.6.4...v0.6.5) (2026-07-29)
 
 
 ### Bug Fixes
@@ -24,21 +24,21 @@ All notable changes to this project will be documented in this file. See [commit
 * **ci:** pin Ruff to the lint contract a639112
 * **deps:** consume SolverForge 0.19.3 rotation repair 544c31b
 
-## [0.6.4](///compare/v0.6.3...v0.6.4) (2026-07-26)
+## [0.6.4](https://github.com/SolverForge/solverforge-py/compare/v0.6.3...v0.6.4) (2026-07-26)
 
 
 ### Bug Fixes
 
 * **deps:** consume SolverForge 0.19.2 construction repair 52bbcdd
 
-## [0.6.3](///compare/v0.6.2...v0.6.3) (2026-07-18)
+## [0.6.3](https://github.com/SolverForge/solverforge-py/compare/v0.6.2...v0.6.3) (2026-07-18)
 
 
 ### Bug Fixes
 
 * **runtime:** enforce mandatory completion at limits cc1262b
 
-## [0.6.2](///compare/v0.6.1...v0.6.2) (2026-07-17)
+## [0.6.2](https://github.com/SolverForge/solverforge-py/compare/v0.6.1...v0.6.2) (2026-07-17)
 
 ## [0.6.1](https://github.com/SolverForge/solverforge-py/compare/v0.6.0...v0.6.1) (2026-07-13)
 
@@ -47,7 +47,7 @@ All notable changes to this project will be documented in this file. See [commit
 
 * **package:** restrict source archives to build inputs 615f291
 
-## [0.6.0](///compare/v0.5.0...v0.6.0) (2026-07-13)
+## [0.6.0](https://github.com/SolverForge/solverforge-py/compare/v0.5.0...v0.6.0) (2026-07-13)
 
 
 ### Features
