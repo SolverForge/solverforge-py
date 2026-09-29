@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.6.10](https://github.com/SolverForge/solverforge-py/compare/v0.6.9...v0.6.10) (2026-09-29)
+
+### Bug Fixes
+
+* **ci:** enforce the Python formatter check in lint and the local CI 1bd7f8c
+
 ## [0.6.9](https://github.com/SolverForge/solverforge-py/compare/v0.6.8...v0.6.9) (2026-09-29)
 
 ### Features
