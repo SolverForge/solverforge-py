@@ -10,7 +10,7 @@ constraint authoring surface.
 
 The package targets CPython 3.14 and Rust 1.95.0. The current published
 `solverforge` `0.6.6` package pins the six published SolverForge Rust
-dependencies to `0.19.4` and `solverforge-ui` to `0.7.0` through exact
+dependencies to `0.19.7` and `solverforge-ui` to `0.9.0` through exact
 crates.io requirements in `Cargo.toml` and registry checksums in `Cargo.lock`.
 There is no local path or Git dependency override. The `solverforge` `0.6.x`
 line is the current dynamic binding architecture and intentionally supersedes
@@ -22,7 +22,7 @@ requirements, and other APIs that are not part of this package.
 
 The current published Python package is `solverforge` `0.6.6`; the native
 `solverforge_py` crate metadata shares that version and targets the published
-and registry-locked SolverForge Rust `0.19.4` dependency base. Install it with:
+and registry-locked SolverForge Rust `0.19.7` dependency base. Install it with:
 
 ```sh
 python3.14 -m pip install "solverforge==0.6.6"
