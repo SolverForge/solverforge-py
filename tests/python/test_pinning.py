@@ -271,6 +271,37 @@ class IntPinSchedule:
         self.score = None
 
 
+@planning_entity
+class UnreadablePin:
+    pinned = planning_pin()
+    nurse = planning_variable(value_range_provider="nurses", allows_unassigned=True)
+
+    def __init__(self) -> None:
+        self.nurse = None
+
+    def __getattribute__(self, name: str):
+        # A declared attribute that raises is a third failure mode: distinct from
+        # one that is unset and from one that holds a non-bool value.
+        if name == "pinned":
+            raise ValueError("deliberately unreadable")
+        return object.__getattribute__(self, name)
+
+
+@constraint_provider
+def unreadable_pin_constraints(factory: ConstraintFactory):
+    return []
+
+
+@planning_solution(score=HardSoftScore, constraints=unreadable_pin_constraints)
+class UnreadablePinSchedule:
+    shifts: list[UnreadablePin]
+
+    def __init__(self) -> None:
+        self.shifts = [UnreadablePin()]
+        self.nurses = [0, 1]
+        self.score = None
+
+
 def test_schema_declares_the_entity_pin_field() -> None:
     schema = build_schema(Schedule([Shift(pinned=True)]))
     fields = schema["entities"][0]["fields"]
@@ -429,3 +460,13 @@ def test_pinned_entity_without_its_declared_bool_is_rejected() -> None:
 
     with pytest.raises(RuntimeError, match="attribute `pinned` must be a bool"):
         Solver.solve(IntPinSchedule(), STEP_LIMITS)
+
+    with pytest.raises(
+        RuntimeError, match="has no readable `pinned` attribute"
+    ) as raised:
+        Solver.solve(UnreadablePinSchedule(), STEP_LIMITS)
+
+    # The original failure stays attached as the cause, so an attribute that
+    # raises is never reported as one that is merely missing.
+    assert isinstance(raised.value.__cause__, ValueError)
+    assert "deliberately unreadable" in str(raised.value.__cause__)

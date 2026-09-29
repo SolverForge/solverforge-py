@@ -1187,10 +1187,18 @@ fn import_named_fields(
 /// preserving nothing. The declared attribute is a `planning_pin()` descriptor,
 /// so an instance that never sets it reads back as `None` rather than raising.
 fn import_pin_value(item: &Bound<'_, PyAny>, pin_field: &str, type_name: &str) -> PyResult<bool> {
-    let Ok(value) = item.getattr(pin_field) else {
-        return Err(crate::error::py_err(format!(
-            "pinned entity `{type_name}` has no `{pin_field}` attribute on an instance"
-        )));
+    let value = match item.getattr(pin_field) {
+        Ok(value) => value,
+        Err(cause) => {
+            // Keep the original failure as the cause: a declared attribute that
+            // exists but raises is a different problem from one that is absent,
+            // and the operator needs the original traceback to tell them apart.
+            let error = crate::error::py_err(format!(
+                "pinned entity `{type_name}` has no readable `{pin_field}` attribute"
+            ));
+            error.set_cause(item.py(), Some(cause));
+            return Err(error);
+        }
     };
     if value.is_none() {
         return Err(crate::error::py_err(format!(
