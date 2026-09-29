@@ -119,8 +119,10 @@ fn dynamic_descriptor_attaches_the_declared_entity_pin_predicate() {
             CompiledRuntimePlan::from_schema(schema)
                 .expect("test dynamic schema should compile into one runtime plan"),
         );
-        let mut pinned_row = DynamicEntityRow::default();
-        pinned_row.pinned = true;
+        let pinned_row = DynamicEntityRow {
+            pinned: true,
+            ..DynamicEntityRow::default()
+        };
         let solution = PyDynamicSolution::from_runtime_plan(
             runtime_plan.clone(),
             DynamicState {
