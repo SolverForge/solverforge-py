@@ -76,6 +76,10 @@ pub struct DynamicEntityRow {
     pub scalar_values: Vec<Option<usize>>,
     pub candidate_values: Vec<Option<Arc<[usize]>>>,
     pub list_values: Vec<Option<Vec<usize>>>,
+    /// The entity's declared pinned flag, resolved once at import. It is the
+    /// only input the compiled runtime reads through the descriptor's pin
+    /// predicate, and it travels with every clone, candidate, and snapshot.
+    pub pinned: bool,
 }
 
 impl DynamicEntityRow {

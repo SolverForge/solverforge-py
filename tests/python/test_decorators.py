@@ -55,8 +55,10 @@ def test_schema_dict_compiles_for_runtime_cache() -> None:
 
 
 def test_planning_variable_rejects_unsupported_pinning_flag() -> None:
-    with pytest.raises(ModelValidationError, match="pinning=True"):
+    with pytest.raises(ModelValidationError, match="pinning=True") as error:
         planning_variable(value_range_provider="workers", pinning=True)
+
+    assert "planning_pin()" in str(error.value)
 
     schema = build_schema(Plan())
     assert "pinning" not in schema["entities"][0]["fields"][0]

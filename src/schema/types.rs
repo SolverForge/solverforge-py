@@ -7,6 +7,10 @@ pub struct EntitySchema {
     pub type_name: String,
     pub collection: String,
     pub variables: Vec<VariableSchema>,
+    /// The declared entity attribute holding this entity's pinned flag. It is
+    /// read once per instance at import and enforced by the compiled
+    /// SolverForge runtime, never by wrapper-owned phase code.
+    pub pin_field: Option<String>,
 }
 
 #[derive(Debug)]

@@ -28,6 +28,7 @@ from .fields import (
     SolutionField,
     planning_id,
     planning_list_variable,
+    planning_pin,
     planning_variable,
 )
 from .groups import (
@@ -78,6 +79,7 @@ __all__ = [
     "planning_entity",
     "planning_id",
     "planning_list_variable",
+    "planning_pin",
     "planning_solution",
     "planning_variable",
     "problem_fact",

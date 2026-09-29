@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, TypeVar
 
+from .errors import ModelValidationError
 from .fields import (
     CapacityRouteFeasibility,
     EntityCallback,
@@ -22,8 +23,11 @@ T = TypeVar("T", bound=type[object])
 
 def _collect_fields(cls: type[object]) -> list[dict[str, object]]:
     fields: list[dict[str, object]] = []
+    pin_fields: list[str] = []
     for name, value in vars(cls).items():
         if isinstance(value, PlanningField):
+            if value.metadata.kind == "planning_pin":
+                pin_fields.append(name)
             fields.append(
                 {
                     "name": name,
@@ -51,6 +55,9 @@ def _collect_fields(cls: type[object]) -> list[dict[str, object]]:
                     "list_metadata": _list_metadata(value.metadata.list_metadata),
                 }
             )
+    if len(pin_fields) > 1:
+        msg = f"{cls.__name__} declares more than one planning_pin field"
+        raise ModelValidationError(msg)
     return fields
 
 
@@ -133,12 +140,19 @@ def planning_entity(cls: T) -> T:
 
 
 def problem_fact(cls: T) -> T:
+    fields = _collect_fields(cls)
+    if any(field["kind"] == "planning_pin" for field in fields):
+        msg = (
+            f"{cls.__name__} is a problem fact; planning_pin is only valid on a "
+            "planning entity"
+        )
+        raise ModelValidationError(msg)
     setattr(
         cls,
         "__solverforge_fact__",
         {
             "type_name": cls.__name__,
-            "fields": _collect_fields(cls),
+            "fields": fields,
         },
     )
     return cls

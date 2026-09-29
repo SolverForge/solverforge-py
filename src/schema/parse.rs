@@ -34,9 +34,20 @@ pub fn parse_schema(schema: &Bound<'_, PyDict>) -> PyResult<DynamicSchema> {
             .ok_or_else(|| py_err(format!("entity `{type_name}` is missing `fields`")))?;
         let fields = fields_any.cast::<PyList>()?;
         let mut variables = Vec::new();
+        let mut pin_field: Option<String> = None;
         for field_any in fields.iter() {
             let field = field_any.cast::<PyDict>()?;
             let kind = required_str(field, "kind")?;
+            if kind == "planning_pin" {
+                let name = required_non_empty_str(field, "name")?;
+                if pin_field.is_some() {
+                    return Err(py_err(format!(
+                        "entity `{type_name}` declares more than one planning_pin field"
+                    )));
+                }
+                pin_field = Some(name);
+                continue;
+            }
             if kind == "planning_variable" || kind == "planning_list_variable" {
                 let list_metadata = if kind == "planning_list_variable" {
                     Some(parse_list_metadata(field)?)
@@ -102,6 +113,7 @@ pub fn parse_schema(schema: &Bound<'_, PyDict>) -> PyResult<DynamicSchema> {
             type_name,
             collection,
             variables,
+            pin_field,
         });
     }
     let facts = parse_facts(schema)?;

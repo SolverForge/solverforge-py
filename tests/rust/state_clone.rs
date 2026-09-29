@@ -77,6 +77,7 @@ fn dynamic_solution_clone_does_not_share_python_callback_view() {
             entities: vec![EntitySchema {
                 type_name: "Vehicle".to_string(),
                 collection: "vehicles".to_string(),
+                pin_field: None,
                 variables: vec![VariableSchema {
                     name: "visits".to_string(),
                     storage_name: "__solverforge_visits".to_string(),
@@ -176,6 +177,7 @@ fn dynamic_solution_implements_upstream_backend_contract() {
             entities: vec![EntitySchema {
                 type_name: "Vehicle".to_string(),
                 collection: "vehicles".to_string(),
+                pin_field: None,
                 variables: vec![
                     VariableSchema {
                         name: "depot".to_string(),

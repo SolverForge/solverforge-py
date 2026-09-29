@@ -26,6 +26,7 @@ fn dynamic_runtime_slots_are_built_from_schema_and_drive_state() {
             entities: vec![EntitySchema {
                 type_name: "Vehicle".to_string(),
                 collection: "vehicles".to_string(),
+                pin_field: None,
                 variables: vec![
                     VariableSchema {
                         name: "worker".to_string(),

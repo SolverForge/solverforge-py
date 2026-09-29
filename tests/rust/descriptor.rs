@@ -22,11 +22,13 @@ fn dynamic_descriptor_extracts_multiple_logical_classes_from_one_row_type() {
                     type_name: "Task".to_string(),
                     collection: "tasks".to_string(),
                     variables: Vec::new(),
+                    pin_field: None,
                 },
                 EntitySchema {
                     type_name: "Vehicle".to_string(),
                     collection: "vehicles".to_string(),
                     variables: Vec::new(),
+                    pin_field: None,
                 },
             ],
             facts: Vec::new(),
@@ -81,5 +83,79 @@ fn dynamic_descriptor_extracts_multiple_logical_classes_from_one_row_type() {
             .get_entity(&solution, 1, 0)
             .and_then(|entity| entity.downcast_ref::<DynamicEntityRow>())
             .is_some());
+    });
+}
+
+#[test]
+fn dynamic_descriptor_attaches_the_declared_entity_pin_predicate() {
+    crate::initialize_python();
+    Python::attach(|py| {
+        let schema = Arc::new(DynamicSchema {
+            solution_type: "Plan".to_string(),
+            score_family: "hard_soft".to_string(),
+            entities: vec![
+                EntitySchema {
+                    type_name: "Task".to_string(),
+                    collection: "tasks".to_string(),
+                    variables: Vec::new(),
+                    pin_field: Some("pinned".to_string()),
+                },
+                EntitySchema {
+                    type_name: "Vehicle".to_string(),
+                    collection: "vehicles".to_string(),
+                    variables: Vec::new(),
+                    pin_field: None,
+                },
+            ],
+            facts: Vec::new(),
+            constraints: py.None(),
+            scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
+            assignment_scalar_groups: Vec::new(),
+            conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),
+            candidate_metrics: pyo3::types::PyList::empty(py).unbind().into_any(),
+            shadow_updates: Vec::new(),
+        });
+        let runtime_plan = Arc::new(
+            CompiledRuntimePlan::from_schema(schema)
+                .expect("test dynamic schema should compile into one runtime plan"),
+        );
+        let mut pinned_row = DynamicEntityRow::default();
+        pinned_row.pinned = true;
+        let solution = PyDynamicSolution::from_runtime_plan(
+            runtime_plan.clone(),
+            DynamicState {
+                entities: vec![
+                    vec![pinned_row, DynamicEntityRow::default()],
+                    vec![DynamicEntityRow::default()],
+                ],
+                facts: Vec::new(),
+                list_elements: Vec::new(),
+                ..DynamicState::default()
+            },
+            PythonCallbackView::default(),
+            None,
+            solverforge_config::SolverConfig::default(),
+            0,
+        );
+
+        let descriptor = runtime_plan.descriptor();
+        let declared = &descriptor.entity_descriptors[0];
+        assert!(declared.has_pin_predicate());
+        assert_eq!(declared.pin_field, Some("pinned"));
+
+        let undeclared = &descriptor.entity_descriptors[1];
+        assert!(!undeclared.has_pin_predicate());
+        assert_eq!(undeclared.pin_field, None);
+
+        // The predicate reads the per-row flag rather than the declaration.
+        assert!(declared.is_pinned(&solution, 0));
+        assert!(!declared.is_pinned(&solution, 1));
+        // An undeclared entity is never pinned, wherever its row flag sits.
+        assert!(!undeclared.is_pinned(&solution, 0));
+
+        // Every clone carries the resolved flag.
+        let cloned = solution.clone();
+        assert!(declared.is_pinned(&cloned, 0));
+        assert!(!declared.is_pinned(&cloned, 1));
     });
 }

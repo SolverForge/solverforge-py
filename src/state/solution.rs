@@ -741,6 +741,7 @@ mod tests {
             entities: vec![EntitySchema {
                 type_name: "Route".to_string(),
                 collection: "routes".to_string(),
+                pin_field: None,
                 variables: vec![VariableSchema {
                     name: "visits".to_string(),
                     storage_name: "__solverforge_visits".to_string(),

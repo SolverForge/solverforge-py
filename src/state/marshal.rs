@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyInt, PyList, PyString};
+use pyo3::types::{PyBool, PyDict, PyInt, PyList, PyString};
 use solverforge_config::SolverConfig;
 
 use crate::schema::runtime_plan::CompiledRuntimePlan;
@@ -116,6 +116,9 @@ pub fn import_solution(
                 Some(&row_metadata_fields),
             )?;
             import_named_fields(&item, &extra_field_names, &mut row)?;
+            if let Some(pin_field) = entity.pin_field.as_deref() {
+                row.pinned = import_pin_value(&item, pin_field, &entity.type_name)?;
+            }
             rows.push(row);
             objects.push(item.unbind());
         }
@@ -1174,6 +1177,32 @@ fn import_named_fields(
         row.set_field(name.clone(), DynamicValue::from_python(&value)?);
     }
     Ok(())
+}
+
+/// Reads one entity's declared pinned flag.
+///
+/// The declaration is a contract on the instance, not a hint: an unset, missing,
+/// or non-`bool` value is an error rather than an implicit "not pinned", because
+/// a silently unpinned declaration would look identical to a working one while
+/// preserving nothing. The declared attribute is a `planning_pin()` descriptor,
+/// so an instance that never sets it reads back as `None` rather than raising.
+fn import_pin_value(item: &Bound<'_, PyAny>, pin_field: &str, type_name: &str) -> PyResult<bool> {
+    let Ok(value) = item.getattr(pin_field) else {
+        return Err(crate::error::py_err(format!(
+            "pinned entity `{type_name}` has no `{pin_field}` attribute on an instance"
+        )));
+    };
+    if value.is_none() {
+        return Err(crate::error::py_err(format!(
+            "pinned entity `{type_name}` must set a bool `{pin_field}` attribute per instance"
+        )));
+    }
+    if !value.is_instance_of::<PyBool>() {
+        return Err(crate::error::py_err(format!(
+            "pinned entity `{type_name}` attribute `{pin_field}` must be a bool"
+        )));
+    }
+    value.extract::<bool>()
 }
 
 fn is_read_only_property(

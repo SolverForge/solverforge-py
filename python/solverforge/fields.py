@@ -181,6 +181,17 @@ def planning_id() -> PlanningField:
     return PlanningField(FieldMetadata(kind="planning_id"))
 
 
+def planning_pin() -> PlanningField:
+    """Declares the entity attribute that holds this entity's pinned flag.
+
+    The declared attribute must hold a ``bool`` on every instance. A pinned
+    entity keeps its input planning state: its genuine scalar value and its
+    list ownership survive construction and search.
+    """
+
+    return PlanningField(FieldMetadata(kind="planning_pin"))
+
+
 def planning_variable(
     *,
     value_range_provider: str,
@@ -195,9 +206,8 @@ def planning_variable(
     if pinning:
         msg = (
             "planning_variable(pinning=True) is not supported: SolverForge pins a whole "
-            "planning entity through an entity-level descriptor predicate, and no public "
-            "bridge seam exposes entity pinning to the Python binding yet. Pin an input "
-            "value by restricting candidate_values instead."
+            "planning entity, not one variable. Declare an entity pin field with "
+            "planning_pin() instead."
         )
         raise ModelValidationError(msg)
     value_candidates = _resolve_metadata_source(
