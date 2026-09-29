@@ -33,8 +33,9 @@ class Vehicle:
 
 @constraint_provider
 def constraints(factory: ConstraintFactory):
-    # Prefer shorter routes so an unpinned vehicle has a reason to give visits
-    # away, which is exactly what a pinned vehicle must not do.
+    # One soft count per owner carrying more than one visit, so the model prefers
+    # a single carrier. The pinned vehicle cannot release its two visits, which is
+    # what forces the free one to take the rest.
     return [
         factory.for_each(Vehicle)
         .filter(lambda vehicle: len(vehicle.visits) > 1)

@@ -1,10 +1,11 @@
 # Entity pinning implementation plan
 
-> **Status — planned, unreleased (2026-09-29).** Nothing in this plan has been
-> implemented. It is the file-by-file design for adding entity-level pinning to
-> the Python binding on top of the public SolverForge `0.19.7` seam. Package and
-> dependency versions are owned by `pyproject.toml`, `Cargo.toml`, `Cargo.lock`,
-> and the release tooling described in `AGENTS.md`.
+> **Status — implemented (2026-09-29).** Every item in §3 shipped: the
+> declaration, the descriptor predicate, the per-row read, the rejection
+> contract, the tests, the example, and the documentation. §5 keeps the behavior
+> observed while implementing it, and §4 is the sequence that cuts the release
+> from this tree. Package and dependency versions are owned by `pyproject.toml`,
+> `Cargo.toml`, `Cargo.lock`, and the release tooling described in `AGENTS.md`.
 
 Pinning preserves an entity's input planning state: its genuine scalar value and
 its list ownership/positions survive construction, local search, ruin/recreate,
@@ -82,8 +83,10 @@ class Vehicle:
   boundary re-checks the duplicate and empty-name invariants for hand-built
   schema dictionaries.
 - **Import errors** (raise at import, matching the list-metadata doctrine that
-  missing or malformed declared values are errors): the declared attribute is
-  absent on an instance, or its value is not a `bool`.
+  missing or malformed declared values are errors): the attribute is unset on an
+  instance — `None`, which is what an unset `planning_pin()` descriptor reads back
+  as — its value is not a `bool`, or the attribute is absent entirely (reachable
+  only through a hand-built schema). No case is read as "not pinned".
 - **Cost.** Upstream short-circuits `move_changes_pinned` unless some descriptor
   carries a predicate, so models without pinning keep today's behavior. A model
   that declares pinning pays one descriptor scan per pinned-move check. No
@@ -120,10 +123,10 @@ class Vehicle:
 | File | Change |
 | --- | --- |
 | `tests/python/test_pinning.py` (new) | The feature matrix below. Imports `examples/pinning.py` for the end-to-end case, matching `test_list_solving.py`'s pattern. |
-| `tests/python/test_decorators.py` | Schema metadata carries `pin_field`; two pin fields and a pin/variable collision raise `ModelValidationError`; a pin declaration changes the compiled-schema cache shape; `planning_variable(pinning=True)` still raises, now mentioning `planning_pin()`. |
+| `tests/python/test_decorators.py` | Only the `planning_variable(pinning=True)` assertion, extended to require that the message names `planning_pin()`. Every declaration error, the schema metadata check, the compiled-schema boundary, and the behavioral matrix live in `tests/python/test_pinning.py`, beside the models they exercise. |
 | `tests/python/test_examples_import_surface.py` | No change: it walks `examples/**/*.py` generically and the new example must satisfy it. |
 | `tests/rust/descriptor.rs` | Descriptor wiring: a row built with `pinned = true` reports `is_pinned` through the compiled plan's descriptor, `has_pin_predicate()` is true only when declared, and an undeclared entity reports `false`. |
-| `tests/rust/runtime_slots.rs` | Runtime wiring: import a solution whose declared pin field is missing or non-bool and assert the import error; assert a clone carries the flag. |
+| `tests/rust/runtime_slots.rs` | Fixture only: the new `pin_field` field on its `EntitySchema`. The import-path coverage lives in `tests/python/test_pinning.py`, where the public API reaches `import_solution` with real Python instances. |
 
 Feature matrix for `tests/python/test_pinning.py`:
 
@@ -143,7 +146,7 @@ Feature matrix for `tests/python/test_pinning.py`:
 | `examples/pinning.py` (new) | Small runnable demo modelled on `examples/vrp_owner_hooks.py`: two vehicles, one pinned with a pre-assigned route, one free, showing the pinned route surviving the solve. |
 | `README.md` | Document `planning_pin()` in the Python API list, the preserved-state and required-unassigned semantics, and the declared-field limit (no dynamic `is_pinned` callable). |
 | `WIREFRAME.md` | Add the entity pin metadata to the entity surface, and record that enforcement is upstream-owned and that the binding adds no wrapper path. |
-| `AGENTS.md` | One contract sentence in Runtime & Callback Contracts: entity pinning is declarative, read once per instance at import, and enforced only by the compiled SolverForge runtime. (This file gates on operator approval.) |
+| `AGENTS.md` | One paragraph in Runtime & Callback Contracts: entity pinning is declarative, read once per instance at import, and enforced only by the compiled SolverForge runtime. (This file gates on operator approval.) |
 | `CHANGELOG.md` / versions | No hand edit: `make release-tag` bumps every surface and writes the section. On this `0.x` line the `feat` computes `0.6.9`, a patch bump — only a breaking change bumps the minor here, which is the tool's decision to make, not ours. |
 
 ## 4. Commit series
@@ -184,6 +187,15 @@ rows. Two footguns are worth carrying forward: `build_schema` aliases the class'
 own field list, so any caller that mutates a returned schema must copy the
 containers first, and nested model classes cannot be used inside test functions
 because `get_type_hints` resolves annotations at module scope.
+
+The suite was also mutation-checked, because a pinning test can look green while
+preserving nothing. With the per-row import read in `import_pin_value` disabled
+and the extension rebuilt, six tests fail — pinned scalar, pinned list owner,
+pinned required-unassigned, pinned optional-unassigned, retained solve, and the
+unset-attribute rejection — while the two unpinned controls still pass. That is
+the signature of a discriminating suite: the pin-dependent assertions fail when
+the feature stops working, and the controls stay green because they describe
+unpinned behavior.
 
 ## 6. Verification sequence
 
