@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import re
 import tarfile
 import tomllib
@@ -120,6 +121,51 @@ def test_solverforge_ui_dependency_is_registry_pinned() -> None:
     assert "git" not in ui_spec
     assert "rev" not in ui_spec
     assert "path" not in ui_spec
+
+
+def test_release_tooling_owns_every_version_surface() -> None:
+    config = json.loads((ROOT / ".versionrc.json").read_text(encoding="utf-8"))
+
+    assert config["tagPrefix"] == "v"
+    assert config["releaseCommitMessageFormat"] == "chore(release): {{currentTag}}"
+    assert config["commitUrlFormat"] == (
+        "https://github.com/SolverForge/solverforge-py/commit/{{hash}}"
+    )
+    assert config["compareUrlFormat"] == (
+        "https://github.com/SolverForge/solverforge-py/compare/"
+        "{{previousTag}}...{{currentTag}}"
+    )
+
+    # Every file that carries the package identity is a release surface. The
+    # SolverForge dependency versions in the same files are a separate boundary
+    # owned by the dependency upgrade pass, so those files must appear here
+    # exactly when they still carry the package version.
+    expected_surfaces = {
+        "pyproject.toml",
+        "Cargo.toml",
+        "Cargo.lock",
+        "python/solverforge/__init__.py",
+        "README.md",
+        "AGENTS.md",
+        "WIREFRAME.md",
+        "examples/solverforge_hospital/README.md",
+        "examples/solverforge_deliveries/README.md",
+    }
+    bumped = {entry["filename"] for entry in config["bumpFiles"]}
+    assert bumped == expected_surfaces
+    assert {entry["filename"] for entry in config["packageFiles"]} <= bumped
+
+    for entry in config["bumpFiles"]:
+        assert (ROOT / entry["updater"]).is_file(), entry["updater"]
+
+    # The section titles reproduce this changelog's established history, and
+    # unlisted types stay out of release sections.
+    assert {entry["type"]: entry["section"] for entry in config["types"]} == {
+        "feat": "Features",
+        "fix": "Bug Fixes",
+        "test": "Tests",
+        "docs": "Documentation and release",
+    }
 
 
 def test_release_workflow_validates_only_tagged_pypi_publish() -> None:
