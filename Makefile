@@ -57,6 +57,7 @@ PY_LINK_DIR := $(CURDIR)/target/libpython-link
 		        build-sdist build-dist build-release check test test-quick rust-test py-test test-hospital test-deliveries test-one \
 	        test-examples-browser rust-test-one typecheck ruff lint fmt fmt-check py-format py-format-check clippy pre-commit docs-check \
         ci-local audit pre-release release-base-check release-upstream-check dist-check smoke-wheel \
+        bump-dry release-tag RELEASE_AS \
 	        hospital-run hospital-solve deliveries-run deliveries-solve version release-info clean clean-dist clean-py clean-venv
 
 .DEFAULT_GOAL := help
@@ -353,6 +354,20 @@ release-info: version
 	@printf -- "$(CYAN)SolverForge crates:$(RESET) $(SOLVERFORGE_RELEASE_VERSION)\n"
 	@printf -- "$(GRAY)Release distributions are written under $(DIST_DIR) by make build-dist.$(RESET)\n"
 
+# ============== Release Commit & Tag ==============
+# .versionrc.json plus scripts/version own every release version surface, so the
+# changelog, version bumps, release commit, and tag come from one command.
+
+bump-dry: banner
+	@printf -- "$(PROGRESS) Previewing the next release commit, tag, and changelog...\n"
+	@npx --yes commit-and-tag-version --dry-run $(RELEASE_AS)
+	@printf -- "$(GREEN)$(CHECK) Release preview complete; run make release-tag to cut it$(RESET)\n\n"
+
+release-tag: banner
+	@printf -- "$(PROGRESS) Bumping every version surface, writing the changelog, and tagging...\n"
+	@npx --yes commit-and-tag-version $(RELEASE_AS)
+	@printf -- "$(GREEN)$(CHECK) Release commit and tag created$(RESET)\n\n"
+
 clean: clean-py
 	@printf -- "$(ARROW) Cleaning Cargo artifacts...\n"
 	@cargo clean
@@ -415,7 +430,9 @@ help: banner
 	@printf -- "  $(GREEN)make smoke-wheel$(RESET)         Install the local wheel in a clean venv\n"
 	@printf -- "  $(GREEN)make pre-release$(RESET)         Run ci-local and release artifact checks\n"
 	@printf -- "  $(GREEN)make version$(RESET)             Print package and crate versions\n"
-	@printf -- "  $(GREEN)make release-info$(RESET)        Show release artifact information\n\n"
+	@printf -- "  $(GREEN)make release-info$(RESET)        Show release artifact information\n"
+	@printf -- "  $(GREEN)make bump-dry$(RESET)            Preview the next release commit, tag, and changelog\n"
+	@printf -- "  $(GREEN)make release-tag$(RESET)         Bump every version surface, write the changelog, and tag\n\n"
 	@printf -- "$(BOLD)Examples$(RESET)\n"
 	@printf -- "  $(GREEN)make hospital-run$(RESET)        Serve the hospital app on APP_HOST=$(APP_HOST) PORT=$(PORT)\n"
 	@printf -- "  $(GREEN)make hospital-solve$(RESET)      Run the hospital model once in the terminal\n\n"

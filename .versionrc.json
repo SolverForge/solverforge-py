@@ -1,0 +1,35 @@
+{
+  "tagPrefix": "v",
+  "releaseCommitMessageFormat": "chore(release): {{currentTag}}",
+  "commitUrlFormat": "https://github.com/SolverForge/solverforge-py/commit/{{hash}}",
+  "compareUrlFormat": "https://github.com/SolverForge/solverforge-py/compare/{{previousTag}}...{{currentTag}}",
+  "types": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" },
+    { "type": "test", "section": "Tests" },
+    { "type": "docs", "section": "Documentation and release" }
+  ],
+  "packageFiles": [
+    { "filename": "pyproject.toml", "updater": "scripts/version/pyproject-version.js" }
+  ],
+  "bumpFiles": [
+    { "filename": "pyproject.toml", "updater": "scripts/version/pyproject-version.js" },
+    { "filename": "Cargo.toml", "updater": "scripts/version/cargo-package-version.js" },
+    { "filename": "Cargo.lock", "updater": "scripts/version/cargo-lock-version.js" },
+    {
+      "filename": "python/solverforge/__init__.py",
+      "updater": "scripts/version/python-package-version.js"
+    },
+    { "filename": "README.md", "updater": "scripts/version/readme-version.js" },
+    { "filename": "AGENTS.md", "updater": "scripts/version/agents-md-version.js" },
+    { "filename": "WIREFRAME.md", "updater": "scripts/version/wireframe-version.js" },
+    {
+      "filename": "examples/solverforge_hospital/README.md",
+      "updater": "scripts/version/example-readme-version.js"
+    },
+    {
+      "filename": "examples/solverforge_deliveries/README.md",
+      "updater": "scripts/version/example-readme-version.js"
+    }
+  ]
+}
