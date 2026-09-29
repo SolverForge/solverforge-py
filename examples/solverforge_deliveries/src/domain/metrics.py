@@ -275,9 +275,7 @@ def route_segments(plan: Any, vehicle: Any) -> list[dict[str, Any]]:
     return segments
 
 
-def rank_delivery_insertions(
-    plan: Any, delivery_id: int, limit: int
-) -> list[dict[str, Any]]:
+def rank_delivery_insertions(plan: Any, delivery_id: int, limit: int) -> list[dict[str, Any]]:
     baseline = score_components(plan)
     base_plan = deepcopy(plan)
     base_plan.normalize()
@@ -314,16 +312,12 @@ def rank_delivery_insertions(
                     "deltaSoft": score[1] - baseline[1],
                 }
             )
-    candidates.sort(
-        key=lambda item: (int(item["hardScore"]), int(item["softScore"])), reverse=True
-    )
+    candidates.sort(key=lambda item: (int(item["hardScore"]), int(item["softScore"])), reverse=True)
     top_candidates = candidates[:limit]
     for candidate in top_candidates:
         preview_plan = deepcopy(base_plan)
         preview_vehicle = preview_plan.vehicles[int(candidate.pop("vehicleIndex"))]
-        preview_vehicle.delivery_order.insert(
-            int(candidate["insertIndex"]), delivery_id
-        )
+        preview_vehicle.delivery_order.insert(int(candidate["insertIndex"]), delivery_id)
         preview_plan.refresh_route_shadows()
         candidate["previewPlan"] = preview_plan
     return top_candidates
@@ -414,9 +408,7 @@ def _vehicle_score_components(
         previous = delivery_id
 
     if has_valid_stop:
-        total_travel_seconds += route_distance(
-            plan, vehicle_index, previous, len(plan.deliveries)
-        )
+        total_travel_seconds += route_distance(plan, vehicle_index, previous, len(plan.deliveries))
 
     return {
         "capacityOverage": max(0, total_demand - int(vehicle.capacity)),
@@ -433,9 +425,7 @@ def route_coord(solution: Any, vehicle: Any, element: int) -> tuple[float, float
 
 
 def route_bounds(plan: Any) -> dict[str, list[float]] | None:
-    coords = [
-        (float(delivery.lat), float(delivery.lng)) for delivery in plan.deliveries
-    ] + [
+    coords = [(float(delivery.lat), float(delivery.lng)) for delivery in plan.deliveries] + [
         (float(vehicle.home_lat), float(vehicle.home_lng)) for vehicle in plan.vehicles
     ]
     if not coords:
@@ -454,9 +444,9 @@ def haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> floa
     radius = 6_371_000
     d_lat = math.radians(lat2 - lat1)
     d_lng = math.radians(lng2 - lng1)
-    a = math.sin(d_lat / 2) * math.sin(d_lat / 2) + math.cos(
-        math.radians(lat1)
-    ) * math.cos(math.radians(lat2)) * math.sin(d_lng / 2) * math.sin(d_lng / 2)
+    a = math.sin(d_lat / 2) * math.sin(d_lat / 2) + math.cos(math.radians(lat1)) * math.cos(
+        math.radians(lat2)
+    ) * math.sin(d_lng / 2) * math.sin(d_lng / 2)
     return 2 * radius * math.asin(math.sqrt(a))
 
 

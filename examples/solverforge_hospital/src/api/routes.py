@@ -93,9 +93,7 @@ def create_app(
         try:
             record = state.create_job(payload_to_plan(payload))
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(error)
-            ) from error
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(error)) from error
         except Exception as error:
             raise_http_error(error)
         return {"id": record.id}
@@ -113,9 +111,7 @@ def create_app(
         return get_job(job_id)
 
     @app.get("/jobs/{job_id}/snapshot")
-    def get_snapshot(
-        job_id: str, snapshot_revision: int | None = None
-    ) -> dict[str, Any]:
+    def get_snapshot(job_id: str, snapshot_revision: int | None = None) -> dict[str, Any]:
         try:
             record = state.require_job(job_id)
             plan = state.snapshot(record, snapshot_revision)
@@ -125,9 +121,7 @@ def create_app(
             raise_http_error(error)
 
     @app.get("/jobs/{job_id}/analysis")
-    def get_analysis(
-        job_id: str, snapshot_revision: int | None = None
-    ) -> dict[str, Any]:
+    def get_analysis(job_id: str, snapshot_revision: int | None = None) -> dict[str, Any]:
         try:
             record = state.require_job(job_id)
             plan = state.snapshot(record, snapshot_revision)

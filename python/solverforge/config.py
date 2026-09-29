@@ -162,9 +162,7 @@ def _normalize_phases(phases: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 dict(phase_copy["termination"])
             ).to_dict()
         if "child_phases" in phase_copy:
-            phase_copy["child_phases"] = _normalize_phases(
-                list(phase_copy["child_phases"])
-            )
+            phase_copy["child_phases"] = _normalize_phases(list(phase_copy["child_phases"]))
         normalized.append(phase_copy)
     return normalized
 

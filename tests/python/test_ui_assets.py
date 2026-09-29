@@ -39,9 +39,7 @@ def test_solverforge_ui_assets_serve_current_versioned_bundle() -> None:
     assert b"sf.createBackend = function" in versioned_js.bytes
 
 
-def test_solverforge_ui_assets_do_not_alias_stale_or_synthetic_versioned_bundles() -> (
-    None
-):
+def test_solverforge_ui_assets_do_not_alias_stale_or_synthetic_versioned_bundles() -> None:
     assert asset(f"sf.{PACKAGE_VERSION}.css") is None
     assert asset(f"sf.{PACKAGE_VERSION}.js") is None
     assert asset(f"sf.{PACKAGE_VERSION}.mjs") is None

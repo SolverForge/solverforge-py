@@ -74,9 +74,7 @@ def demo_plan(demo_id: str = "PHILADELPHIA") -> DeliveryPlan:
     return plan
 
 
-def delivery_from_location(
-    index: int, location: dict[str, Any], rng: random.Random
-) -> Delivery:
+def delivery_from_location(index: int, location: dict[str, Any], rng: random.Random) -> Delivery:
     kind, min_start, max_end, demand_range, service_range = customer_profile(
         str(location["customerType"])
     )
@@ -128,9 +126,7 @@ def plan_from_payload(payload: dict[str, Any]) -> DeliveryPlan:
             home_lat=float(vehicle.get("homeLat", 0.0)),
             home_lng=float(vehicle.get("homeLng", 0.0)),
             departure_time=int(vehicle.get("departureTime", 0)),
-            delivery_order=[
-                int(delivery_id) for delivery_id in vehicle.get("deliveryOrder", [])
-            ],
+            delivery_order=[int(delivery_id) for delivery_id in vehicle.get("deliveryOrder", [])],
         )
         for index, vehicle in enumerate(payload.get("vehicles") or [])
     ]

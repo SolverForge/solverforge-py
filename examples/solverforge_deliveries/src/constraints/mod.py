@@ -14,9 +14,7 @@ CONSTRAINTS = [
 
 
 def capacity_penalty(vehicle: Any) -> HardSoftScore:
-    return HardSoftScore.of_hard(
-        int(vehicle.route_capacity_overage) * CAPACITY_HARD_WEIGHT
-    )
+    return HardSoftScore.of_hard(int(vehicle.route_capacity_overage) * CAPACITY_HARD_WEIGHT)
 
 
 def time_window_penalty(vehicle: Any) -> HardSoftScore:

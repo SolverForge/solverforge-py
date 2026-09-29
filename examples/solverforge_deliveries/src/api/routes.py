@@ -84,23 +84,17 @@ def create_app(
         try:
             return plan_to_payload(demo_plan(demo_id))
         except KeyError as error:
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_FOUND, detail=str(error)
-            ) from error
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error)) from error
 
     @app.post("/jobs")
     def create_job(payload: dict[str, Any] = Body(...)) -> dict[str, str]:
         try:
             plan = payload_to_plan(payload)
             if not plan.deliveries or not plan.vehicles:
-                raise ValueError(
-                    "delivery jobs require at least one delivery and one vehicle"
-                )
+                raise ValueError("delivery jobs require at least one delivery and one vehicle")
             record = state.create_job(plan)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(error)
-            ) from error
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(error)) from error
         except Exception as error:
             raise_http_error(error)
         return {"id": record.id}
@@ -118,9 +112,7 @@ def create_app(
         return get_job(job_id)
 
     @app.get("/jobs/{job_id}/snapshot")
-    def get_snapshot(
-        job_id: str, snapshot_revision: int | None = None
-    ) -> dict[str, Any]:
+    def get_snapshot(job_id: str, snapshot_revision: int | None = None) -> dict[str, Any]:
         try:
             record = state.require_job(job_id)
             plan = state.snapshot(record, snapshot_revision)
@@ -130,9 +122,7 @@ def create_app(
             raise_http_error(error)
 
     @app.get("/jobs/{job_id}/analysis")
-    def get_analysis(
-        job_id: str, snapshot_revision: int | None = None
-    ) -> dict[str, Any]:
+    def get_analysis(job_id: str, snapshot_revision: int | None = None) -> dict[str, Any]:
         try:
             record = state.require_job(job_id)
             plan = state.snapshot(record, snapshot_revision)
@@ -227,9 +217,7 @@ def create_app(
             ]
             return {"deliveryId": delivery_id, "candidates": candidates}
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(error)
-            ) from error
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(error)) from error
 
     @app.api_route("/{_path:path}", methods=["POST", "PUT", "PATCH"])
     def unmatched_mutation_route(_path: str) -> None:

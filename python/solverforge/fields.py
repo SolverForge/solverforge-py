@@ -59,9 +59,7 @@ class SolutionCallback:
             raise TypeError("SolutionCallback callback must be callable")
 
 
-ListValueSource: TypeAlias = (
-    RowField | SolutionField | EntityCallback | SolutionCallback
-)
+ListValueSource: TypeAlias = RowField | SolutionField | EntityCallback | SolutionCallback
 ListFeasibilityFieldSource: TypeAlias = RowField | SolutionField
 
 
@@ -74,14 +72,10 @@ class CapacityRouteFeasibility:
 
     def __post_init__(self) -> None:
         if self.capacity is None or self.demand is None:
-            raise TypeError(
-                "CapacityRouteFeasibility requires capacity and demand sources"
-            )
+            raise TypeError("CapacityRouteFeasibility requires capacity and demand sources")
 
 
-ListFeasibilitySource: TypeAlias = (
-    EntityCallback | SolutionCallback | CapacityRouteFeasibility
-)
+ListFeasibilitySource: TypeAlias = EntityCallback | SolutionCallback | CapacityRouteFeasibility
 
 
 @dataclass(frozen=True)
@@ -94,9 +88,7 @@ class ListRouteHooks:
 
     def __post_init__(self) -> None:
         if self.depot is None or self.distance is None or self.feasible is None:
-            raise TypeError(
-                "ListRouteHooks requires depot, distance, and feasible sources"
-            )
+            raise TypeError("ListRouteHooks requires depot, distance, and feasible sources")
 
 
 @dataclass(frozen=True)
@@ -403,9 +395,7 @@ def _resolve_list_value_source(
             solution_arity,
         )
         return source
-    raise TypeError(
-        f"{name} must be RowField, SolutionField, EntityCallback, or SolutionCallback"
-    )
+    raise TypeError(f"{name} must be RowField, SolutionField, EntityCallback, or SolutionCallback")
 
 
 def _resolve_required_list_value_source(
@@ -455,9 +445,7 @@ def _resolve_list_feasibility_source(
             solution_arity,
         )
         return source
-    raise TypeError(
-        f"{name} must be EntityCallback, SolutionCallback, or CapacityRouteFeasibility"
-    )
+    raise TypeError(f"{name} must be EntityCallback, SolutionCallback, or CapacityRouteFeasibility")
 
 
 def _resolve_list_feasibility_field_source(
@@ -501,10 +489,7 @@ def _callback_accepts_arity(callback: Callable[..., object], arity: int) -> bool
                 required_positional_count += 1
         elif parameter.kind is Parameter.VAR_POSITIONAL:
             accepts_extra_positionals = True
-        elif (
-            parameter.kind is Parameter.KEYWORD_ONLY
-            and parameter.default is Parameter.empty
-        ):
+        elif parameter.kind is Parameter.KEYWORD_ONLY and parameter.default is Parameter.empty:
             return False
 
     if arity < required_positional_count:

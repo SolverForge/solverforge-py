@@ -143,8 +143,7 @@ def problem_fact(cls: T) -> T:
     fields = _collect_fields(cls)
     if any(field["kind"] == "planning_pin" for field in fields):
         msg = (
-            f"{cls.__name__} is a problem fact; planning_pin is only valid on a "
-            "planning entity"
+            f"{cls.__name__} is a problem fact; planning_pin is only valid on a " "planning entity"
         )
         raise ModelValidationError(msg)
     setattr(
@@ -220,9 +219,7 @@ def planning_solution(
     shadow_variable_updates: dict[str, Any] | list[dict[str, Any]] | None = None,
 ) -> Callable[[T], T]:
     def decorate(cls: T) -> T:
-        updates = (
-            shadow_updates if shadow_updates is not None else shadow_variable_updates
-        )
+        updates = shadow_updates if shadow_updates is not None else shadow_variable_updates
         if updates is None:
             update_list: list[dict[str, Any]] = []
         elif isinstance(updates, dict):

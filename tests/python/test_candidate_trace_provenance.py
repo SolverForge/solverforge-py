@@ -33,9 +33,7 @@ class _RecordingNativeManager:
         *,
         qualified_candidate_trace_provenance: object | None = None,
     ) -> int:
-        self.solve_values.append(
-            (solution, schema, qualified_candidate_trace_provenance)
-        )
+        self.solve_values.append((solution, schema, qualified_candidate_trace_provenance))
         return 17
 
 
@@ -94,9 +92,7 @@ def test_manager_ordinary_path_skips_preflight_but_qualified_path_uses_it(
     manager = SolverManager.__new__(SolverManager)
     manager._native = native  # type: ignore[assignment]
     schema = object()
-    monkeypatch.setattr(
-        "solverforge.manager._compiled_schema_for_solution", lambda _: schema
-    )
+    monkeypatch.setattr("solverforge.manager._compiled_schema_for_solution", lambda _: schema)
 
     ordinary_solution = object()
     ordinary = manager.solve(ordinary_solution)
@@ -124,9 +120,7 @@ def test_manager_rejects_qualified_provenance_before_schema_discovery(
     provenance = QualifiedCandidateTraceProvenance(**_DIGESTS)
 
     def unexpected_schema_discovery(_: object) -> object:
-        raise AssertionError(
-            "qualified provenance preflight must run before schema discovery"
-        )
+        raise AssertionError("qualified provenance preflight must run before schema discovery")
 
     monkeypatch.setattr(
         "solverforge.manager._compiled_schema_for_solution", unexpected_schema_discovery
@@ -165,9 +159,7 @@ def test_manager_accepts_qualified_provenance_only_with_candidate_trace() -> Non
     manager = SolverManager({"candidate_trace": {"max_entries": 1}})
     handle = manager.solve(
         Schedule(),
-        qualified_candidate_trace_provenance=QualifiedCandidateTraceProvenance(
-            **_DIGESTS
-        ),
+        qualified_candidate_trace_provenance=QualifiedCandidateTraceProvenance(**_DIGESTS),
     )
 
     assert manager.wait(handle.job_id)["lifecycle_state"] == "COMPLETED"

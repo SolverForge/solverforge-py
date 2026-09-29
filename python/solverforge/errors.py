@@ -12,4 +12,3 @@ class CallbackError(SolverForgeError):
 
 class NativeBridgeError(SolverForgeError):
     """Raised when the PyO3 bridge reports a native-side failure."""
-

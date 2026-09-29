@@ -23,9 +23,7 @@ class Vehicle:
     pinned = planning_pin()
     visits = planning_list_variable(element_collection="visit_values")
 
-    def __init__(
-        self, name: str, pinned: bool, visits: list[int] | None = None
-    ) -> None:
+    def __init__(self, name: str, pinned: bool, visits: list[int] | None = None) -> None:
         self.name = name
         self.pinned = pinned
         self.visits: list[int] = list(visits or [])

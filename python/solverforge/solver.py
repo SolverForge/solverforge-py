@@ -9,9 +9,7 @@ from .model import _compiled_schema_for_solution
 
 class Solver:
     @staticmethod
-    def solve(
-        solution: object, config: SolverConfig | dict[str, Any] | None = None
-    ) -> object:
+    def solve(solution: object, config: SolverConfig | dict[str, Any] | None = None) -> object:
         schema = _compiled_schema_for_solution(solution)
         return _native.solve(solution, schema, _resolve_config(config))
 

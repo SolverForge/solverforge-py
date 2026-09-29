@@ -68,12 +68,8 @@ def test_core_metadata_is_runtime_only() -> None:
     assert project["dependencies"] == []
     optional_dependencies = project["optional-dependencies"]
     assert "examples" in optional_dependencies
-    assert any(
-        "fastapi" in dependency for dependency in optional_dependencies["examples"]
-    )
-    assert any(
-        "uvicorn" in dependency for dependency in optional_dependencies["examples"]
-    )
+    assert any("fastapi" in dependency for dependency in optional_dependencies["examples"])
+    assert any("uvicorn" in dependency for dependency in optional_dependencies["examples"])
 
 
 def test_project_urls_cover_release_operations() -> None:
@@ -132,8 +128,7 @@ def test_release_tooling_owns_every_version_surface() -> None:
         "https://github.com/SolverForge/solverforge-py/commit/{{hash}}"
     )
     assert config["compareUrlFormat"] == (
-        "https://github.com/SolverForge/solverforge-py/compare/"
-        "{{previousTag}}...{{currentTag}}"
+        "https://github.com/SolverForge/solverforge-py/compare/" "{{previousTag}}...{{currentTag}}"
     )
 
     # Every file that carries the package identity is a release surface. The
@@ -169,9 +164,7 @@ def test_release_tooling_owns_every_version_surface() -> None:
 
 
 def test_release_workflow_validates_only_tagged_pypi_publish() -> None:
-    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
-        encoding="utf-8"
-    )
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     testpypi_job = workflow_job(workflow, "publish-testpypi")
     pypi_job = workflow_job(workflow, "publish-pypi")
 

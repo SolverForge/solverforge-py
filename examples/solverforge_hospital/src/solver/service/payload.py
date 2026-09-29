@@ -13,9 +13,7 @@ def status_event_payload(
     *,
     solution: HospitalPlan | None = None,
 ) -> dict[str, Any]:
-    current_score = _solution_score(solution) or score_to_string(
-        status.get("current_score")
-    )
+    current_score = _solution_score(solution) or score_to_string(status.get("current_score"))
     best_score = score_to_string(status.get("best_score")) or current_score
     return {
         "id": record.id,
@@ -40,9 +38,7 @@ def event_payload_from_native(
     *,
     solution: HospitalPlan | None = None,
 ) -> dict[str, Any]:
-    current_score = _solution_score(solution) or score_to_string(
-        native_event.get("current_score")
-    )
+    current_score = _solution_score(solution) or score_to_string(native_event.get("current_score"))
     best_score = score_to_string(native_event.get("best_score")) or current_score
     return {
         "id": record.id,

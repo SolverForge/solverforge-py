@@ -110,9 +110,7 @@ class ModuleNamespaceCacheRow:
         self.value = value
 
 
-_module_namespace_cache_callback: Callable[[ModuleNamespaceCacheRow], bool] | None = (
-    None
-)
+_module_namespace_cache_callback: Callable[[ModuleNamespaceCacheRow], bool] | None = None
 
 
 @constraint_provider
@@ -498,9 +496,7 @@ class DescriptorStringJoinPlan:
         self.score = None
 
 
-@planning_solution(
-    score=HardSoftScore, constraints=descriptor_callback_join_constraints
-)
+@planning_solution(score=HardSoftScore, constraints=descriptor_callback_join_constraints)
 class DescriptorCallbackJoinPlan(DescriptorStringJoinPlan):
     pass
 
@@ -566,9 +562,7 @@ def overridden_lookup_callback_constraints(factory: ConstraintFactory):
     ]
 
 
-@planning_solution(
-    score=HardSoftScore, constraints=overridden_lookup_string_constraints
-)
+@planning_solution(score=HardSoftScore, constraints=overridden_lookup_string_constraints)
 class OverriddenLookupStringPlan:
     left_rows: list[OverriddenLookupLeft]
     right_rows: list[OverriddenLookupRight]
@@ -580,9 +574,7 @@ class OverriddenLookupStringPlan:
         self.score = None
 
 
-@planning_solution(
-    score=HardSoftScore, constraints=overridden_lookup_callback_constraints
-)
+@planning_solution(score=HardSoftScore, constraints=overridden_lookup_callback_constraints)
 class OverriddenLookupCallbackPlan(OverriddenLookupStringPlan):
     pass
 
@@ -708,9 +700,7 @@ def test_string_key_join_preserves_list_and_tuple_equality_semantics() -> None:
 
 def test_string_key_join_preserves_custom_object_equality_semantics() -> None:
     native = Solver.analyze(AttributeJoinPlan([IdentityKey()], [IdentityKey()]))
-    callback = Solver.analyze(
-        CallbackAttributeJoinPlan([IdentityKey()], [IdentityKey()])
-    )
+    callback = Solver.analyze(CallbackAttributeJoinPlan([IdentityKey()], [IdentityKey()]))
 
     assert native == callback == {"family": "hard_soft", "levels": [0, 0]}
 
@@ -961,11 +951,7 @@ class SequenceScoreItem:
 
 @constraint_provider
 def fixed_sequence_score_constraints(factory: ConstraintFactory):
-    return [
-        factory.for_each(SequenceScoreItem)
-        .penalize([1, 0])
-        .named("fixed sequence score")
-    ]
+    return [factory.for_each(SequenceScoreItem).penalize([1, 0]).named("fixed sequence score")]
 
 
 @planning_solution(score=HardSoftScore, constraints=fixed_sequence_score_constraints)
@@ -1039,12 +1025,8 @@ class MultiShadowItem:
 @planning_solution(
     score=HardSoftScore,
     shadow_updates=[
-        shadow_variable_updates(
-            list_owner="items", post_update_listener=first_shadow_listener
-        ),
-        shadow_variable_updates(
-            list_owner="items", post_update_listener=second_shadow_listener
-        ),
+        shadow_variable_updates(list_owner="items", post_update_listener=first_shadow_listener),
+        shadow_variable_updates(list_owner="items", post_update_listener=second_shadow_listener),
     ],
 )
 class MultiShadowPlan:
@@ -1363,9 +1345,7 @@ class MixedRuntimePlan:
         self.score = None
 
 
-def test_detached_callback_views_import_computed_fields_from_every_runtime_row() -> (
-    None
-):
+def test_detached_callback_views_import_computed_fields_from_every_runtime_row() -> None:
     plan = Solver.solve(
         MixedRuntimePlan(),
         {

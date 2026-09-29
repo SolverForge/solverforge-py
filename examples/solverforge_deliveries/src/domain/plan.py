@@ -42,9 +42,7 @@ class DeliveryPlan:
         self.normalize()
 
     def normalize(self) -> None:
-        old_to_new = {
-            delivery.id: index for index, delivery in enumerate(self.deliveries)
-        }
+        old_to_new = {delivery.id: index for index, delivery in enumerate(self.deliveries)}
         for index, delivery in enumerate(self.deliveries):
             delivery.id = index
         for index, vehicle in enumerate(self.vehicles):
@@ -75,9 +73,7 @@ class DeliveryPlan:
             vehicle.bind_distance_plan(copied)
         return copied
 
-    def _vehicle_distance_signature(
-        self, vehicle: Vehicle
-    ) -> tuple[tuple[float, float], ...]:
+    def _vehicle_distance_signature(self, vehicle: Vehicle) -> tuple[tuple[float, float], ...]:
         return tuple(
             [(delivery.lat, delivery.lng) for delivery in self.deliveries]
             + [(vehicle.home_lat, vehicle.home_lng)]
@@ -92,9 +88,7 @@ class DeliveryPlan:
         for from_coord in coords:
             row: list[int] = []
             for to_coord in coords:
-                row.append(
-                    meters_to_seconds(round(haversine_meters(*from_coord, *to_coord)))
-                )
+                row.append(meters_to_seconds(round(haversine_meters(*from_coord, *to_coord))))
             matrix.append(row)
         return matrix
 
@@ -114,9 +108,7 @@ class DeliveryPlan:
     def remove_delivery_assignments(self, delivery_id: int) -> None:
         for vehicle in self.vehicles:
             vehicle.delivery_order = [
-                assigned
-                for assigned in vehicle.delivery_order
-                if assigned != delivery_id
+                assigned for assigned in vehicle.delivery_order if assigned != delivery_id
             ]
 
     def refreshed_for_transport(self) -> DeliveryPlan:

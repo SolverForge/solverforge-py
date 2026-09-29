@@ -24,9 +24,7 @@ def build(factory: ConstraintFactory) -> object:
         )
         .penalize(
             lambda left, right: hard_scaled(
-                (600 - (gap_minutes(left, right) or 0))
-                * STRUCTURAL_MINUTE_HARD_UNITS
-                * SCORE_SCALE
+                (600 - (gap_minutes(left, right) or 0)) * STRUCTURAL_MINUTE_HARD_UNITS * SCORE_SCALE
             )
         )
         .named("At least 10 hours between 2 shifts")

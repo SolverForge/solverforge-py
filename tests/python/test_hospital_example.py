@@ -93,18 +93,13 @@ def test_solverforge_hospital_config_keeps_upstream_termination() -> None:
         "late_acceptance_size": 400,
     }
     assert config["phases"][1]["forager"] == {"type": "first_best_score_improving"}
-    assert [
-        selector["type"]
-        for selector in config["phases"][1]["move_selector"]["selectors"]
-    ] == [
+    assert [selector["type"] for selector in config["phases"][1]["move_selector"]["selectors"]] == [
         "nearby_change_move_selector",
         "nearby_swap_move_selector",
     ]
 
 
-def test_solverforge_hospital_prunes_statically_ineligible_employee_candidates() -> (
-    None
-):
+def test_solverforge_hospital_prunes_statically_ineligible_employee_candidates() -> None:
     plan = demo_plan()
     field = build_schema(plan)["entities"][0]["fields"][0]
 
@@ -115,10 +110,7 @@ def test_solverforge_hospital_prunes_statically_ineligible_employee_candidates()
         assert candidates == shift.employee_nearby_candidates
         assert candidates
         assert all(shift.employee_has_skill[candidate] for candidate in candidates)
-        assert all(
-            shift.employee_unavailable_minutes[candidate] == 0
-            for candidate in candidates
-        )
+        assert all(shift.employee_unavailable_minutes[candidate] == 0 for candidate in candidates)
 
 
 def test_solverforge_hospital_python_model_uses_canonical_large_payload() -> None:
@@ -190,10 +182,6 @@ def test_solverforge_hospital_file_tree_matches_rust_ownership_shape() -> None:
         "src/solver/service/payload.py",
     }
 
-    missing = [
-        path
-        for path in sorted(expected)
-        if not (HOSPITAL_EXAMPLE_ROOT / path).is_file()
-    ]
+    missing = [path for path in sorted(expected) if not (HOSPITAL_EXAMPLE_ROOT / path).is_file()]
 
     assert missing == []

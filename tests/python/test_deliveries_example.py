@@ -23,22 +23,17 @@ from examples.solverforge_deliveries.src.domain.metrics import (
 from solverforge import Solver, SolverManager
 from solverforge.model import build_schema
 
-DELIVERIES_EXAMPLE_ROOT = (
-    Path(__file__).parents[2] / "examples" / "solverforge_deliveries"
-)
+DELIVERIES_EXAMPLE_ROOT = Path(__file__).parents[2] / "examples" / "solverforge_deliveries"
 
 
 def assert_complete_routes(plan: DeliveryPlan) -> None:
-    assigned = [
-        delivery for vehicle in plan.vehicles for delivery in vehicle.delivery_order
-    ]
+    assigned = [delivery for vehicle in plan.vehicles for delivery in vehicle.delivery_order]
     assert len(assigned) == len(plan.deliveries)
     assert sorted(assigned) == list(range(len(plan.deliveries)))
     for vehicle in plan.vehicles:
         assert vehicle.route_capacity_overage == 0
         assert vehicle.route_total_demand == sum(
-            plan.deliveries[delivery_id].demand
-            for delivery_id in vehicle.delivery_order
+            plan.deliveries[delivery_id].demand for delivery_id in vehicle.delivery_order
         )
 
 
@@ -53,9 +48,7 @@ def test_solverforge_deliveries_python_model_solves_default_routes() -> None:
 def test_solverforge_deliveries_schema_exposes_cvrp_and_shadow_hooks() -> None:
     schema = build_schema(demo_plan("HARTFORD"))
     vehicle = schema["entities"][0]
-    delivery_order = next(
-        field for field in vehicle["fields"] if field["name"] == "delivery_order"
-    )
+    delivery_order = next(field for field in vehicle["fields"] if field["name"] == "delivery_order")
 
     assert vehicle["type_name"] == "Vehicle"
     assert delivery_order["kind"] == "planning_list_variable"
@@ -97,9 +90,7 @@ def test_solverforge_deliveries_payload_round_trips_unassigned_seed() -> None:
     assert len(payload["deliveries"]) == 50
     assert len(payload["vehicles"]) == 10
     assert payload["viewState"]["preview"]["unassignedDeliveryIds"] == list(range(50))
-    assert [vehicle.delivery_order for vehicle in plan.vehicles] == [
-        [] for _ in range(10)
-    ]
+    assert [vehicle.delivery_order for vehicle in plan.vehicles] == [[] for _ in range(10)]
     assert plan_to_payload(plan)["vehicles"] == payload["vehicles"]
 
 
@@ -371,10 +362,6 @@ def test_solverforge_deliveries_file_tree_matches_example_ownership_shape() -> N
         "src/solver/service/payload.py",
     }
 
-    missing = [
-        path
-        for path in sorted(expected)
-        if not (DELIVERIES_EXAMPLE_ROOT / path).is_file()
-    ]
+    missing = [path for path in sorted(expected) if not (DELIVERIES_EXAMPLE_ROOT / path).is_file()]
 
     assert missing == []

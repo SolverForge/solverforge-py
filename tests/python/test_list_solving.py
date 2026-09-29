@@ -427,9 +427,7 @@ def prefer_owned_search_route_without_odd_visit(factory: ConstraintFactory):
     ]
 
 
-@planning_solution(
-    score=SoftScore, constraints=prefer_owned_search_route_without_odd_visit
-)
+@planning_solution(score=SoftScore, constraints=prefer_owned_search_route_without_odd_visit)
 class OwnedSearchRoutePlan:
     owned_search_routes: list[OwnedSearchRoute]
 
@@ -572,9 +570,7 @@ class PrecedenceSchedulePlan:
     machine_sequences: list[PrecedenceMachine]
 
     def __init__(self, machine_sequences: list[list[int]]) -> None:
-        self.machine_sequences = [
-            PrecedenceMachine(operations) for operations in machine_sequences
-        ]
+        self.machine_sequences = [PrecedenceMachine(operations) for operations in machine_sequences]
         self.operation_ids = [0, 1, 2, 3]
         self.operation_owners = [0, 1, 1, 0]
         self.operation_durations = [3, 2, 4, 1]
@@ -587,9 +583,7 @@ class SoftPrecedenceSchedulePlan:
     machine_sequences: list[PrecedenceMachine]
 
     def __init__(self, machine_sequences: list[list[int]]) -> None:
-        self.machine_sequences = [
-            PrecedenceMachine(operations) for operations in machine_sequences
-        ]
+        self.machine_sequences = [PrecedenceMachine(operations) for operations in machine_sequences]
         self.operation_ids = [0, 1, 2, 3]
         self.operation_owners = [0, 1, 1, 0]
         self.operation_durations = [3, 2, 4, 1]
@@ -597,9 +591,7 @@ class SoftPrecedenceSchedulePlan:
         self.score = None
 
 
-@planning_solution(
-    score=HardSoftScore, constraints=metadata_precedence_schedule_constraints
-)
+@planning_solution(score=HardSoftScore, constraints=metadata_precedence_schedule_constraints)
 class MetadataPrecedenceSchedulePlan:
     machine_sequences: list[MetadataPrecedenceMachine]
 
@@ -704,9 +696,7 @@ def test_dynamic_list_regret_construction_passes_precedence_hooks() -> None:
     successor_calls = PRECEDENCE_HOOK_CALLS["successors"]
 
     assigned = sorted(
-        operation
-        for machine in plan.machine_sequences
-        for operation in machine.operations
+        operation for machine in plan.machine_sequences for operation in machine.operations
     )
 
     assert duration_calls > 0
@@ -714,8 +704,7 @@ def test_dynamic_list_regret_construction_passes_precedence_hooks() -> None:
     assert assigned == [0, 1, 2, 3]
     for machine_idx, machine in enumerate(plan.machine_sequences):
         assert all(
-            plan.operation_owners[operation] == machine_idx
-            for operation in machine.operations
+            plan.operation_owners[operation] == machine_idx for operation in machine.operations
         )
     assert plan.score == Solver.analyze(plan)
     assert plan.score["levels"][0] == 0
@@ -941,9 +930,7 @@ def test_retained_nearby_list_selector_without_position_metric_fails_once(
     events = manager.events(handle.job_id)
     failed = [event for event in events if event["event_type"] == "FAILED"]
     terminal = [
-        event
-        for event in events
-        if event["event_type"] in {"COMPLETED", "CANCELLED", "FAILED"}
+        event for event in events if event["event_type"] in {"COMPLETED", "CANCELLED", "FAILED"}
     ]
 
     assert status["lifecycle_state"] == "FAILED"
@@ -1036,18 +1023,14 @@ def test_field_backed_position_metrics_are_collected_without_callbacks() -> None
 def test_field_backed_position_metrics_preserve_direct_retained_search_parity(
     move_selector: dict[str, object],
 ) -> None:
-    direct = Solver.solve(
-        FieldPositionMetricPlan(), list_local_search_config(move_selector)
-    )
+    direct = Solver.solve(FieldPositionMetricPlan(), list_local_search_config(move_selector))
     manager = SolverManager(list_local_search_config(move_selector))
     handle = manager.solve(FieldPositionMetricPlan())
     status = manager.wait(handle.job_id)
     snapshot = manager.snapshot(handle.job_id)
     events = manager.events(handle.job_id)
     terminal = [
-        event
-        for event in events
-        if event["event_type"] in {"COMPLETED", "CANCELLED", "FAILED"}
+        event for event in events if event["event_type"] in {"COMPLETED", "CANCELLED", "FAILED"}
     ]
 
     assert sorted(direct.field_position_metric_routes[0].visits) == [0, 1, 2, 3]
@@ -1304,9 +1287,7 @@ class CvrpRoute:
         ),
     )
 
-    def __init__(
-        self, *, depot: int, capacity: int, visits: list[int] | None = None
-    ) -> None:
+    def __init__(self, *, depot: int, capacity: int, visits: list[int] | None = None) -> None:
         self.depot = depot
         self.capacity = capacity
         self.demands = [1, 1, 1]
@@ -1385,9 +1366,7 @@ def test_retained_cvrp_uses_configured_clarke_wright_not_cheapest_insertion() ->
     bypassing the configured Clarke-Wright work.
     """
     direct = Solver.solve(CvrpPlan(), cvrp_clarke_wright_k_opt_config())
-    manager = SolverManager(
-        cvrp_clarke_wright_k_opt_config(candidate_trace_max_entries=512)
-    )
+    manager = SolverManager(cvrp_clarke_wright_k_opt_config(candidate_trace_max_entries=512))
     handle = manager.solve(CvrpPlan())
     status = manager.wait(handle.job_id)
     trace = manager.telemetry_detail(handle.job_id)["candidate_trace"]
@@ -1573,18 +1552,12 @@ def test_row_metadata_route_hooks_use_row_sources() -> None:
         },
     )
 
-    assigned = sorted(
-        visit for route in plan.row_metadata_routes for visit in route.visits
-    )
+    assigned = sorted(visit for route in plan.row_metadata_routes for visit in route.visits)
     assert assigned == [0, 1, 2]
-    assert all(
-        len(route.visits) <= route.capacity for route in plan.row_metadata_routes
-    )
+    assert all(len(route.visits) <= route.capacity for route in plan.row_metadata_routes)
 
 
-def test_row_metadata_route_hooks_preserve_row_fields_that_share_solution_names() -> (
-    None
-):
+def test_row_metadata_route_hooks_preserve_row_fields_that_share_solution_names() -> None:
     plan = Solver.solve(
         RowCapacityBackedPlan(),
         {
@@ -1599,9 +1572,7 @@ def test_row_metadata_route_hooks_preserve_row_fields_that_share_solution_names(
         },
     )
 
-    assigned = sorted(
-        visit for route in plan.row_capacity_routes for visit in route.visits
-    )
+    assigned = sorted(visit for route in plan.row_capacity_routes for visit in route.visits)
     assert assigned == [0, 1]
     assert all(len(route.visits) <= 1 for route in plan.row_capacity_routes)
     assert plan.score == {"family": "hard_soft", "levels": [0, 0]}
@@ -1669,9 +1640,7 @@ class PropertyCapacityBackedPlan:
         self.score = None
 
 
-def test_row_metadata_route_hooks_import_read_only_row_fields_that_share_solution_names() -> (
-    None
-):
+def test_row_metadata_route_hooks_import_read_only_row_fields_that_share_solution_names() -> None:
     plan = Solver.solve(
         PropertyCapacityBackedPlan(),
         {
@@ -1686,9 +1655,7 @@ def test_row_metadata_route_hooks_import_read_only_row_fields_that_share_solutio
         },
     )
 
-    assigned = sorted(
-        visit for route in plan.property_capacity_routes for visit in route.visits
-    )
+    assigned = sorted(visit for route in plan.property_capacity_routes for visit in route.visits)
     assert assigned == [0, 1]
     assert all(len(route.visits) <= 1 for route in plan.property_capacity_routes)
     assert plan.score == {"family": "hard_soft", "levels": [0, 0]}
@@ -1827,13 +1794,9 @@ def test_solution_scoped_route_hooks_use_solution_level_shared_fields() -> None:
         },
     )
 
-    assigned = sorted(
-        visit for route in plan.shared_row_metadata_routes for visit in route.visits
-    )
+    assigned = sorted(visit for route in plan.shared_row_metadata_routes for visit in route.visits)
     assert assigned == [0, 1, 2]
-    assert all(
-        len(route.visits) <= route.capacity for route in plan.shared_row_metadata_routes
-    )
+    assert all(len(route.visits) <= route.capacity for route in plan.shared_row_metadata_routes)
 
 
 def test_row_scoped_route_metadata_never_falls_back_to_solution_fields() -> None:
@@ -1926,9 +1889,7 @@ def shared_constraint_constraints(factory: ConstraintFactory):
         )
         .named("shared route capacity"),
         factory.for_each(SharedConstraintRoute)
-        .penalize(
-            lambda route: HardSoftScore.of_soft(shared_constraint_route_cost(route))
-        )
+        .penalize(lambda route: HardSoftScore.of_soft(shared_constraint_route_cost(route)))
         .named("shared route distance"),
     ]
 
@@ -1975,9 +1936,7 @@ def test_constraints_use_live_rows_with_solution_level_shared_fields() -> None:
         },
     )
 
-    assigned = sorted(
-        visit for route in plan.shared_constraint_routes for visit in route.visits
-    )
+    assigned = sorted(visit for route in plan.shared_constraint_routes for visit in route.visits)
     assert assigned == [0, 1, 2]
     assert all(
         shared_constraint_route_load(route) <= route.capacity

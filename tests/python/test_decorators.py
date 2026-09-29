@@ -179,9 +179,7 @@ def _raw_canonical_list_schema() -> tuple[dict[str, object], dict[str, object]]:
     ) -> int:
         return 0
 
-    def solution_feasible(
-        _solution: object, _entity_index: int, _values: list[int]
-    ) -> bool:
+    def solution_feasible(_solution: object, _entity_index: int, _values: list[int]) -> bool:
         return True
 
     def cross_distance(
@@ -259,9 +257,7 @@ def test_raw_canonical_list_callbacks_require_their_hook_arity(
     target[path_parts[-1]] = {"kind": scope, "callback": lambda: 0}
 
     context = f"list_metadata.{path}"
-    with pytest.raises(
-        RuntimeError, match=rf"{context}.*{scope} callback must accept {arity}"
-    ):
+    with pytest.raises(RuntimeError, match=rf"{context}.*{scope} callback must accept {arity}"):
         _native.validate_schema(schema)
 
 
@@ -330,9 +326,7 @@ def test_nested_list_metadata_serializes_explicit_source_scopes() -> None:
 
 
 def test_explicit_route_and_savings_bundles_do_not_couple_equal_callbacks() -> None:
-    def strict_feasible(
-        _solution: object, _entity_index: int, _values: list[int]
-    ) -> bool:
+    def strict_feasible(_solution: object, _entity_index: int, _values: list[int]) -> bool:
         return True
 
     @planning_entity
@@ -399,18 +393,14 @@ def test_nested_list_metadata_rejects_invalid_explicit_callback_arities() -> Non
             ),
         )
 
-    with pytest.raises(
-        TypeError, match="cross_position_distance EntityCallback must accept 4"
-    ):
+    with pytest.raises(TypeError, match="cross_position_distance EntityCallback must accept 4"):
         planning_list_variable(
             element_collection="values",
             cross_position_distance=EntityCallback(lambda _route: 0),
         )
 
 
-def test_compiled_schema_cache_distinguishes_row_and_solution_field_provenance() -> (
-    None
-):
+def test_compiled_schema_cache_distinguishes_row_and_solution_field_provenance() -> None:
     @planning_entity
     class CacheRoute:
         visits = planning_list_variable(
@@ -540,9 +530,7 @@ class MixedInferencePlan:
 def test_compiled_schema_cache_is_keyed_by_complete_inferred_shape() -> None:
     without_facts = _compiled_schema_for_solution(MixedInferencePlan([]))
     with_facts = _compiled_schema_for_solution(MixedInferencePlan([CalendarDay("MON")]))
-    same_fact_shape = _compiled_schema_for_solution(
-        MixedInferencePlan([CalendarDay("TUE")])
-    )
+    same_fact_shape = _compiled_schema_for_solution(MixedInferencePlan([CalendarDay("TUE")]))
 
     assert without_facts is not with_facts
     assert with_facts is same_fact_shape
@@ -594,9 +582,7 @@ def test_compiled_schema_cache_is_keyed_by_assignment_metadata_field_source() ->
             "nearby_value_candidates must be a callable or row field name",
         ),
         (
-            lambda: planning_list_variable(
-                element_collection="values", element_owner=""
-            ),
+            lambda: planning_list_variable(element_collection="values", element_owner=""),
             "element_owner field name must not be empty",
         ),
         (

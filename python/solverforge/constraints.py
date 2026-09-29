@@ -163,10 +163,7 @@ class ListPrecedenceMakespanConstraintStream:
         if plan.precedence_duration is None and plan.precedence_duration_field is None:
             msg = f"{self.entity_type.__name__}.{self.variable_name} requires precedence_duration"
             raise TypeError(msg)
-        if (
-            plan.precedence_successors is None
-            and plan.precedence_successors_field is None
-        ):
+        if plan.precedence_successors is None and plan.precedence_successors_field is None:
             msg = f"{self.entity_type.__name__}.{self.variable_name} requires precedence_successors"
             raise TypeError(msg)
         if plan.element_owner is None and plan.element_owner_field is None:
@@ -382,9 +379,7 @@ class ConstraintFactory:
         self.score_family = score_family
 
     def for_each(self, entity_type: type[object]) -> UniConstraintStream:
-        return UniConstraintStream(
-            entity_type=entity_type, score_family=self.score_family
-        )
+        return UniConstraintStream(entity_type=entity_type, score_family=self.score_family)
 
     def for_each_unassigned_element(
         self,
@@ -409,14 +404,10 @@ class ConstraintFactory:
         )
 
     def join(self, *_args: Any, **_kwargs: Any) -> None:
-        raise NotImplementedError(
-            "dynamic join is implemented in the native stream planner"
-        )
+        raise NotImplementedError("dynamic join is implemented in the native stream planner")
 
     def if_exists(self, *_args: Any, **_kwargs: Any) -> None:
-        raise NotImplementedError(
-            "dynamic if_exists is implemented in the native stream planner"
-        )
+        raise NotImplementedError("dynamic if_exists is implemented in the native stream planner")
 
     def if_not_exists(self, *_args: Any, **_kwargs: Any) -> None:
         raise NotImplementedError(
@@ -424,14 +415,10 @@ class ConstraintFactory:
         )
 
     def group_by(self, *_args: Any, **_kwargs: Any) -> None:
-        raise NotImplementedError(
-            "dynamic group_by is implemented in the native stream planner"
-        )
+        raise NotImplementedError("dynamic group_by is implemented in the native stream planner")
 
     def flattened(self, *_args: Any, **_kwargs: Any) -> None:
-        raise NotImplementedError(
-            "dynamic flattened is implemented in the native stream planner"
-        )
+        raise NotImplementedError("dynamic flattened is implemented in the native stream planner")
 
 
 def joiner_to_native(joiner: object) -> object:
@@ -462,9 +449,7 @@ def collector_to_native(collector: object) -> object:
     return collector
 
 
-def _list_variable_element_collection(
-    entity_type: type[object], variable_name: str
-) -> str:
+def _list_variable_element_collection(entity_type: type[object], variable_name: str) -> str:
     field_info = _list_variable_metadata(entity_type, variable_name)
     collection = field_info.get("element_collection")
     if isinstance(collection, str) and collection:
@@ -473,9 +458,7 @@ def _list_variable_element_collection(
     raise TypeError(msg)
 
 
-def _list_variable_metadata(
-    entity_type: type[object], variable_name: str
-) -> dict[str, object]:
+def _list_variable_metadata(entity_type: type[object], variable_name: str) -> dict[str, object]:
     metadata = getattr(entity_type, "__solverforge_entity__", None)
     if not isinstance(metadata, dict):
         msg = f"{entity_type.__name__} is not marked with @planning_entity"

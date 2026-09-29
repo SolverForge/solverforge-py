@@ -56,9 +56,7 @@ def test_config_loads_solver_toml_from_file(tmp_path) -> None:
     assert config.to_dict()["termination"]["seconds_spent_limit"] == 9
 
 
-def test_config_load_defaults_to_solver_toml_in_current_directory(
-    tmp_path, monkeypatch
-) -> None:
+def test_config_load_defaults_to_solver_toml_in_current_directory(tmp_path, monkeypatch) -> None:
     config_path = tmp_path / "solver.toml"
     config_path.write_text("[termination]\nstep_count_limit = 13\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
@@ -79,9 +77,7 @@ def test_config_from_file_alias_loads_solver_toml(tmp_path) -> None:
 
 def test_none_config_resolves_user_space_solver_toml(tmp_path, monkeypatch) -> None:
     config_path = tmp_path / "solver.toml"
-    config_path.write_text(
-        "[termination]\nseconds_spent_limit = 17\n", encoding="utf-8"
-    )
+    config_path.write_text("[termination]\nseconds_spent_limit = 17\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
     config = _resolve_config(None)
@@ -90,13 +86,9 @@ def test_none_config_resolves_user_space_solver_toml(tmp_path, monkeypatch) -> N
     assert config["termination"]["seconds_spent_limit"] == 17
 
 
-def test_explicit_config_overrides_user_space_solver_toml(
-    tmp_path, monkeypatch
-) -> None:
+def test_explicit_config_overrides_user_space_solver_toml(tmp_path, monkeypatch) -> None:
     config_path = tmp_path / "solver.toml"
-    config_path.write_text(
-        "[termination]\nseconds_spent_limit = 17\n", encoding="utf-8"
-    )
+    config_path.write_text("[termination]\nseconds_spent_limit = 17\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
     config = _resolve_config({"termination": {"seconds_spent_limit": 3}})
@@ -166,9 +158,7 @@ def test_dict_config_rejects_non_upstream_phase_termination_keys() -> None:
             "phases": [
                 {
                     "type": "local_search",
-                    "qualified_candidate_trace_provenance": {
-                        "producer": "not-a-config"
-                    },
+                    "qualified_candidate_trace_provenance": {"producer": "not-a-config"},
                 }
             ]
         },

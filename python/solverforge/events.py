@@ -10,4 +10,3 @@ class SolverEvent:
     lifecycle_state: str
     snapshot_revision: int | None = None
     error: str | None = None
-

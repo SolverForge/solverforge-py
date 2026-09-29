@@ -140,9 +140,7 @@ def snapshot_payload(
     status: dict[str, object],
     revision: int | None,
 ) -> dict[str, Any]:
-    resolved_revision = (
-        revision if revision is not None else status.get("latest_snapshot_revision")
-    )
+    resolved_revision = revision if revision is not None else status.get("latest_snapshot_revision")
     snapshot_score = score_to_string(plan.score)
     return {
         "id": record.id,
@@ -164,9 +162,7 @@ def analysis_payload(
     revision: int | None,
 ) -> dict[str, Any]:
     analysis = analyze_plan(plan)
-    resolved_revision = (
-        revision if revision is not None else status.get("latest_snapshot_revision")
-    )
+    resolved_revision = revision if revision is not None else status.get("latest_snapshot_revision")
     return {
         "id": record.id,
         "jobId": record.id,
@@ -204,18 +200,14 @@ def constraint_analysis(plan: DeliveryPlan) -> dict[str, dict[str, object]]:
         "All Deliveries Assigned": {
             "weight": f"{UNASSIGNED_DELIVERY_HARD_PENALTY}hard/0soft",
             "matchCount": unassigned_count,
-            "score": hard_soft_string(
-                -(unassigned_count * UNASSIGNED_DELIVERY_HARD_PENALTY), 0
-            ),
+            "score": hard_soft_string(-(unassigned_count * UNASSIGNED_DELIVERY_HARD_PENALTY), 0),
         },
         "Vehicle Capacity": {
             "weight": f"{CAPACITY_HARD_WEIGHT}hard/0soft",
             "matchCount": sum(
                 1 for vehicle in preview["vehicles"] if vehicle["capacityOverage"] > 0
             ),
-            "score": hard_soft_string(
-                -(components["capacityOverage"] * CAPACITY_HARD_WEIGHT), 0
-            ),
+            "score": hard_soft_string(-(components["capacityOverage"] * CAPACITY_HARD_WEIGHT), 0),
         },
         "Delivery Time Windows": {
             "weight": "1hard/0soft",

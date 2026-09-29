@@ -1,4 +1,9 @@
-from solverforge import planning_entity, planning_list_variable, planning_solution, planning_variable
+from solverforge import (
+    planning_entity,
+    planning_list_variable,
+    planning_solution,
+    planning_variable,
+)
 
 
 @planning_entity

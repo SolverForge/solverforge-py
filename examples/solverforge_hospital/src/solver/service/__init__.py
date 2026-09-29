@@ -189,7 +189,11 @@ def status_from_manager_error(error: Exception) -> HTTPStatus:
         return HTTPStatus.SERVICE_UNAVAILABLE
     if "was not found" in message or "not found" in message:
         return HTTPStatus.NOT_FOUND
-    if "cannot" in message or "NoSnapshotAvailable" in message or "no retained snapshots" in message:
+    if (
+        "cannot" in message
+        or "NoSnapshotAvailable" in message
+        or "no retained snapshots" in message
+    ):
         return HTTPStatus.CONFLICT
     return HTTPStatus.INTERNAL_SERVER_ERROR
 

@@ -51,9 +51,7 @@ class MediumScoreFamilyPlan:
 
 def terminal_events(events: list[dict[str, object]]) -> list[dict[str, object]]:
     return [
-        event
-        for event in events
-        if event["event_type"] in {"COMPLETED", "CANCELLED", "FAILED"}
+        event for event in events if event["event_type"] in {"COMPLETED", "CANCELLED", "FAILED"}
     ]
 
 
@@ -77,9 +75,7 @@ def test_manager_returns_completed_handle() -> None:
     assert detail_status["lifecycle_state"] == status["lifecycle_state"]
     assert detail_status["terminal_reason"] == status["terminal_reason"]
     assert detail_status["event_sequence"] == status["event_sequence"]
-    assert (
-        detail_status["latest_snapshot_revision"] == status["latest_snapshot_revision"]
-    )
+    assert detail_status["latest_snapshot_revision"] == status["latest_snapshot_revision"]
     assert detail["candidate_trace"] is None
     snapshot = manager.snapshot(handle.job_id)
     assert [shift.nurse for shift in snapshot.shifts] == [0, 0]
@@ -100,8 +96,7 @@ def test_manager_candidate_trace_is_atomic_and_excluded_from_control_plane() -> 
     assert isinstance(telemetry, dict)
     assert "candidate_trace" not in telemetry
     assert all(
-        isinstance(event["telemetry"], dict)
-        and "candidate_trace" not in event["telemetry"]
+        isinstance(event["telemetry"], dict) and "candidate_trace" not in event["telemetry"]
         for event in events
     )
 
@@ -113,9 +108,7 @@ def test_manager_candidate_trace_is_atomic_and_excluded_from_control_plane() -> 
     assert detail_status["lifecycle_state"] == status["lifecycle_state"]
     assert detail_status["terminal_reason"] == status["terminal_reason"]
     assert detail_status["event_sequence"] == status["event_sequence"]
-    assert (
-        detail_status["latest_snapshot_revision"] == status["latest_snapshot_revision"]
-    )
+    assert detail_status["latest_snapshot_revision"] == status["latest_snapshot_revision"]
     assert isinstance(trace, dict)
     assert trace["max_entries"] == 128
     assert trace["candidate_index_scope"] == "source_local_only"
@@ -239,9 +232,7 @@ def test_manager_preserves_declared_score_family_across_publications(
     manager.delete(handle.job_id)
 
 
-def test_manager_assignment_group_zero_step_phase_fails_without_partial_snapshot() -> (
-    None
-):
+def test_manager_assignment_group_zero_step_phase_fails_without_partial_snapshot() -> None:
     plan = AssignmentSchedule()
     manager = SolverManager(
         {
@@ -291,9 +282,7 @@ def test_manager_assignment_group_missing_group_fails_before_job_starts() -> Non
         manager.solve(AssignmentSchedule())
 
 
-def test_manager_assignment_owned_raw_selector_fails_without_running_wrapper_path() -> (
-    None
-):
+def test_manager_assignment_owned_raw_selector_fails_without_running_wrapper_path() -> None:
     manager = SolverManager(
         {
             "phases": [

@@ -138,9 +138,7 @@ def snapshot_payload(
     status: dict[str, object],
     revision: int | None,
 ) -> dict[str, Any]:
-    resolved_revision = (
-        revision if revision is not None else status.get("latest_snapshot_revision")
-    )
+    resolved_revision = revision if revision is not None else status.get("latest_snapshot_revision")
     snapshot_score = score_to_string(plan.score)
     return {
         "id": record.id,
@@ -162,9 +160,7 @@ def analysis_payload(
     revision: int | None,
 ) -> dict[str, Any]:
     analysis = analyze_plan(plan)
-    resolved_revision = (
-        revision if revision is not None else status.get("latest_snapshot_revision")
-    )
+    resolved_revision = revision if revision is not None else status.get("latest_snapshot_revision")
     return {
         "id": record.id,
         "jobId": record.id,
@@ -225,9 +221,7 @@ def constraint_analysis(plan: HospitalPlan) -> dict[str, dict[str, object]]:
             )
         desired_count = shift.employee_desired_day_count[shift.employee_idx]
         if desired_count > 0:
-            add_match(
-                rows["Desired day for employee"], soft=desired_count * SCORE_SCALE
-            )
+            add_match(rows["Desired day for employee"], soft=desired_count * SCORE_SCALE)
 
     for left in plan.shifts:
         for right in plan.shifts:
@@ -237,9 +231,7 @@ def constraint_analysis(plan: HospitalPlan) -> dict[str, dict[str, object]]:
                 add_match(
                     rows["Overlapping shift"],
                     hard=-(
-                        overlap_minutes(left, right)
-                        * STRUCTURAL_MINUTE_HARD_UNITS
-                        * SCORE_SCALE
+                        overlap_minutes(left, right) * STRUCTURAL_MINUTE_HARD_UNITS * SCORE_SCALE
                     ),
                 )
             if same_day(left, right):
@@ -248,9 +240,7 @@ def constraint_analysis(plan: HospitalPlan) -> dict[str, dict[str, object]]:
             if gap is not None and gap < 10 * 60:
                 add_match(
                     rows["At least 10 hours between 2 shifts"],
-                    hard=-(
-                        (10 * 60 - gap) * STRUCTURAL_MINUTE_HARD_UNITS * SCORE_SCALE
-                    ),
+                    hard=-((10 * 60 - gap) * STRUCTURAL_MINUTE_HARD_UNITS * SCORE_SCALE),
                 )
 
     balance = balance_score(plan.shifts)
@@ -283,9 +273,7 @@ def row_int(value: object) -> int:
 
 
 def hard_soft_string(hard: int, soft: int) -> str:
-    return (
-        f"{format_decimal_score_part(hard)}hard/{format_decimal_score_part(soft)}soft"
-    )
+    return f"{format_decimal_score_part(hard)}hard/{format_decimal_score_part(soft)}soft"
 
 
 def balance_match_count(plan: HospitalPlan) -> int:

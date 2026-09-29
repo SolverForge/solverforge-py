@@ -14,4 +14,3 @@ class PlanningEntityProtocol(Protocol):
 
 class PlanningSolutionProtocol(Protocol):
     score: object | None
-

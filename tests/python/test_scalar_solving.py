@@ -98,9 +98,7 @@ def test_dynamic_scalar_assignment_uses_row_candidate_values() -> None:
     field = schema["entities"][0]["fields"][0]
     assert callable(field["candidate_values"])
 
-    plan = Solver.solve(
-        FilteredWorkerPlan(), {"phases": [{"type": "construction_heuristic"}]}
-    )
+    plan = Solver.solve(FilteredWorkerPlan(), {"phases": [{"type": "construction_heuristic"}]})
     assert plan.filtered_tasks[0].worker == 1
 
 
@@ -634,9 +632,7 @@ class NearbySwapTask:
         nearby_entity_distance_meter=nearby_task_distance,
     )
 
-    def __init__(
-        self, name: str, worker: int, nearby_indices: list[int] | None = None
-    ) -> None:
+    def __init__(self, name: str, worker: int, nearby_indices: list[int] | None = None) -> None:
         self.name = name
         self.worker = worker
         self.nearby_indices = list(nearby_indices or [])
@@ -1058,9 +1054,7 @@ def test_dynamic_cartesian_preview_preserves_class_backed_shadow_callbacks() -> 
         },
     )
 
-    assert [task.cursor_shadow for task in plan.tasks] == [
-        task.worker + 10 for task in plan.tasks
-    ]
+    assert [task.cursor_shadow for task in plan.tasks] == [task.worker + 10 for task in plan.tasks]
     assert plan.score == Solver.analyze(plan)
 
 
@@ -1101,9 +1095,7 @@ class AsymmetricSelfJoinPlan:
         self.score = None
 
 
-def test_dynamic_equal_self_join_delta_keeps_score_consistent_when_left_has_no_match() -> (
-    None
-):
+def test_dynamic_equal_self_join_delta_keeps_score_consistent_when_left_has_no_match() -> None:
     plan = Solver.solve(
         AsymmetricSelfJoinPlan(),
         {
@@ -1244,9 +1236,7 @@ class GroupedDeltaPlan:
         self.score = None
 
 
-def test_dynamic_grouped_constraint_delta_keeps_score_consistent_for_pillar_change() -> (
-    None
-):
+def test_dynamic_grouped_constraint_delta_keeps_score_consistent_for_pillar_change() -> None:
     plan = Solver.solve(
         GroupedDeltaPlan(),
         {
@@ -1914,9 +1904,7 @@ two_assignment_group_callback_calls: list[tuple[str, int]] = []
 @planning_entity
 class TwoAssignmentGroupTask:
     left = planning_variable(value_range_provider="left_values", allows_unassigned=True)
-    right = planning_variable(
-        value_range_provider="right_values", allows_unassigned=True
-    )
+    right = planning_variable(value_range_provider="right_values", allows_unassigned=True)
 
     def __init__(self) -> None:
         self.left: int | None = None
@@ -2017,9 +2005,7 @@ class FieldAssignmentShift:
         self.nurse: int | None = None
 
 
-def field_assignment_rule(
-    _solution, _left_entity, _left_nurse, _right_entity, _right_nurse
-):
+def field_assignment_rule(_solution, _left_entity, _left_nurse, _right_entity, _right_nurse):
     return True
 
 
@@ -2115,8 +2101,7 @@ class ConflictFieldAssignmentSchedule:
     def __init__(self, conflicts: list[list[int]] | None = None) -> None:
         row_conflicts = [[1], [0]] if conflicts is None else conflicts
         self.shifts = [
-            ConflictFieldAssignmentShift(index, row_conflicts[index])
-            for index in range(2)
+            ConflictFieldAssignmentShift(index, row_conflicts[index]) for index in range(2)
         ]
         self.nurses = [0, 1]
         self.score = None
@@ -2271,9 +2256,7 @@ class CountingAssignmentSchedule:
     shifts: list[CountingAssignmentShift]
 
     def __init__(self, shift_count: int) -> None:
-        self.shifts = [
-            CountingAssignmentShift(shift_index) for shift_index in range(shift_count)
-        ]
+        self.shifts = [CountingAssignmentShift(shift_index) for shift_index in range(shift_count)]
         self.nurses = list(range(shift_count))
         self.score = None
 
@@ -2525,9 +2508,7 @@ def test_scalar_assignment_group_same_value_conflict_field_validates_indices() -
         Solver.solve(ConflictFieldAssignmentSchedule([[2], []]))
 
 
-def test_scalar_assignment_group_field_metadata_rejects_missing_candidate_capacity() -> (
-    None
-):
+def test_scalar_assignment_group_field_metadata_rejects_missing_candidate_capacity() -> None:
     with pytest.raises(RuntimeError, match="capacity_keys.*candidate 1"):
         Solver.solve(
             FieldAssignmentSchedule([0]),
@@ -2542,9 +2523,7 @@ def test_scalar_assignment_group_field_metadata_rejects_missing_candidate_capaci
         )
 
 
-def test_scalar_assignment_group_callback_metadata_preserves_rich_core_ordering() -> (
-    None
-):
+def test_scalar_assignment_group_callback_metadata_preserves_rich_core_ordering() -> None:
     rich_assignment_metadata_calls.clear()
 
     plan = Solver.solve(
@@ -2638,9 +2617,7 @@ def test_scalar_assignment_group_rejects_callback_and_field_for_same_metadata() 
             self.nurses = [0]
             self.score = None
 
-    with pytest.raises(
-        ModelValidationError, match="same-value conflict groups need sequence"
-    ):
+    with pytest.raises(ModelValidationError, match="same-value conflict groups need sequence"):
         build_schema(MissingSequenceConflictFieldSchedule())
 
 
@@ -2716,9 +2693,7 @@ def test_assignment_group_metadata_binds_to_each_declared_group() -> None:
 
     assert plan.tasks[0].left == 0
     assert plan.tasks[0].right == 1
-    assert {
-        callback_name for callback_name, _value in two_assignment_group_callback_calls
-    } == {
+    assert {callback_name for callback_name, _value in two_assignment_group_callback_calls} == {
         "left_capacity",
         "left_value_order",
         "right_capacity",
@@ -2728,9 +2703,7 @@ def test_assignment_group_metadata_binds_to_each_declared_group() -> None:
     assert plan.score["levels"] == [0, 0]
 
 
-@pytest.mark.parametrize(
-    "construction_heuristic_type", ["first_fit", "cheapest_insertion"]
-)
+@pytest.mark.parametrize("construction_heuristic_type", ["first_fit", "cheapest_insertion"])
 def test_scalar_assignment_group_expired_step_limit_rejects_incomplete_solution(
     construction_heuristic_type: str,
 ) -> None:
@@ -2754,9 +2727,7 @@ def test_scalar_assignment_group_expired_step_limit_rejects_incomplete_solution(
     assert plan.score is None
 
 
-def test_scalar_assignment_group_default_construction_completes_required_assignments() -> (
-    None
-):
+def test_scalar_assignment_group_default_construction_completes_required_assignments() -> None:
     plan = Solver.solve(AssignmentSchedule())
 
     assert sorted(shift.nurse for shift in plan.shifts) == [0, 1]
@@ -2815,9 +2786,7 @@ def test_grouped_scalar_local_search_preserves_row_candidate_domains() -> None:
     assert plan.score["levels"] == [0, -2]
 
 
-def test_scalar_assignment_group_construction_preserves_solution_context_in_previews() -> (
-    None
-):
+def test_scalar_assignment_group_construction_preserves_solution_context_in_previews() -> None:
     plan = Solver.solve(
         AssignmentSchedule(),
         {
@@ -3520,9 +3489,7 @@ def test_dynamic_conflict_repair_selector_solves_python_model() -> None:
     assert plan.score["levels"][0] == 0
 
 
-def test_dynamic_conflict_repair_selector_accepts_callback_weighted_hard_constraint() -> (
-    None
-):
+def test_dynamic_conflict_repair_selector_accepts_callback_weighted_hard_constraint() -> None:
     plan = Solver.solve(
         CallbackHardConflictRepairPlan(),
         {

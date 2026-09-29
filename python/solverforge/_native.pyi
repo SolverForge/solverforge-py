@@ -38,18 +38,14 @@ class SolverManager:
     def _preflight_qualified_candidate_trace_provenance(
         self,
         *,
-        qualified_candidate_trace_provenance: (
-            QualifiedCandidateTraceProvenance | None
-        ) = None,
+        qualified_candidate_trace_provenance: QualifiedCandidateTraceProvenance | None = None,
     ) -> None: ...
     def solve(
         self,
         solution: object,
         schema: CompiledSchema,
         *,
-        qualified_candidate_trace_provenance: (
-            QualifiedCandidateTraceProvenance | None
-        ) = None,
+        qualified_candidate_trace_provenance: QualifiedCandidateTraceProvenance | None = None,
     ) -> int: ...
     def get_status(self, job_id: int) -> dict[str, object]: ...
     def telemetry_detail(self, job_id: int) -> dict[str, object]: ...

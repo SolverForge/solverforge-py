@@ -382,9 +382,7 @@ def test_a_hand_built_schema_cannot_declare_two_pin_fields() -> None:
         _native.validate_schema(mutated)
 
     # The declaration itself is untouched.
-    assert [
-        field["kind"] for field in build_schema(Schedule([]))["entities"][0]["fields"]
-    ] == [
+    assert [field["kind"] for field in build_schema(Schedule([]))["entities"][0]["fields"]] == [
         "planning_pin",
         "planning_variable",
     ]
@@ -396,24 +394,18 @@ def test_a_hand_built_schema_cannot_name_one_field_as_variable_and_pin() -> None
     schema = build_schema(Schedule([Shift(pinned=True)]))
     entity = dict(schema["entities"][0])
     fields = [dict(field) for field in entity["fields"]]
-    pin_index = next(
-        index for index, field in enumerate(fields) if field["kind"] == "planning_pin"
-    )
+    pin_index = next(index for index, field in enumerate(fields) if field["kind"] == "planning_pin")
     fields[pin_index]["name"] = "nurse"
     entity["fields"] = fields
     mutated = dict(schema)
     mutated["entities"] = [entity]
 
-    with pytest.raises(
-        RuntimeError, match="both a planning variable and a planning_pin"
-    ):
+    with pytest.raises(RuntimeError, match="both a planning variable and a planning_pin"):
         _native.validate_schema(mutated)
 
 
 def test_pinned_entity_keeps_its_input_value() -> None:
-    solved = Solver.solve(
-        Schedule([Shift(pinned=True, nurse=1), Shift(pinned=False)]), STEP_LIMITS
-    )
+    solved = Solver.solve(Schedule([Shift(pinned=True, nurse=1), Shift(pinned=False)]), STEP_LIMITS)
 
     # The pinned row keeps the expensive input value; the free row takes the
     # cheapest one, so the pinned solve ends one soft step away from optimal.
@@ -442,9 +434,7 @@ def test_pinned_list_owner_keeps_its_route_and_free_owner_constructs() -> None:
 
 
 def test_unpinned_control_route_is_rebuilt() -> None:
-    solved = Solver.solve(
-        FreeRoutes([FreeVehicle(visits=[0, 1]), FreeVehicle()]), STEP_LIMITS
-    )
+    solved = Solver.solve(FreeRoutes([FreeVehicle(visits=[0, 1]), FreeVehicle()]), STEP_LIMITS)
 
     # Without the pin declaration the first route no longer holds exactly the
     # input route. This is not an incidental search outcome: the only soft
@@ -478,9 +468,7 @@ def test_pinned_optional_scalar_stays_unassigned() -> None:
 
 def test_retained_solve_preserves_pinned_state() -> None:
     manager = SolverManager()
-    handle = manager.solve(
-        Routes([Vehicle(pinned=True, visits=[0, 1]), Vehicle(pinned=False)])
-    )
+    handle = manager.solve(Routes([Vehicle(pinned=True, visits=[0, 1]), Vehicle(pinned=False)]))
     status = manager.wait(handle.job_id)
     snapshot = manager.snapshot(handle.job_id)
 
@@ -497,9 +485,7 @@ def test_pinned_entity_without_its_declared_bool_is_rejected() -> None:
     with pytest.raises(RuntimeError, match="attribute `pinned` must be a bool"):
         Solver.solve(IntPinSchedule(), STEP_LIMITS)
 
-    with pytest.raises(
-        RuntimeError, match="has no readable `pinned` attribute"
-    ) as raised:
+    with pytest.raises(RuntimeError, match="has no readable `pinned` attribute") as raised:
         Solver.solve(UnreadablePinSchedule(), STEP_LIMITS)
 
     # The original failure stays attached as the cause, so an attribute that

@@ -105,8 +105,6 @@ class Vehicle:
         copied.route_total_demand = self.route_total_demand
         copied.route_capacity_overage = self.route_capacity_overage
         copied.route_total_travel_seconds = self.route_total_travel_seconds
-        copied.route_time_window_violation_seconds = (
-            self.route_time_window_violation_seconds
-        )
+        copied.route_time_window_violation_seconds = self.route_time_window_violation_seconds
         copied.route_unreachable_legs = self.route_unreachable_legs
         return copied

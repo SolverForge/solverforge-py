@@ -207,9 +207,7 @@ def wait_for_server(base_url: str) -> None:
     raise AssertionError(msg)
 
 
-def wait_for_terminal(
-    base_url: str, job_id: str, timeout_seconds: float = 15.0
-) -> dict[str, Any]:
+def wait_for_terminal(base_url: str, job_id: str, timeout_seconds: float = 15.0) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         status = request_json(base_url, f"/jobs/{job_id}/status")
@@ -262,9 +260,7 @@ def test_deliveries_python_frontend_app_serves_static_and_solve_lifecycle() -> N
             for delivery_id in vehicle["deliveryOrder"]
         ]
         assert sorted(assigned) == list(range(len(solution["deliveries"])))
-        assert all(
-            vehicle["routeCapacityOverage"] == 0 for vehicle in solution["vehicles"]
-        )
+        assert all(vehicle["routeCapacityOverage"] == 0 for vehicle in solution["vehicles"])
 
         routes = request_json(base_url, f"/jobs/{job_id}/routes")
         assert routes["routingMode"] == solution["routingMode"]

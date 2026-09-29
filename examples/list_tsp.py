@@ -17,4 +17,3 @@ class Tsp:
         self.tours = [Tour()]
         self.visit_values = [0, 1, 2, 3]
         self.score = None
-

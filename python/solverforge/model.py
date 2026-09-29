@@ -90,9 +90,7 @@ def _schema_shape(value: object) -> tuple[SchemaShape, bool]:
 
     def shape(item: object, *, callback_state: bool = False) -> SchemaShape:
         nonlocal cacheable, next_marker
-        recursive = isinstance(
-            item, (dict, list, tuple, FunctionType, MethodType, partial)
-        )
+        recursive = isinstance(item, (dict, list, tuple, FunctionType, MethodType, partial))
         item_id = id(item)
         if recursive:
             if item_id in active:
@@ -147,8 +145,7 @@ def _schema_shape(value: object) -> tuple[SchemaShape, bool]:
                     for cell in (item.__closure__ or ())
                 )
                 defaults = tuple(
-                    shape(default, callback_state=True)
-                    for default in (item.__defaults__ or ())
+                    shape(default, callback_state=True) for default in (item.__defaults__ or ())
                 )
                 keyword_defaults = tuple(
                     (name, shape(default, callback_state=True))
@@ -241,7 +238,9 @@ def _scalar_groups(callbacks: object) -> list[dict[str, object]]:
         callback = cast(Callable[..., object], item)
         metadata = getattr(callback, "__solverforge_scalar_group__", None)
         if not isinstance(metadata, dict):
-            msg = f"{callback!r} is not marked with @scalar_group and is not a ScalarAssignmentGroup"
+            msg = (
+                f"{callback!r} is not marked with @scalar_group and is not a ScalarAssignmentGroup"
+            )
             raise ModelValidationError(msg)
         name = metadata.get("name")
         if not isinstance(name, str) or not name:
@@ -262,9 +261,7 @@ def _conflict_repairs(callbacks: object) -> list[dict[str, object]]:
         if not isinstance(metadata, dict):
             msg = f"{callback!r} is not marked with @conflict_repair"
             raise ModelValidationError(msg)
-        constraint_names = list(
-            cast(Iterable[object], metadata.get("constraints") or [])
-        )
+        constraint_names = list(cast(Iterable[object], metadata.get("constraints") or []))
         if not constraint_names or not all(
             isinstance(name, str) and name for name in constraint_names
         ):

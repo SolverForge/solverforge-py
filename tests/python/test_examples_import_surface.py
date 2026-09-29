@@ -40,9 +40,7 @@ def test_examples_import_solverforge_as_installed_package() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name == "solverforge" or alias.name.startswith(
-                        "solverforge."
-                    ):
+                    if alias.name == "solverforge" or alias.name.startswith("solverforge."):
                         solverforge_imports.append(f"{relative}:{node.lineno}")
                     if alias.name == "python.solverforge" or alias.name.startswith(
                         "python.solverforge."
@@ -54,9 +52,7 @@ def test_examples_import_solverforge_as_installed_package() -> None:
                     solverforge_imports.append(f"{relative}:{node.lineno}")
                     if node.level != 0:
                         offenders.append(f"{relative}:{node.lineno}")
-                if module == "python.solverforge" or module.startswith(
-                    "python.solverforge."
-                ):
+                if module == "python.solverforge" or module.startswith("python.solverforge."):
                     offenders.append(f"{relative}:{node.lineno}")
 
     assert solverforge_imports

@@ -80,9 +80,7 @@ class Shift:
         self.touched_dates = tuple(
             day.isoformat() for day in dates_touched_by_span(self.start_dt, self.end_dt)
         )
-        self.employee_has_skill = [
-            required_skill in employee.skills for employee in employees
-        ]
+        self.employee_has_skill = [required_skill in employee.skills for employee in employees]
         self.employee_unavailable_minutes = [
             sum(
                 overlap_minutes_for_day(self.start_dt, self.end_dt, parse_date(day))
@@ -98,12 +96,8 @@ class Shift:
             sum(1 for day in self.touched_dates if day in employee.desired_days)
             for employee in employees
         ]
-        self.employee_undesired_day = [
-            count > 0 for count in self.employee_undesired_day_count
-        ]
-        self.employee_desired_day = [
-            count > 0 for count in self.employee_desired_day_count
-        ]
+        self.employee_undesired_day = [count > 0 for count in self.employee_undesired_day_count]
+        self.employee_desired_day = [count > 0 for count in self.employee_desired_day_count]
         self.employee_nearby_distance = [
             shift_to_employee_nearby_distance(self, employee) for employee in employees
         ]
@@ -156,9 +150,7 @@ def employee_unavailable_minutes(shift: Any, employee: Any) -> int:
 
 
 def overlaps(left: Any, right: Any) -> bool:
-    return bool(
-        left.start_minute < right.end_minute and right.start_minute < left.end_minute
-    )
+    return bool(left.start_minute < right.end_minute and right.start_minute < left.end_minute)
 
 
 def overlap_minutes(left: Any, right: Any) -> int:
@@ -236,9 +228,7 @@ def overlap_minutes_for_day(start: datetime, end: datetime, target: date) -> int
 
 
 def start_band_distance(left_hour: int, right_hour: int) -> float:
-    return float(
-        min(abs(start_band_index(left_hour) - start_band_index(right_hour)), 2)
-    )
+    return float(min(abs(start_band_index(left_hour) - start_band_index(right_hour)), 2))
 
 
 def start_band_index(hour: int) -> int:
@@ -263,9 +253,7 @@ def shift_to_employee_nearby_distance(shift: Shift, employee: Employee) -> float
 
 
 def shift_to_shift_nearby_distance(left: Any, right: Any) -> float:
-    return 10.0 * care_hub_distance(
-        left.care_hub, right.care_hub
-    ) + start_band_distance(
+    return 10.0 * care_hub_distance(left.care_hub, right.care_hub) + start_band_distance(
         parse_datetime(left.start).hour,
         parse_datetime(right.start).hour,
     )

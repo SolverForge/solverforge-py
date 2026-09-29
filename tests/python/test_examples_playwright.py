@@ -109,9 +109,7 @@ def collect_browser_errors(page: Page) -> list[str]:
     errors: list[str] = []
     page.on(
         "console",
-        lambda message: (
-            errors.append(message.text) if message.type == "error" else None
-        ),
+        lambda message: (errors.append(message.text) if message.type == "error" else None),
     )
     page.on("pageerror", lambda error: errors.append(str(error)))
     return errors
@@ -135,9 +133,7 @@ def stub_external_map_tiles(page: Page, base_url: str) -> list[str]:
         parsed = urlsplit(request.url)
         if parsed.scheme in {"http", "https"} and parsed.netloc != base_origin:
             external_urls.append(request.url)
-            if request.resource_type == "image" and is_openstreetmap_tile_url(
-                request.url
-            ):
+            if request.resource_type == "image" and is_openstreetmap_tile_url(request.url):
                 route.fulfill(
                     status=200,
                     content_type="image/png",
@@ -266,17 +262,13 @@ def test_deliveries_browser_recommends_insertions_for_assigned_delivery() -> Non
                 playwright_expect(page.locator(".sf-header-title")).to_have_text(
                     "SolverForge Deliveries"
                 )
-                playwright_expect(page.locator(".deliveries-kpis")).to_contain_text(
-                    "Unassigned"
-                )
+                playwright_expect(page.locator(".deliveries-kpis")).to_contain_text("Unassigned")
                 playwright_expect(
                     page.locator("#deliveries-map .leaflet-marker-icon").first
                 ).to_be_visible()
 
                 page.locator(".sf-nav-btn", has_text="Data").click()
-                playwright_expect(
-                    page.locator("h3", has_text="Draft Data")
-                ).to_be_visible()
+                playwright_expect(page.locator("h3", has_text="Draft Data")).to_be_visible()
                 recommend_button = page.get_by_role("button", name="Recommend").first
                 playwright_expect(recommend_button).to_be_visible()
                 recommend_button.click()
@@ -287,12 +279,8 @@ def test_deliveries_browser_recommends_insertions_for_assigned_delivery() -> Non
                 )
                 playwright_expect(dialog).to_be_visible()
                 playwright_expect(dialog).not_to_contain_text("No valid insertions.")
-                playwright_expect(
-                    dialog.get_by_role("button", name="Apply").first
-                ).to_be_visible()
-                assert all(
-                    is_openstreetmap_tile_url(url) for url in external_urls
-                ), external_urls
+                playwright_expect(dialog.get_by_role("button", name="Apply").first).to_be_visible()
+                assert all(is_openstreetmap_tile_url(url) for url in external_urls), external_urls
                 assert browser_errors == []
             finally:
                 browser.close()

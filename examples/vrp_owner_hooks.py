@@ -18,4 +18,3 @@ class Vrp:
         self.vehicles = [Vehicle(0), Vehicle(1)]
         self.visit_values = [0, 1, 2, 3]
         self.score = None
-

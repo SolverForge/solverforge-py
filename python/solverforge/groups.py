@@ -89,17 +89,10 @@ class ScalarAssignmentGroup:
             ),
         ):
             if callback is not None and field is not None:
-                raise TypeError(
-                    f"{callback_name} and {field_name} cannot both be configured"
-                )
+                raise TypeError(f"{callback_name} and {field_name} cannot both be configured")
             if field is not None and (not isinstance(field, str) or not field):
-                raise TypeError(
-                    f"{field_name} must be a non-empty string when provided"
-                )
-        if (
-            self.assignment_rule is not None
-            and self.same_value_conflict_field is not None
-        ):
+                raise TypeError(f"{field_name} must be a non-empty string when provided")
+        if self.assignment_rule is not None and self.same_value_conflict_field is not None:
             raise TypeError(
                 "assignment_rule and same_value_conflict_field cannot both be configured"
             )
@@ -107,9 +100,7 @@ class ScalarAssignmentGroup:
             not isinstance(self.same_value_conflict_field, str)
             or not self.same_value_conflict_field
         ):
-            raise TypeError(
-                "same_value_conflict_field must be a non-empty string when provided"
-            )
+            raise TypeError("same_value_conflict_field must be a non-empty string when provided")
 
     def to_native(self) -> dict[str, Any]:
         return {

@@ -70,9 +70,7 @@ def project_metadata(repo_root: Path) -> tuple[str, str]:
     project_version = str(project["version"])
     crate_version = str(package["version"])
     if project_version != crate_version:
-        fail(
-            f"pyproject version {project_version} does not match crate {crate_version}"
-        )
+        fail(f"pyproject version {project_version} does not match crate {crate_version}")
 
     if parse_version_tuple(project_version) < MIN_REPLACEMENT_VERSION:
         fail(f"{project_version} will not replace the old PyPI architecture")
@@ -82,9 +80,7 @@ def project_metadata(repo_root: Path) -> tuple[str, str]:
 
     dependencies = project.get("dependencies")
     if dependencies:
-        fail(
-            "core runtime dependencies must stay empty; use optional dependencies for examples"
-        )
+        fail("core runtime dependencies must stay empty; use optional dependencies for examples")
 
     urls = project.get("urls")
     if not isinstance(urls, dict):
@@ -102,9 +98,7 @@ def assert_wheel(path: Path, version: str) -> None:
 
     with zipfile.ZipFile(path) as wheel:
         names = set(wheel.namelist())
-        metadata_paths = [
-            name for name in names if name.endswith(".dist-info/METADATA")
-        ]
+        metadata_paths = [name for name in names if name.endswith(".dist-info/METADATA")]
         if len(metadata_paths) != 1:
             fail(f"wheel {path.name} has {len(metadata_paths)} METADATA files")
 
@@ -123,9 +117,7 @@ def assert_wheel(path: Path, version: str) -> None:
             if not any(item.startswith(f"{label},") for item in project_urls)
         }
         if missing_urls:
-            fail(
-                f"wheel metadata missing project URLs: {', '.join(sorted(missing_urls))}"
-            )
+            fail(f"wheel metadata missing project URLs: {', '.join(sorted(missing_urls))}")
 
         required = {
             "solverforge/__init__.py",
@@ -137,24 +129,19 @@ def assert_wheel(path: Path, version: str) -> None:
             fail(f"wheel {path.name} is missing {', '.join(sorted(missing))}")
 
         has_native_extension = any(
-            name.startswith("solverforge/_native.")
-            and name.endswith((".so", ".pyd", ".dylib"))
+            name.startswith("solverforge/_native.") and name.endswith((".so", ".pyd", ".dylib"))
             for name in names
         )
         if not has_native_extension:
             fail(f"wheel {path.name} does not contain the native extension")
 
         forbidden_prefixes = ("examples/", "tests/", "src/")
-        forbidden = sorted(
-            name for name in names if name.startswith(forbidden_prefixes)
-        )
+        forbidden = sorted(name for name in names if name.startswith(forbidden_prefixes))
         if forbidden:
             fail(f"wheel {path.name} contains source-only files such as {forbidden[0]}")
 
         core_requirements = [
-            item
-            for item in metadata.get_all("Requires-Dist", [])
-            if "extra ==" not in item
+            item for item in metadata.get_all("Requires-Dist", []) if "extra ==" not in item
         ]
         if core_requirements:
             fail(f"wheel {path.name} has core dependencies: {core_requirements}")
@@ -165,9 +152,7 @@ def assert_sdist(path: Path, version: str) -> None:
     with tarfile.open(path, "r:gz") as sdist:
         names = set(sdist.getnames())
 
-    invalid_prefixes = sorted(
-        name for name in names if not name.startswith(expected_prefix)
-    )
+    invalid_prefixes = sorted(name for name in names if not name.startswith(expected_prefix))
     if invalid_prefixes:
         fail(f"sdist contains path outside {expected_prefix}: {invalid_prefixes[0]}")
 
@@ -185,16 +170,12 @@ def assert_sdist(path: Path, version: str) -> None:
     if unexpected:
         fail(f"sdist contains non-package file {unexpected[0]}")
 
-    required_python = {
-        expected_prefix + suffix for suffix in REQUIRED_SDIST_PYTHON_PATHS
-    }
+    required_python = {expected_prefix + suffix for suffix in REQUIRED_SDIST_PYTHON_PATHS}
     missing_python = required_python.difference(names)
     if missing_python:
         fail(f"sdist is missing {', '.join(sorted(missing_python))}")
 
-    required_project = {
-        expected_prefix + suffix for suffix in REQUIRED_SDIST_PROJECT_PATHS
-    }
+    required_project = {expected_prefix + suffix for suffix in REQUIRED_SDIST_PROJECT_PATHS}
     if not required_project <= names:
         missing = required_project.difference(names)
         fail(f"sdist is missing {', '.join(sorted(missing))}")
