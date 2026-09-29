@@ -144,7 +144,7 @@ Feature matrix for `tests/python/test_pinning.py`:
 | `README.md` | Document `planning_pin()` in the Python API list, the preserved-state and required-unassigned semantics, and the declared-field limit (no dynamic `is_pinned` callable). |
 | `WIREFRAME.md` | Add the entity pin metadata to the entity surface, and record that enforcement is upstream-owned and that the binding adds no wrapper path. |
 | `AGENTS.md` | One contract sentence in Runtime & Callback Contracts: entity pinning is declarative, read once per instance at import, and enforced only by the compiled SolverForge runtime. (This file gates on operator approval.) |
-| `CHANGELOG.md` / versions | No hand edit: `make release-tag` bumps every surface and writes the section. A `feat` commit makes this `0.7.0`. |
+| `CHANGELOG.md` / versions | No hand edit: `make release-tag` bumps every surface and writes the section. On this `0.x` line the `feat` computes `0.6.9`, a patch bump — only a breaking change bumps the minor here, which is the tool's decision to make, not ours. |
 
 ## 4. Commit series
 
@@ -157,7 +157,7 @@ Feature matrix for `tests/python/test_pinning.py`:
    callback cases from §3.4 and the negative control, if kept separate.
 3. `docs(pinning): document the entity pin contract` — README, WIREFRAME,
    AGENTS.
-4. `chore(release): 0.7.0` — produced by `make release-tag`, not by hand.
+4. `chore(release): 0.6.9` — produced by `make release-tag`, not by hand.
 
 Alternative if item 2 is folded into item 1: keep the series at three commits
 (feature, example, docs).
@@ -191,7 +191,7 @@ because `get_type_hints` resolves annotations at module scope.
 2. `make lint` — rustfmt, ruff, strict mypy, clippy with warnings denied.
 3. `make ci-local` — the full local CI gate, including the browser tests.
 4. `python examples/pinning.py` — the demo runs and shows preservation.
-5. `make bump-dry` — confirm the `feat` computes `0.7.0` and bumps all nine
+5. `make bump-dry` — confirm the computed version and that it bumps all nine
    version surfaces before any release is cut.
 6. `make pre-release` on the tree the tag will point at, then `make release-tag`,
    push branch and tag to both remotes, and verify the published artifacts from
