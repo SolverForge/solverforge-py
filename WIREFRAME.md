@@ -30,7 +30,10 @@ shape, and source-checkout example UI/API surfaces.
   aliasing to current bytes.
 - Current contract documentation is intentionally kept in `README.md`,
   `AGENTS.md`, this wireframe, and the example READMEs. `CHANGELOG.md` remains
-  tool-managed release history; there is no separate `docs/` directory.
+  tool-managed release history: `.versionrc.json` plus `scripts/version/` own
+  every version surface, so one `make release-tag` bumps the crate, package,
+  lockfile, importable version, and documented releases, writes the changelog,
+  and cuts the release commit and tag. There is no separate `docs/` directory.
 
 ## Python Package API
 
@@ -449,6 +452,8 @@ The root Makefile is the maintainer entry point:
   for Playwright tests in lean CI images
 - `make test`: Rust plus Python tests
 - `make lint`: rustfmt check, ruff, mypy, clippy
+- `make bump-dry`: preview the next release commit, tag, and changelog
+- `make release-tag`: bump every version surface, write the changelog, and tag
 - `make ci-local`: local CI simulation
 - `make test-examples-browser`: Playwright browser tests for both example apps
 - `make build-dist`: release source distribution plus local wheel

@@ -134,6 +134,10 @@ targeting the six published SolverForge `0.19.7` registry crates and
 `solverforge-ui` `0.9.0` through exact manifest and lock requirements.
 `make release-base-check` and `make pre-release` must pass. Do not use committed
 path overrides, Git dependencies, or manually constructed registry checksums.
+`.versionrc.json` and `scripts/version/` own every release version surface, so
+`make release-tag` bumps the crate, package, lockfile, importable version, and
+documented releases, writes the changelog, and cuts the release commit and tag
+with hooks enabled; never bump a version surface by hand.
 The `Makefile` owns local release targets, dependency-base checks, distribution
 builds, artifact validation, browser system dependency setup, and
 `pre-release`. `scripts/verify_release_artifacts.py` checks deterministic
