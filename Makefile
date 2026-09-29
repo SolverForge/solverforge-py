@@ -258,9 +258,13 @@ docs-check:
 	@grep -Eq 'ui.asset_paths' README.md WIREFRAME.md
 	@grep -Fq 'solverforge==$(VERSION)' README.md
 	@for path in README.md examples/solverforge_hospital/README.md examples/solverforge_deliveries/README.md; do \
-		grep -Fq 'solverforge[examples]==$(VERSION)' "$$path"; \
+		grep -Fq 'solverforge[examples]==$(VERSION)' "$$path" \
+			|| { printf -- "$(RED)$(CROSS) $$path must name solverforge[examples]==$(VERSION)$(RESET)\n"; exit 1; }; \
 	done
-	@for path in AGENTS.md WIREFRAME.md; do grep -Fq '`$(VERSION)`' "$$path"; done
+	@for path in AGENTS.md WIREFRAME.md; do \
+		grep -Fq '`$(VERSION)`' "$$path" \
+			|| { printf -- "$(RED)$(CROSS) $$path must name package version $(VERSION)$(RESET)\n"; exit 1; }; \
+	done
 	@grep -Eq 'assign_when_candidate_exists' examples/solverforge_hospital/README.md
 	@grep -Eq 'RowField' examples/solverforge_deliveries/README.md
 	@printf -- "$(GREEN)$(CHECK) Documentation surface looks current$(RESET)\n"
