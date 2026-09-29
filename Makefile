@@ -210,7 +210,7 @@ ruff: install-python-deps
 	@printf -- "$(PROGRESS) Running ruff...\n"
 	@$(RUFF) check $(PY_STYLE_PATHS) && printf -- "$(GREEN)$(CHECK) Ruff passed$(RESET)\n"
 
-lint: banner fmt-check ruff typecheck clippy
+lint: banner fmt-check py-format-check ruff typecheck clippy
 	@printf -- "\n$(GREEN)$(BOLD)$(CHECK) All lint checks passed$(RESET)\n\n"
 
 fmt:
@@ -298,21 +298,23 @@ smoke-wheel:
 # ============== CI Simulation ==============
 ci-local: banner
 	@printf -- "$(CYAN)$(BOLD)==== Local CI Simulation ============================$(RESET)\n\n"
-	@printf -- "$(PROGRESS) Step 1/8: format check...\n"
+	@printf -- "$(PROGRESS) Step 1/9: format check...\n"
 	@$(MAKE) fmt-check --no-print-directory
-	@printf -- "$(PROGRESS) Step 2/8: cargo check...\n"
+	@printf -- "$(PROGRESS) Step 2/9: Python format check...\n"
+	@$(MAKE) py-format-check --no-print-directory
+	@printf -- "$(PROGRESS) Step 3/9: cargo check...\n"
 	@$(MAKE) check --no-print-directory
-	@printf -- "$(PROGRESS) Step 3/8: clippy...\n"
+	@printf -- "$(PROGRESS) Step 4/9: clippy...\n"
 	@$(MAKE) clippy --no-print-directory
-	@printf -- "$(PROGRESS) Step 4/8: Rust tests...\n"
+	@printf -- "$(PROGRESS) Step 5/9: Rust tests...\n"
 	@$(MAKE) rust-test --no-print-directory
-	@printf -- "$(PROGRESS) Step 5/8: Python tests...\n"
+	@printf -- "$(PROGRESS) Step 6/9: Python tests...\n"
 	@$(MAKE) py-test --no-print-directory
-	@printf -- "$(PROGRESS) Step 6/8: typecheck...\n"
+	@printf -- "$(PROGRESS) Step 7/9: typecheck...\n"
 	@$(MAKE) typecheck --no-print-directory
-	@printf -- "$(PROGRESS) Step 7/8: ruff...\n"
+	@printf -- "$(PROGRESS) Step 8/9: ruff...\n"
 	@$(MAKE) ruff --no-print-directory
-	@printf -- "$(PROGRESS) Step 8/8: docs-check...\n"
+	@printf -- "$(PROGRESS) Step 9/9: docs-check...\n"
 	@$(MAKE) docs-check --no-print-directory
 	@printf -- "\n$(GREEN)$(BOLD)$(CHECK) Local CI simulation passed$(RESET)\n\n"
 

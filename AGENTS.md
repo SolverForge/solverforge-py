@@ -27,7 +27,8 @@ callback/threading, boundary, and release contracts. There is no separate
 - `make test-deliveries`: run the deliveries model, FastAPI/frontend lifecycle,
   and deliveries Playwright browser test.
 - `make test-examples-browser`: run the Playwright browser tests for both example apps.
-- `make lint`: run rustfmt check, ruff, strict mypy, and clippy with warnings denied.
+- `make lint`: run rustfmt check, Black format check, ruff, strict mypy, and
+  clippy with warnings denied.
 - `make docs-check`: verify the tracked README, AGENTS, WIREFRAME, and example
   README surface exists and avoids known stale claims.
 - `make release-base-check`: verify the exact crates.io SolverForge dependency
@@ -43,8 +44,9 @@ Use Rust `1.95.0` from `rust-toolchain.toml`. Python code targets Python `3.14`.
 
 ## Coding Style & Naming Conventions
 
-Python uses Ruff linting, strict mypy, and the 100-character line limit from
-`pyproject.toml`; `make py-format` is available for an intentional Black pass.
+Python uses Ruff linting, strict mypy, and the 100-character line limit that
+`pyproject.toml` owns for both Ruff and Black; `make lint` and `make ci-local`
+check Black formatting, and `make py-format` applies it.
 Prefer typed public APIs and keep exports in `python/solverforge/__init__.py`
 intentional. Use snake_case for Python modules, functions, and variables; use
 PascalCase for classes. Rust follows rustfmt and clippy with `-D warnings`; keep
