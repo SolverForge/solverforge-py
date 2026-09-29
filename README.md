@@ -8,24 +8,24 @@ The native extension owns the working solution state in Rust so SolverForge can
 clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
-The package targets CPython 3.14 and Rust 1.95.0. The current published
-`solverforge` `0.6.6` package pins the six published SolverForge Rust
-dependencies to `0.19.7` and `solverforge-ui` to `0.9.0` through exact
-crates.io requirements in `Cargo.toml` and registry checksums in `Cargo.lock`.
-There is no local path or Git dependency override. The `solverforge` `0.6.x`
-line is the current dynamic binding architecture and intentionally supersedes
-the older incompatible `0.2.x` and `0.3.0` artifacts in the same PyPI namespace.
+The package targets CPython 3.14 and Rust 1.95.0. This release-preparation
+checkout pins the six published SolverForge Rust dependencies to `0.19.7` and
+`solverforge-ui` to `0.9.0` through exact crates.io requirements in
+`Cargo.toml` and registry checksums in `Cargo.lock`. There is no local path or
+Git dependency override. The `solverforge` `0.6.x` line is the current dynamic
+binding architecture and intentionally supersedes the older incompatible
+`0.2.x` and `0.3.0` artifacts in the same PyPI namespace.
 Those older artifacts exposed `SolverFactory`, `PlanningVariable`, Java service
 requirements, and other APIs that are not part of this package.
 
 ## Installation
 
-The current published Python package is `solverforge` `0.6.6`; the native
-`solverforge_py` crate metadata shares that version and targets the published
-and registry-locked SolverForge Rust `0.19.7` dependency base. Install it with:
+The package version prepared by this checkout is `solverforge` `0.6.7`, targeting
+the published and registry-locked SolverForge Rust `0.19.7` dependency base.
+Install the matching package after its Python release with:
 
 ```sh
-python3.14 -m pip install "solverforge==0.6.6"
+python3.14 -m pip install "solverforge==0.6.7"
 ```
 
 The installable wheel contains the core `solverforge` package, native extension,
@@ -44,8 +44,8 @@ make hospital-run
 make deliveries-run PORT=7861
 ```
 
-The same source-checkout examples can be run against the published package
-without `PYTHONPATH` or an editable checkout:
+The same source-checkout examples can be run against the matching published
+package once `0.6.7` is released, without `PYTHONPATH` or an editable checkout:
 
 ```sh
 python3.14 -m venv .venv-examples
