@@ -174,7 +174,7 @@ def test_browser_imports_solverforge_ui_module_assets() -> None:
                     }""")
 
                 assert result == {
-                    "version": "0.7.0",
+                    "version": "0.9.0",
                     "createBackendType": "function",
                     "defaultMatches": True,
                 }
@@ -184,7 +184,9 @@ def test_browser_imports_solverforge_ui_module_assets() -> None:
                     "/sf/sf.0.6.6.css",
                     "/sf/sf.0.6.6.js",
                     "/sf/sf.0.6.6.mjs",
-                    "/sf/sf.0.7.0.mjs",
+                    "/sf/sf.0.7.0.css",
+                    "/sf/sf.0.7.0.js",
+                    "/sf/sf.0.9.0.mjs",
                 ):
                     try:
                         urlopen(f"{base_url}{path}", timeout=2)

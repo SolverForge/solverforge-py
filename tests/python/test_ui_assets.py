@@ -13,7 +13,7 @@ def test_solverforge_ui_assets_are_served_from_native_bridge() -> None:
     assert sf_js.cache_control == "public, max-age=3600"
     assert b"sf.createBackend = function" in sf_js.bytes
 
-    versioned_css = asset("sf.0.7.0.css")
+    versioned_css = asset("sf.0.9.0.css")
     assert versioned_css is not None
     assert versioned_css.content_type == "text/css; charset=utf-8"
     assert versioned_css.cache_control == "public, max-age=31536000, immutable"
@@ -25,9 +25,9 @@ def test_solverforge_ui_assets_are_served_from_native_bridge() -> None:
 
 
 def test_solverforge_ui_assets_serve_current_versioned_bundle() -> None:
-    versioned_js = asset("sf.0.7.0.js")
+    versioned_js = asset("sf.0.9.0.js")
     assert versioned_js is not None
-    assert versioned_js.path == "sf.0.7.0.js"
+    assert versioned_js.path == "sf.0.9.0.js"
     assert versioned_js.content_type == "application/javascript; charset=utf-8"
     assert versioned_js.cache_control == "public, max-age=31536000, immutable"
     assert b"sf.createBackend = function" in versioned_js.bytes
@@ -39,7 +39,9 @@ def test_solverforge_ui_assets_do_not_alias_stale_or_synthetic_versioned_bundles
     assert asset("sf.0.6.6.css") is None
     assert asset("sf.0.6.6.js") is None
     assert asset("sf.0.6.6.mjs") is None
-    assert asset("sf.0.7.0.mjs") is None
+    assert asset("sf.0.7.0.css") is None
+    assert asset("sf.0.7.0.js") is None
+    assert asset("sf.0.9.0.mjs") is None
 
 
 def test_solverforge_ui_assets_expose_only_unversioned_module_wrapper() -> None:
@@ -98,7 +100,7 @@ console.log(`${version}:${typeof createBackend}`);
         capture_output=True,
         text=True,
     )
-    assert completed.stdout.strip() == "0.7.0:function"
+    assert completed.stdout.strip() == "0.9.0:function"
 
 
 def test_solverforge_ui_asset_bridge_rejects_unsafe_paths() -> None:
@@ -113,8 +115,8 @@ def test_solverforge_ui_asset_paths_are_available() -> None:
     paths = asset_paths()
     assert "sf.js" in paths
     assert "sf.mjs" in paths
-    assert "sf.0.7.0.css" in paths
-    assert "sf.0.7.0.js" in paths
+    assert "sf.0.9.0.css" in paths
+    assert "sf.0.9.0.js" in paths
     assert "sf.css" in paths
     assert "modules/sf-map.js" in paths
     assert "vendor/leaflet/leaflet.js" in paths
@@ -122,4 +124,5 @@ def test_solverforge_ui_asset_paths_are_available() -> None:
     assert "sf.0.6.6.css" not in paths
     assert "sf.0.6.6.js" not in paths
     assert "sf.0.6.6.mjs" not in paths
-    assert "sf.0.7.0.mjs" not in paths
+    assert "sf.0.7.0.js" not in paths
+    assert "sf.0.9.0.mjs" not in paths
