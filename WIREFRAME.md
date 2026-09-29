@@ -45,7 +45,7 @@ stable package error classes (`SolverForgeError`, `CallbackError`,
 the `__version__` string, plus decorators/helpers for model authoring:
 
 - `@planning_solution`, `@planning_entity`, `@problem_fact`
-- `planning_id`, `planning_variable`, `planning_list_variable`
+- `planning_id`, `planning_variable`, `planning_list_variable`, `planning_pin`
 - `@constraint_provider`, `@scalar_group`, `@conflict_repair`, `@candidate_metric`
 - `scalar_assignment_group(...)`, `ScalarAssignmentGroup`, `ScalarGroupLimits`
 - `RowField`, `SolutionField`, `EntityCallback`, `SolutionCallback`
@@ -98,6 +98,18 @@ one canonical nested schema object: independent complete
 `ListRouteHooks` and `ListSavingsHooks` bundles, plus independent
 `cross_position_distance` and `intra_position_distance` sources. A route bundle
 never implies a savings bundle.
+
+Entity pinning is declared with `planning_pin()` on the entity attribute that
+holds the pinned flag. The declaration joins the compiled descriptor the binding
+already builds and forwards into the SolverForge runtime, so construction, local
+search, ruin/recreate, Clarke-Wright, K-opt, and exhaustive search all skip
+pinned rows with no wrapper-owned enforcement path. The attribute is read once
+per instance at import: an unset or non-`bool` value is an import error, never an
+implicit "not pinned". Pinning preserves input state and does not exempt a row
+from mandatory completion, so a pinned required scalar that nothing assigned
+fails the solve, while a pinned `allows_unassigned` scalar stays unassigned.
+`planning_variable(pinning=True)` stays rejected: the framework pins entities,
+not variables.
 
 Declared solution-level element metadata sequences are validated before dynamic
 state construction: owner entries are `None` or non-negative integers, order

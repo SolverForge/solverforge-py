@@ -95,6 +95,12 @@ from Rust-owned state. Callback code may be called many times and from multiple
 worker threads on CPython 3.14 free-threaded, so treat solution-level lookup
 context as immutable during a solve.
 
+Entity pinning is declarative: `planning_pin()` names the entity attribute
+holding a per-instance `bool`, the binding resolves it once per row at import,
+and only the compiled SolverForge runtime enforces it. The binding adds no pin
+enforcement path of its own, never infers pinning from solution state, and keeps
+rejecting the variable-level `planning_variable(pinning=True)` flag.
+
 `@candidate_metric` callbacks are the Python surface for named sorted or
 probabilistic selector metrics. Register them through
 `@planning_solution(..., candidate_metrics=[...])`; they receive the callback

@@ -73,16 +73,19 @@ from solverforge import (
     Solver,
     constraint_provider,
     planning_entity,
+    planning_pin,
     planning_solution,
     planning_variable,
 )
 
 @planning_entity
 class Shift:
+    pinned = planning_pin()
     nurse = planning_variable(value_range_provider="nurses", allows_unassigned=True)
 
     def __init__(self, required: bool = True, nurse: int | None = None) -> None:
         self.required = required
+        self.pinned = False
         self.nurse = nurse
 
 @constraint_provider
@@ -212,11 +215,21 @@ Run `make help` for focused targets such as `make test-hospital`,
   per-query Python callbacks. Provider-backed value ranges are imported once per
   variable and shared across rows in Rust-owned state. Row candidate callbacks
   remain row-specific and define move legality throughout construction and local
-  search, including assignment-group swaps and rematches. `pinning=True` is
-  rejected with `ModelValidationError` rather than ignored: SolverForge pins a
-  whole planning entity through an entity-level descriptor predicate, and no
-  public bridge seam exposes entity pinning to the Python binding yet. Pin an
-  input value by restricting `candidate_values` instead.
+  search, including assignment-group swaps and rematches.
+- `planning_pin()` declares the entity attribute that holds an entity's pinned
+  flag. The declared attribute must hold a `bool` on every instance; an unset or
+  non-`bool` value is rejected at import rather than read as "not pinned". A
+  pinned entity keeps its input planning state: its genuine scalar value and the
+  elements its list variable owns survive construction, local search,
+  ruin/recreate, and exhaustive search, while every unpinned entity in the same
+  solve is still constructed and searched. Pinning preserves input state, it does
+  not exempt a row from the mandatory-completion gate: a pinned required scalar
+  that nothing assigned fails the solve, and a pinned `allows_unassigned` scalar
+  stays unassigned. It is a declared field, not a callback — there is no dynamic
+  `is_pinned()` hook, because the compiled runtime reads a resolved per-row flag.
+  The variable-level `planning_variable(pinning=True)` flag stays rejected with
+  `ModelValidationError`: SolverForge pins whole entities, and that flag names a
+  route the framework does not have.
 - `scalar_assignment_group(...)` declares assignment-aware scalar groups for
   grouped scalar local search and assignment-group construction. Group metadata
   covers required entities, capacity keys, assignment rules, ordering callbacks,
