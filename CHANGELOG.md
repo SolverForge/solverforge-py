@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.6.7](https://github.com/SolverForge/solverforge-py/compare/v0.6.6...v0.6.7) (2026-09-29)
+
+
+### Bug Fixes
+
+* **deps:** consume the SolverForge 0.19.7 registry release 35b1483
+* **schema:** reject the unsupported pinning flag d201a51
+* **ui:** serve the solverforge-ui 0.9.0 asset bundle b3d52d7
+
 ## [0.6.6](///compare/v0.6.5...v0.6.6) (2026-08-11)
 
 ### Bug Fixes
