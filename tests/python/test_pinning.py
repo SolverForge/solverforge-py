@@ -333,6 +333,26 @@ def test_a_hand_built_schema_cannot_declare_two_pin_fields() -> None:
     ]
 
 
+def test_a_hand_built_schema_cannot_name_one_field_as_variable_and_pin() -> None:
+    # Only the pin field's name changes: adding a second pin field would trip the
+    # duplicate-pin check first and never reach the name-collision invariant.
+    schema = build_schema(Schedule([Shift(pinned=True)]))
+    entity = dict(schema["entities"][0])
+    fields = [dict(field) for field in entity["fields"]]
+    pin_index = next(
+        index for index, field in enumerate(fields) if field["kind"] == "planning_pin"
+    )
+    fields[pin_index]["name"] = "nurse"
+    entity["fields"] = fields
+    mutated = dict(schema)
+    mutated["entities"] = [entity]
+
+    with pytest.raises(
+        RuntimeError, match="both a planning variable and a planning_pin"
+    ):
+        _native.validate_schema(mutated)
+
+
 def test_pinned_entity_keeps_its_input_value() -> None:
     solved = Solver.solve(
         Schedule([Shift(pinned=True, nurse=1), Shift(pinned=False)]), STEP_LIMITS

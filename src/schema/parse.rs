@@ -109,6 +109,14 @@ pub fn parse_schema(schema: &Bound<'_, PyDict>) -> PyResult<DynamicSchema> {
                 });
             }
         }
+        if let Some(pin_field) = pin_field.as_deref() {
+            if variables.iter().any(|variable| variable.name == pin_field) {
+                return Err(py_err(format!(
+                    "entity `{type_name}` declares `{pin_field}` as both a planning \
+                     variable and a planning_pin field"
+                )));
+            }
+        }
         entities.push(EntitySchema {
             type_name,
             collection,
