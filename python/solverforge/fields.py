@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from inspect import Parameter, signature
 from typing import Any, NamedTuple, TypeAlias
 
+from .errors import ModelValidationError
+
 MetadataSource = Callable[..., object] | str
 
 
@@ -143,7 +145,6 @@ class FieldMetadata:
     nearby_entity_distance_field: str | None = None
     allows_unassigned: bool = False
     element_collection: str | None = None
-    pinning: bool = False
     element_owner: Callable[..., object] | None = None
     element_owner_field: str | None = None
     construction_element_order_key: Callable[..., object] | None = None
@@ -191,6 +192,14 @@ def planning_variable(
     allows_unassigned: bool = False,
     pinning: bool = False,
 ) -> PlanningField:
+    if pinning:
+        msg = (
+            "planning_variable(pinning=True) is not supported: SolverForge pins a whole "
+            "planning entity through an entity-level descriptor predicate, and no public "
+            "bridge seam exposes entity pinning to the Python binding yet. Pin an input "
+            "value by restricting candidate_values instead."
+        )
+        raise ModelValidationError(msg)
     value_candidates = _resolve_metadata_source(
         nearby_value_candidates, name="nearby_value_candidates"
     )
@@ -217,7 +226,6 @@ def planning_variable(
             nearby_entity_distance_meter=entity_distance.callback,
             nearby_entity_distance_field=entity_distance.field_name,
             allows_unassigned=allows_unassigned,
-            pinning=pinning,
         )
     )
 

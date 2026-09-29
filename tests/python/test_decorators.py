@@ -8,6 +8,7 @@ from solverforge import (
     EntityCallback,
     ListRouteHooks,
     ListSavingsHooks,
+    ModelValidationError,
     RowField,
     SolutionCallback,
     SolutionField,
@@ -51,6 +52,14 @@ def test_schema_dict_compiles_for_runtime_cache() -> None:
 
     assert compiled.solution_type == "Plan"
     assert compiled.score_family == "hard_soft"
+
+
+def test_planning_variable_rejects_unsupported_pinning_flag() -> None:
+    with pytest.raises(ModelValidationError, match="pinning=True"):
+        planning_variable(value_range_provider="workers", pinning=True)
+
+    schema = build_schema(Plan())
+    assert "pinning" not in schema["entities"][0]["fields"][0]
 
 
 @pytest.mark.parametrize(

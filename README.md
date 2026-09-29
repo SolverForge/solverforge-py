@@ -212,7 +212,11 @@ Run `make help` for focused targets such as `make test-hospital`,
   per-query Python callbacks. Provider-backed value ranges are imported once per
   variable and shared across rows in Rust-owned state. Row candidate callbacks
   remain row-specific and define move legality throughout construction and local
-  search, including assignment-group swaps and rematches.
+  search, including assignment-group swaps and rematches. `pinning=True` is
+  rejected with `ModelValidationError` rather than ignored: SolverForge pins a
+  whole planning entity through an entity-level descriptor predicate, and no
+  public bridge seam exposes entity pinning to the Python binding yet. Pin an
+  input value by restricting `candidate_values` instead.
 - `scalar_assignment_group(...)` declares assignment-aware scalar groups for
   grouped scalar local search and assignment-group construction. Group metadata
   covers required entities, capacity keys, assignment rules, ordering callbacks,

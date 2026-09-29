@@ -40,7 +40,6 @@ def _collect_fields(cls: type[object]) -> list[dict[str, object]]:
                     "nearby_entity_distance_field": value.metadata.nearby_entity_distance_field,
                     "allows_unassigned": value.metadata.allows_unassigned,
                     "element_collection": value.metadata.element_collection,
-                    "pinning": value.metadata.pinning,
                     "element_owner": value.metadata.element_owner,
                     "element_owner_field": value.metadata.element_owner_field,
                     "construction_element_order_key": value.metadata.construction_element_order_key,
