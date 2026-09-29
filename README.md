@@ -50,7 +50,7 @@ package once `0.6.7` is released, without `PYTHONPATH` or an editable checkout:
 ```sh
 python3.14 -m venv .venv-examples
 . .venv-examples/bin/activate
-python -m pip install "solverforge[examples]==0.6.6"
+python -m pip install "solverforge[examples]==0.6.7"
 python examples/nqueens.py
 python -m examples.solverforge_hospital
 python -m examples.solverforge_deliveries
