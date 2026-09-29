@@ -2,7 +2,13 @@ import shutil
 import subprocess
 
 import pytest
+
+import solverforge
 from solverforge.ui import asset, asset_paths
+
+# The package version is read from the installed package so these synthetic-name
+# guards can never drift from the release identity.
+PACKAGE_VERSION = solverforge.__version__
 
 
 def test_solverforge_ui_assets_are_served_from_native_bridge() -> None:
@@ -36,9 +42,9 @@ def test_solverforge_ui_assets_serve_current_versioned_bundle() -> None:
 def test_solverforge_ui_assets_do_not_alias_stale_or_synthetic_versioned_bundles() -> (
     None
 ):
-    assert asset("sf.0.6.7.css") is None
-    assert asset("sf.0.6.7.js") is None
-    assert asset("sf.0.6.7.mjs") is None
+    assert asset(f"sf.{PACKAGE_VERSION}.css") is None
+    assert asset(f"sf.{PACKAGE_VERSION}.js") is None
+    assert asset(f"sf.{PACKAGE_VERSION}.mjs") is None
     assert asset("sf.0.7.0.css") is None
     assert asset("sf.0.7.0.js") is None
     assert asset("sf.0.9.0.mjs") is None
@@ -121,8 +127,8 @@ def test_solverforge_ui_asset_paths_are_available() -> None:
     assert "modules/sf-map.js" in paths
     assert "vendor/leaflet/leaflet.js" in paths
 
-    assert "sf.0.6.7.css" not in paths
-    assert "sf.0.6.7.js" not in paths
-    assert "sf.0.6.7.mjs" not in paths
+    assert f"sf.{PACKAGE_VERSION}.css" not in paths
+    assert f"sf.{PACKAGE_VERSION}.js" not in paths
+    assert f"sf.{PACKAGE_VERSION}.mjs" not in paths
     assert "sf.0.7.0.js" not in paths
     assert "sf.0.9.0.mjs" not in paths

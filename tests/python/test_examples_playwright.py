@@ -16,6 +16,7 @@ import uvicorn
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
 from playwright.sync_api import expect as playwright_expect
 
+import solverforge
 from examples.solverforge_deliveries import create_app as create_deliveries_app
 from examples.solverforge_hospital import create_app as create_hospital_app
 
@@ -180,10 +181,11 @@ def test_browser_imports_solverforge_ui_module_assets() -> None:
                 }
                 assert browser_errors == []
 
+                package_version = solverforge.__version__
                 for path in (
-                    "/sf/sf.0.6.7.css",
-                    "/sf/sf.0.6.7.js",
-                    "/sf/sf.0.6.7.mjs",
+                    f"/sf/sf.{package_version}.css",
+                    f"/sf/sf.{package_version}.js",
+                    f"/sf/sf.{package_version}.mjs",
                     "/sf/sf.0.7.0.css",
                     "/sf/sf.0.7.0.js",
                     "/sf/sf.0.9.0.mjs",
