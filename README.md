@@ -9,7 +9,7 @@ clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
 The package targets CPython 3.14 and Rust 1.95.0. This release-preparation
-checkout pins the six published SolverForge Rust dependencies to `0.21.0` and
+checkout pins the six published SolverForge Rust dependencies to `0.21.2` and
 `solverforge-ui` to `0.9.0` through exact crates.io requirements in
 `Cargo.toml` and registry checksums in `Cargo.lock`. There is no local path or
 Git dependency override. The `solverforge` `0.6.x` line is the current dynamic
@@ -21,7 +21,7 @@ requirements, and other APIs that are not part of this package.
 ## Installation
 
 The package version prepared by this checkout is `solverforge` `0.6.11`, targeting
-the published and registry-locked SolverForge Rust `0.21.0` dependency base.
+the published and registry-locked SolverForge Rust `0.21.2` dependency base.
 Install the matching package after its Python release with:
 
 ```sh
