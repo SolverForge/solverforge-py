@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import io
-import json
 import re
 import tarfile
 import tomllib
@@ -120,7 +119,8 @@ def test_solverforge_ui_dependency_is_registry_pinned() -> None:
 
 
 def test_release_tooling_owns_every_version_surface() -> None:
-    config = json.loads((ROOT / ".versionrc.json").read_text(encoding="utf-8"))
+    config_text = (ROOT / "csemver.toml").read_text(encoding="utf-8")
+    config = tomllib.loads(config_text)
 
     assert config["tagPrefix"] == "v"
     assert config["releaseCommitMessageFormat"] == "chore(release): {{currentTag}}"
@@ -150,8 +150,23 @@ def test_release_tooling_owns_every_version_surface() -> None:
     assert bumped == expected_surfaces
     assert {entry["filename"] for entry in config["packageFiles"]} <= bumped
 
-    for entry in config["bumpFiles"]:
-        assert (ROOT / entry["updater"]).is_file(), entry["updater"]
+    release_version = str(load_toml(ROOT / "pyproject.toml")["project"]["version"])
+    bumps: list[dict[str, object]] = list(config["bumpFiles"])
+    assert all(isinstance(entry, dict) for entry in bumps)
+    for entry in bumps:
+        assert isinstance(entry, dict)
+        if entry.get("type") != "regex":
+            continue
+        surface_text = (ROOT / str(entry["filename"])).read_text(encoding="utf-8")
+        pattern = str(entry["pattern"])
+        raw_version_group = entry["versionGroup"]
+        assert isinstance(raw_version_group, int)
+        version_group = raw_version_group
+        matches = re.findall(pattern, surface_text)
+        assert matches, f"release pattern no longer matches: {entry['filename']}"
+        assert all(match[version_group - 1] == release_version for match in matches), entry[
+            "filename"
+        ]
 
     # The section titles reproduce this changelog's established history, and
     # unlisted types stay out of release sections.
@@ -161,6 +176,15 @@ def test_release_tooling_owns_every_version_surface() -> None:
         "test": "Tests",
         "docs": "Documentation and release",
     }
+
+
+def test_legacy_commit_and_tag_version_channels_are_gone() -> None:
+    assert not (ROOT / ".versionrc.json").exists()
+    assert not (ROOT / "scripts" / "version").exists()
+    for path in (ROOT / "Makefile", ROOT / "AGENTS.md", ROOT / "WIREFRAME.md"):
+        text = path.read_text(encoding="utf-8")
+        assert "commit-and-tag-version" not in text, path.name
+        assert ".versionrc" not in text, path.name
 
 
 def test_release_workflow_validates_only_tagged_pypi_publish() -> None:

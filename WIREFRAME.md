@@ -30,8 +30,8 @@ shape, and source-checkout example UI/API surfaces.
   aliasing to current bytes.
 - Current contract documentation is intentionally kept in `README.md`,
   `AGENTS.md`, this wireframe, and the example READMEs. `CHANGELOG.md` remains
-  tool-managed release history: `.versionrc.json` plus `scripts/version/` own
-  every version surface, so one `make release-tag` bumps the crate, package,
+  tool-managed release history: `csemver.toml` owns every version surface, so
+  one `make release-tag` bumps the crate, package,
   lockfile, importable version, and documented releases, writes the changelog,
   and cuts the release commit and tag. There is no separate `docs/` directory.
 

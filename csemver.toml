@@ -1,0 +1,58 @@
+# csemver — native release configuration.
+# Replaces the retired .versionrc.json and scripts/version/* JavaScript
+# updaters: every surface uses a native updater (the TOML line reader or a
+# POSIX ERE regex with an explicit version capture group). Bump entries apply
+# in order, re-reading each file from disk, so several entries may target one
+# file to move every documented version surface. versionGroup names the span
+# csemver replaces; prefix and suffix groups are preserved verbatim.
+
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file."""
+
+tagPrefix = "v"
+
+releaseCommitMessageFormat = "chore(release): {{currentTag}}"
+commitUrlFormat = "https://github.com/SolverForge/solverforge-py/commit/{{hash}}"
+compareUrlFormat = "https://github.com/SolverForge/solverforge-py/compare/{{previousTag}}...{{currentTag}}"
+
+packageFiles = [
+  # Reads the canonical package version every other surface must match.
+  { filename = "pyproject.toml", type = "toml" },
+]
+
+bumpFiles = [
+  # Python package release version and native crate release version.
+  { filename = "pyproject.toml", type = "toml" },
+  { filename = "Cargo.toml", type = "toml" },
+  # The lockfile's solverforge_py entry. The six SolverForge dependency
+  # records are owned by the dependency upgrade pass and must not move here,
+  # so the entry is anchored to the package name in the same block.
+  { filename = "Cargo.lock", type = 'regex', pattern = '''(\[\[package\]\]
+name = "solverforge_py"
+version = ")([^"]*)(")''', versionGroup = 2 },
+  # Importable package version; pyproject.toml must stay equal to it.
+  { filename = "python/solverforge/__init__.py", type = 'regex', pattern = '(__version__ = ")([^"]*)(")', versionGroup = 2 },
+  # Documented release surfaces. README's install snippet and the example
+  # READMEs' install snippets must match both the pre-publication wordings
+  # configured here; the dependency upgrade pass owns the SolverForge
+  # dependency versions mentioned in the same files.
+  { filename = "README.md", type = 'regex', pattern = '(prepared by this checkout is `solverforge` `)([^`]*)(`)', versionGroup = 2 },
+  { filename = "README.md", type = 'regex', pattern = '(python3\.14 -m pip install "solverforge==)([^"]*)(")', versionGroup = 2 },
+  { filename = "README.md", type = 'regex', pattern = '(package once `)([^`]*)(` is released)', versionGroup = 2 },
+  { filename = "README.md", type = 'regex', pattern = '(python -m pip install "solverforge\[examples\]==)([^"]*)(")', versionGroup = 2 },
+  { filename = "AGENTS.md", type = 'regex', pattern = '(prepares package/crate `)([^`]*)(`)', versionGroup = 2 },
+  { filename = "WIREFRAME.md", type = 'regex', pattern = '(metadata version `)([^`]*)(`)', versionGroup = 2 },
+  { filename = "examples/solverforge_hospital/README.md", type = 'regex', pattern = '(After `)([^`]*)(` is published)', versionGroup = 2 },
+  { filename = "examples/solverforge_hospital/README.md", type = 'regex', pattern = '(solverforge\[examples\]==)([^"]*)(")', versionGroup = 2 },
+  { filename = "examples/solverforge_deliveries/README.md", type = 'regex', pattern = '(After `)([^`]*)(` is published)', versionGroup = 2 },
+  { filename = "examples/solverforge_deliveries/README.md", type = 'regex', pattern = '(solverforge\[examples\]==)([^"]*)(")', versionGroup = 2 },
+]
+
+types = [
+  { type = "feat", section = "Features" },
+  { type = "fix", section = "Bug Fixes" },
+  { type = "test", section = "Tests" },
+  { type = "docs", section = "Documentation and release" },
+]
