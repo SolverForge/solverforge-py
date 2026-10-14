@@ -1,6 +1,13 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+All notable changes to this project will be documented in this file.
+## [0.6.11](https://github.com/SolverForge/solverforge-py/compare/v0.6.10...v0.6.11) (2026-10-14)
+
+
+### Bug Fixes
+
+* **deps:** target the SolverForge 0.21.0 registry base ([33dc856](https://github.com/SolverForge/solverforge-py/commit/33dc8565c6070bfda68d0d7d62148de5624ec95e))
+
 
 ## [0.6.10](https://github.com/SolverForge/solverforge-py/compare/v0.6.9...v0.6.10) (2026-09-29)
 
