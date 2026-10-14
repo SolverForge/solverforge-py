@@ -1,6 +1,14 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.6.13](https://github.com/SolverForge/solverforge-py/compare/v0.6.12...v0.6.13) (2026-10-14)
+
+
+### Bug Fixes
+
+* **runtime:** resolve assignment metadata fields once at import ([0af0ab3](https://github.com/SolverForge/solverforge-py/commit/0af0ab344702592d12ee6237557b0131952fb08f))
+
+
 ## [0.6.12](https://github.com/SolverForge/solverforge-py/compare/v0.6.11...v0.6.12) (2026-10-14)
 
 
