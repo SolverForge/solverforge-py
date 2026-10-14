@@ -3,6 +3,19 @@ use std::sync::Arc;
 
 use crate::value::DynamicValue;
 
+/// Immutable assignment row sources, resolved by group and hook once at import.
+/// State clones share these values; planning-variable changes never rewrite them.
+pub type AssignmentGroupFields = Vec<Vec<AssignmentRowFields>>;
+
+#[derive(Debug, Clone, Default)]
+pub struct AssignmentRowFields {
+    pub required_entity: Option<DynamicValue>,
+    pub capacity_key: Option<DynamicValue>,
+    pub position_key: Option<DynamicValue>,
+    pub sequence_key: Option<DynamicValue>,
+    pub same_value_conflicts: Option<DynamicValue>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct DynamicState {
     pub entities: Vec<Vec<DynamicEntityRow>>,
@@ -10,6 +23,7 @@ pub struct DynamicState {
     pub scalar_value_ranges: Vec<Vec<Option<Arc<[usize]>>>>,
     pub list_elements: Vec<Vec<Option<Arc<[usize]>>>>,
     pub solution_fields: Arc<BTreeMap<String, DynamicValue>>,
+    pub assignment_group_fields: Arc<AssignmentGroupFields>,
 }
 
 impl DynamicState {

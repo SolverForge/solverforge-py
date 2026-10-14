@@ -12,7 +12,9 @@ use crate::schema::types::{
 };
 use crate::schema::DynamicSchema;
 use crate::state::callback_view::PythonCallbackView;
-use crate::state::entity_table::{DynamicEntityRow, DynamicState};
+use crate::state::entity_table::{
+    AssignmentGroupFields, AssignmentRowFields, DynamicEntityRow, DynamicState,
+};
 use crate::state::PyDynamicSolution;
 use crate::value::DynamicValue;
 
@@ -148,6 +150,7 @@ pub fn import_solution(
         fact_objects.push(objects);
     }
     validate_assignment_group_field_metadata(schema, &entity_tables)?;
+    let assignment_group_fields = resolve_assignment_group_fields(schema, &entity_tables)?;
     validate_list_element_metadata_field_sources(
         schema,
         &entity_tables,
@@ -163,6 +166,7 @@ pub fn import_solution(
             scalar_value_ranges,
             list_elements,
             solution_fields: Arc::new(solution_fields),
+            assignment_group_fields: Arc::new(assignment_group_fields),
         },
         PythonCallbackView::from_import(
             py_solution.clone().unbind(),
@@ -482,6 +486,57 @@ fn collect_list_metadata_row_fields(
     if let Some(source) = metadata.intra_position_distance.as_ref() {
         collect_source(source);
     }
+}
+
+fn resolve_assignment_group_fields(
+    schema: &DynamicSchema,
+    entity_tables: &[Vec<DynamicEntityRow>],
+) -> PyResult<AssignmentGroupFields> {
+    schema
+        .assignment_scalar_groups
+        .iter()
+        .map(|group| {
+            let entity_index = schema
+                .entity_index_by_type(&group.entity_class)
+                .expect("assignment group entity validated");
+            let fields = [
+                group
+                    .required_entity
+                    .as_ref()
+                    .and_then(MetadataSourceSchema::row),
+                group
+                    .capacity_key
+                    .as_ref()
+                    .and_then(MetadataSourceSchema::row),
+                group
+                    .position_key
+                    .as_ref()
+                    .and_then(MetadataSourceSchema::row),
+                group
+                    .sequence_key
+                    .as_ref()
+                    .and_then(MetadataSourceSchema::row),
+                group.same_value_conflict_field.as_deref(),
+            ];
+            entity_tables[entity_index]
+                .iter()
+                .enumerate()
+                .map(|(row_index, row)| {
+                    let mut resolved = std::array::from_fn(|_| None);
+                    for (index, field) in fields.iter().enumerate() {
+                        if let Some(field) = field {
+                            resolved[index] = Some(
+                                assignment_metadata_field(row, &group.name, row_index, field)?
+                                    .clone(),
+                            );
+                        }
+                    }
+                    let [required_entity, capacity_key, position_key, sequence_key, same_value_conflicts] = resolved;
+                    Ok(AssignmentRowFields { required_entity, capacity_key, position_key, sequence_key, same_value_conflicts })
+                })
+                .collect()
+        })
+        .collect()
 }
 
 fn validate_assignment_group_field_metadata(

@@ -2478,6 +2478,27 @@ def test_scalar_assignment_group_field_metadata_solves_with_rule_callback() -> N
     assert plan.score["levels"] == [0, 0]
 
 
+def test_scalar_assignment_fields_are_resolved_per_import_and_survive_resolving() -> None:
+    config = {
+        "phases": [
+            {
+                "type": "construction_heuristic",
+                "construction_heuristic_type": "first_fit",
+                "group_name": "field_shift_nurse_assignment",
+            }
+        ]
+    }
+    for keys in ([0, 1], [2, 3], [0, 1]):
+        schedule = FieldAssignmentSchedule(keys)
+        solved = Solver.solve(schedule, config)
+        assert sorted(shift.nurse for shift in solved.shifts) == [0, 1]
+        assert all(shift.capacity_keys == keys for shift in solved.shifts)
+        assert solved.score == Solver.analyze(solved)
+        resumed = Solver.solve(solved, config)
+        assert sorted(shift.nurse for shift in resumed.shifts) == [0, 1]
+        assert resumed.score == Solver.analyze(resumed)
+
+
 def test_scalar_assignment_group_same_value_conflict_field_stays_native() -> None:
     schema = build_schema(ConflictFieldAssignmentSchedule())
     group = schema["scalar_groups"][0]

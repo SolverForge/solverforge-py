@@ -123,7 +123,6 @@ fn build_assignment_group(
     let metadata = Arc::new(PyDynamicAssignmentMetadata {
         schema,
         group_index,
-        entity_index,
     });
     Ok(ScalarGroupBinding::dynamic_assignment(
         intern(group.name.clone()),
@@ -146,7 +145,6 @@ fn scalar_group_limits(group: &AssignmentScalarGroupSchema) -> ScalarGroupLimits
 struct PyDynamicAssignmentMetadata {
     schema: Arc<DynamicSchema>,
     group_index: usize,
-    entity_index: usize,
 }
 
 impl PyDynamicAssignmentMetadata {
@@ -182,10 +180,16 @@ impl PyDynamicAssignmentMetadata {
         };
         solution
             .state
-            .entities
-            .get(self.entity_index)
+            .assignment_group_fields
+            .get(self.group_index)
             .and_then(|rows| rows.get(entity_index))
-            .and_then(|row| row.fields.get(field_name))
+            .and_then(|fields| match hook_name {
+                "required_entity" => fields.required_entity.as_ref(),
+                "capacity_key" => fields.capacity_key.as_ref(),
+                "position_key" => fields.position_key.as_ref(),
+                "sequence_key" => fields.sequence_key.as_ref(),
+                _ => unreachable!("assignment metadata source resolved"),
+            })
             .map(Some)
             .ok_or_else(|| {
                 py_err(format!(
@@ -420,10 +424,10 @@ impl PyDynamicAssignmentMetadata {
     ) -> PyResult<bool> {
         let value = solution
             .state
-            .entities
-            .get(self.entity_index)
+            .assignment_group_fields
+            .get(self.group_index)
             .and_then(|rows| rows.get(entity_index))
-            .and_then(|row| row.fields.get(field_name))
+            .and_then(|fields| fields.same_value_conflicts.as_ref())
             .ok_or_else(|| {
                 py_err(format!(
                     "assignment scalar group `{}` field `{field_name}` is missing on row {entity_index}",
@@ -545,5 +549,95 @@ fn indexed_usize(field_value: &DynamicValue, candidate_value: usize) -> PyResult
         _ => Err(py_err(
             "assignment capacity_key field must contain non-negative integers or None",
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pyo3::ffi::c_str;
+
+    use super::*;
+    use crate::schema::parse::parse_schema;
+    use crate::schema::runtime_plan::CompiledRuntimePlan;
+    use crate::state::callback_view::PythonCallbackView;
+    use crate::state::entity_table::{AssignmentRowFields, DynamicEntityRow, DynamicState};
+
+    #[test]
+    fn assignment_access_uses_imported_slots_not_named_row_fields() {
+        Python::initialize();
+        Python::attach(|py| {
+            let raw = py
+                .eval(
+                    c_str!(
+                        r#"{
+                'solution_type': 'Plan', 'score_family': 'hard_soft',
+                'entities': [{'type_name': 'Task', 'collection': 'tasks', 'fields': [
+                    {'name': 'value', 'kind': 'planning_variable', 'allows_unassigned': True}
+                ]}],
+                'constraints': [], 'conflict_repairs': [], 'candidate_metrics': [],
+                'scalar_groups': [{'kind': 'assignment', 'name': 'assign',
+                    'entity_class': 'Task', 'variable_name': 'value',
+                    'required_entity_field': 'required', 'capacity_key_field': 'capacity',
+                    'position_key_field': 'position', 'sequence_key_field': 'sequence',
+                    'same_value_conflict_field': 'conflicts'}]
+            }"#
+                    ),
+                    None,
+                    None,
+                )
+                .unwrap();
+            let schema = Arc::new(parse_schema(raw.cast().unwrap()).unwrap());
+            let plan = Arc::new(CompiledRuntimePlan::from_schema(Arc::clone(&schema)).unwrap());
+            let metadata = PyDynamicAssignmentMetadata {
+                schema,
+                group_index: 0,
+            };
+            let state = DynamicState {
+                entities: vec![vec![DynamicEntityRow::default(); 2]],
+                assignment_group_fields: Arc::new(vec![vec![
+                    AssignmentRowFields {
+                        required_entity: Some(DynamicValue::Bool(true)),
+                        capacity_key: Some(DynamicValue::List(vec![
+                            DynamicValue::Int(7),
+                            DynamicValue::None,
+                        ])),
+                        position_key: Some(DynamicValue::Int(13)),
+                        sequence_key: Some(DynamicValue::Int(5)),
+                        same_value_conflicts: Some(DynamicValue::List(vec![DynamicValue::Int(1)])),
+                    },
+                    AssignmentRowFields {
+                        required_entity: Some(DynamicValue::Bool(false)),
+                        same_value_conflicts: Some(DynamicValue::List(Vec::new())),
+                        ..AssignmentRowFields::default()
+                    },
+                ]]),
+                ..DynamicState::default()
+            };
+            let solution = PyDynamicSolution::from_runtime_plan(
+                plan,
+                state,
+                PythonCallbackView::default(),
+                None,
+                SolverConfig::default(),
+                0,
+            );
+            let cloned = solution.clone();
+            assert!(Arc::ptr_eq(
+                &solution.state.assignment_group_fields,
+                &cloned.state.assignment_group_fields
+            ));
+            for state in [&solution, &cloned] {
+                assert!(state.state.entities[0][0].fields.is_empty());
+                assert!(metadata.required_entity(state, 0));
+                assert!(!metadata.required_entity(state, 1));
+                assert_eq!(metadata.capacity_key(state, 0, 0), Some(7));
+                assert_eq!(metadata.capacity_key(state, 0, 1), None);
+                assert_eq!(metadata.position_key(state, 0), Some(13));
+                assert_eq!(metadata.sequence_key(state, 0, 0), Some(5));
+                assert!(!metadata.assignment_edge_allowed(state, 0, 0, 1, 0));
+                assert!(!metadata.assignment_edge_allowed(state, 1, 0, 0, 0));
+                assert!(metadata.assignment_edge_allowed(state, 0, 0, 1, 1));
+            }
+        });
     }
 }
