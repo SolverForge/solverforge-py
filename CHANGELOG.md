@@ -1,6 +1,14 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.6.12](https://github.com/SolverForge/solverforge-py/compare/v0.6.11...v0.6.12) (2026-10-14)
+
+
+### Bug Fixes
+
+* **deps:** target the SolverForge 0.21.2 registry base ([0d50553](https://github.com/SolverForge/solverforge-py/commit/0d505534be99ba3d226def9a14653a0ae3d2cc7b))
+
+
 ## [0.6.11](https://github.com/SolverForge/solverforge-py/compare/v0.6.10...v0.6.11) (2026-10-14)
 
 
