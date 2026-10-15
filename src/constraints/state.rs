@@ -19,6 +19,10 @@ use crate::score::{dynamic_score_from_native, DynamicScore};
 use crate::state::PyDynamicSolution;
 use crate::value::DynamicValue;
 
+#[cfg(test)]
+#[path = "compiled_dispatch_tests.rs"]
+mod compiled_dispatch_tests;
+
 struct PythonRowSet {
     type_name: String,
     rows: Vec<Py<PyAny>>,
@@ -393,6 +397,85 @@ impl PyDynamicConstraintSet {
         })
     }
 
+    fn evaluate_delta(
+        &mut self,
+        py: Python<'_>,
+        solution: &PyDynamicSolution,
+        target: DeltaTarget,
+    ) -> PyResult<DynamicScore> {
+        let mut total = DynamicScore::zero();
+        let mut rows_ready = false;
+        // An uncompiled set uses the original Python list in one pass. Compiled
+        // sets fall back only for the individual plans that need Python rows.
+        let plan_count = self.compiled.plans().len();
+        for plan_index in 0..plan_count.max(1) {
+            let direct = match self.compiled.plans().get(plan_index) {
+                Some(CompiledConstraintPlan::Unary(plan)) => Some(unary_delta(plan, target)),
+                Some(CompiledConstraintPlan::AttributeJoin(plan)) => {
+                    attribute_join_delta(solution, plan, &self.retracted_entities, target)?
+                }
+                Some(CompiledConstraintPlan::ListPrecedence(plan)) => {
+                    Some(if plan.entity_index == target.descriptor_index {
+                        list_precedence::evaluate_delta(
+                            py,
+                            &mut self.list_precedence_cache,
+                            plan_index,
+                            solution,
+                            plan.entity_index,
+                            target.entity_index,
+                            plan.python_plan.bind(py).cast::<PyDict>()?,
+                            match target.mode {
+                                DeltaMode::Insert => ListPrecedenceDeltaMode::Insert,
+                                DeltaMode::Retract => ListPrecedenceDeltaMode::Retract,
+                            },
+                            &self.retracted_entities,
+                        )?
+                    } else {
+                        DynamicScore::zero()
+                    })
+                }
+                _ => None,
+            };
+            if let Some(delta) = direct {
+                total = total + delta;
+                continue;
+            }
+            if !rows_ready {
+                ensure_cached_rows(py, &mut self.cached_rows, solution)?;
+                if matches!(target.mode, DeltaMode::Insert) {
+                    sync_cached_entity_row(
+                        py,
+                        self.cached_rows.as_mut().unwrap(),
+                        solution,
+                        target.descriptor_index,
+                        target.entity_index,
+                    )?;
+                }
+                rows_ready = true;
+            }
+            let mut caches = ConstraintStateCaches {
+                join_key: &mut self.join_key_cache,
+                join_index: &mut self.join_index_cache,
+                balance_count: &mut self.balance_count_cache,
+                group: &mut self.group_cache,
+                list_unassigned_count: &mut self.list_unassigned_count_cache,
+                list_precedence: &mut self.list_precedence_cache,
+            };
+            total = total
+                + evaluate_impacted_state_constraints(
+                    py,
+                    solution,
+                    self.cached_rows.as_ref().unwrap(),
+                    &mut caches,
+                    &self.retracted_entities,
+                    self.compiled.python_plans().bind(py),
+                    target,
+                    (plan_count != 0).then_some(plan_index),
+                )?;
+        }
+        Ok(total)
+    }
+
     fn reset_incremental_state(&mut self) {
         self.cached_rows = None;
         self.join_key_cache.clear();
@@ -445,41 +528,9 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
         descriptor_index: usize,
     ) -> DynamicScore {
         let delta = Python::attach(|py| {
-            if can_score_delta(&self.compiled) {
-                if let Some(delta) = score_delta(
-                    solution,
-                    &self.compiled,
-                    &self.retracted_entities,
-                    DeltaTarget {
-                        entity_index,
-                        descriptor_index,
-                        mode: DeltaMode::Insert,
-                    },
-                )? {
-                    return Ok(delta);
-                }
-            }
-            ensure_cached_rows(py, &mut self.cached_rows, solution)?;
-            let row_sets = self
-                .cached_rows
-                .as_mut()
-                .expect("cached rows must exist after ensure_cached_rows");
-            sync_cached_entity_row(py, row_sets, solution, descriptor_index, entity_index)?;
-            let mut caches = ConstraintStateCaches {
-                join_key: &mut self.join_key_cache,
-                join_index: &mut self.join_index_cache,
-                balance_count: &mut self.balance_count_cache,
-                group: &mut self.group_cache,
-                list_unassigned_count: &mut self.list_unassigned_count_cache,
-                list_precedence: &mut self.list_precedence_cache,
-            };
-            evaluate_impacted_state_constraints(
+            self.evaluate_delta(
                 py,
                 solution,
-                row_sets,
-                &mut caches,
-                &self.retracted_entities,
-                self.compiled.python_plans().bind(py),
                 DeltaTarget {
                     entity_index,
                     descriptor_index,
@@ -500,38 +551,9 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
         descriptor_index: usize,
     ) -> DynamicScore {
         let delta = Python::attach(|py| {
-            if can_score_delta(&self.compiled) {
-                if let Some(delta) = score_delta(
-                    solution,
-                    &self.compiled,
-                    &self.retracted_entities,
-                    DeltaTarget {
-                        entity_index,
-                        descriptor_index,
-                        mode: DeltaMode::Retract,
-                    },
-                )? {
-                    return Ok(delta);
-                }
-            }
-            ensure_cached_rows(py, &mut self.cached_rows, solution)?;
-            let mut caches = ConstraintStateCaches {
-                join_key: &mut self.join_key_cache,
-                join_index: &mut self.join_index_cache,
-                balance_count: &mut self.balance_count_cache,
-                group: &mut self.group_cache,
-                list_unassigned_count: &mut self.list_unassigned_count_cache,
-                list_precedence: &mut self.list_precedence_cache,
-            };
-            evaluate_impacted_state_constraints(
+            self.evaluate_delta(
                 py,
                 solution,
-                self.cached_rows
-                    .as_ref()
-                    .expect("cached rows must exist after ensure_cached_rows"),
-                &mut caches,
-                &self.retracted_entities,
-                self.compiled.python_plans().bind(py),
                 DeltaTarget {
                     entity_index,
                     descriptor_index,
@@ -556,7 +578,7 @@ fn evaluate_state_constraints(
     constraints: &Bound<'_, PyAny>,
 ) -> PyResult<DynamicScore> {
     let row_sets = python_rows_by_type(py, solution)?;
-    evaluate_state_constraint_plans(py, solution, &row_sets, constraints)
+    evaluate_state_constraint_plans(py, solution, &row_sets, constraints, None)
 }
 
 fn evaluate_compiled_constraints(
@@ -569,13 +591,20 @@ fn evaluate_compiled_constraints(
     }
     let mut total = DynamicScore::zero();
     let mut fallback_rows: Option<Vec<PythonRowSet>> = None;
-    for plan in compiled.plans() {
+    for (plan_index, plan) in compiled.plans().iter().enumerate() {
+        let python_plan = plan.python_plan();
         let direct_score = match plan {
             CompiledConstraintPlan::Unary(plan) => Some(score_unary(solution, plan)),
             CompiledConstraintPlan::AttributeJoin(plan) => score_attribute_join(solution, plan)?,
             CompiledConstraintPlan::ListCoverage(plan) => {
                 Some(score_list_coverage(solution, plan)?)
             }
+            CompiledConstraintPlan::ListPrecedence(plan) => Some(list_precedence::evaluate_plan(
+                py,
+                solution,
+                plan.entity_index,
+                python_plan.bind(py).cast::<PyDict>()?,
+            )?),
             CompiledConstraintPlan::Python(_) => None,
         };
         if let Some(score) = direct_score {
@@ -583,12 +612,12 @@ fn evaluate_compiled_constraints(
             continue;
         }
         ensure_cached_rows(py, &mut fallback_rows, solution)?;
-        let single = PyList::new(py, [plan.python_plan().clone_ref(py)])?;
         total = evaluate_state_constraint_plans(
             py,
             solution,
             fallback_rows.as_ref().unwrap(),
-            &single,
+            compiled.python_plans().bind(py),
+            Some(plan_index),
         )? + total;
     }
     Ok(total)
@@ -664,41 +693,6 @@ fn score_attribute_join(
     Ok(Some(
         plan.impact.apply(score_times(plan.weight, match_count)),
     ))
-}
-
-fn can_score_delta(compiled: &CompiledConstraintSet) -> bool {
-    compiled.plans().iter().all(|plan| match plan {
-        CompiledConstraintPlan::Unary(_) => true,
-        CompiledConstraintPlan::AttributeJoin(plan) => {
-            plan.left_entity_index != plan.right_entity_index
-        }
-        CompiledConstraintPlan::ListCoverage(_) | CompiledConstraintPlan::Python(_) => false,
-    })
-}
-
-fn score_delta(
-    solution: &PyDynamicSolution,
-    compiled: &CompiledConstraintSet,
-    retracted_entities: &RetractedEntitySet,
-    target: DeltaTarget,
-) -> PyResult<Option<DynamicScore>> {
-    let mut total = DynamicScore::zero();
-    for plan in compiled.plans() {
-        let contribution = match plan {
-            CompiledConstraintPlan::Unary(plan) => Some(unary_delta(plan, target)),
-            CompiledConstraintPlan::AttributeJoin(plan) => {
-                attribute_join_delta(solution, plan, retracted_entities, target)?
-            }
-            CompiledConstraintPlan::ListCoverage(_) | CompiledConstraintPlan::Python(_) => {
-                return Ok(None);
-            }
-        };
-        let Some(contribution) = contribution else {
-            return Ok(None);
-        };
-        total = total + contribution;
-    }
-    Ok(Some(total))
 }
 
 fn unary_delta(plan: &UnaryPlan, target: DeltaTarget) -> DynamicScore {
@@ -824,10 +818,13 @@ fn evaluate_state_constraint_plans(
     solution: &PyDynamicSolution,
     row_sets: &[PythonRowSet],
     constraints: &Bound<'_, PyAny>,
+    selected_plan: Option<usize>,
 ) -> PyResult<DynamicScore> {
     let constraints = constraints.cast::<PyList>()?;
     let mut total = DynamicScore::zero();
-    for plan_any in constraints.iter() {
+    let indices = selected_plan.map_or(0..constraints.len(), |index| index..index + 1);
+    for plan_index in indices {
+        let plan_any = constraints.get_item(plan_index)?;
         let plan = plan_any.cast::<PyDict>()?;
         let entity_type = plan
             .get_item("entity_type")?
@@ -979,6 +976,7 @@ fn evaluate_state_constraint_plans(
     Ok(total)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn evaluate_impacted_state_constraints(
     py: Python<'_>,
     solution: &PyDynamicSolution,
@@ -987,10 +985,13 @@ fn evaluate_impacted_state_constraints(
     retracted_entities: &RetractedEntitySet,
     constraints: &Bound<'_, PyAny>,
     target: DeltaTarget,
+    selected_plan: Option<usize>,
 ) -> PyResult<DynamicScore> {
     let constraints = constraints.cast::<PyList>()?;
     let mut total = DynamicScore::zero();
-    for (plan_index, plan_any) in constraints.iter().enumerate() {
+    let indices = selected_plan.map_or(0..constraints.len(), |index| index..index + 1);
+    for plan_index in indices {
+        let plan_any = constraints.get_item(plan_index)?;
         let plan = plan_any.cast::<PyDict>()?;
         let entity_type = plan
             .get_item("entity_type")?

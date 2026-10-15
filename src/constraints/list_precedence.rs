@@ -14,25 +14,30 @@ type OwnerId = usize;
 type DenseNodeId = usize;
 type DenseEdge = (DenseNodeId, DenseNodeId);
 
-pub type ListPrecedenceStateCache = BTreeMap<usize, DynamicListPrecedenceState>;
+#[cfg(test)]
+#[path = "list_precedence_tests.rs"]
+mod tests;
+
+pub type ListPrecedenceStateCache =
+    BTreeMap<usize, (ListPrecedencePlan, DynamicListPrecedenceState)>;
 
 pub enum ListPrecedenceDeltaMode {
     Insert,
     Retract,
 }
 
-struct ListPrecedencePlan<'py> {
+pub struct ListPrecedencePlan {
     score_family: String,
     variable_name: String,
-    duration: Option<Bound<'py, PyAny>>,
+    duration: Option<Py<PyAny>>,
     duration_field: Option<String>,
-    successors: Option<Bound<'py, PyAny>>,
+    successors: Option<Py<PyAny>>,
     successors_field: Option<String>,
-    expected_owner: Option<Bound<'py, PyAny>>,
+    expected_owner: Option<Py<PyAny>>,
     expected_owner_field: Option<String>,
 }
 
-impl ListPrecedencePlan<'_> {
+impl ListPrecedencePlan {
     fn uses_callbacks(&self) -> bool {
         self.duration.is_some() || self.successors.is_some() || self.expected_owner.is_some()
     }
@@ -95,7 +100,7 @@ pub fn initialize_cache_entry(
 ) -> PyResult<()> {
     let access = parse_plan(plan)?;
     let state = build_state(py, solution, descriptor_index, &access, None)?;
-    cache.insert(plan_index, state);
+    cache.insert(plan_index, (access, state));
     Ok(())
 }
 
@@ -111,8 +116,8 @@ pub fn evaluate_delta(
     mode: ListPrecedenceDeltaMode,
     retracted_entities: &std::collections::BTreeSet<(usize, usize)>,
 ) -> PyResult<DynamicScore> {
-    let access = parse_plan(plan)?;
     if let std::collections::btree_map::Entry::Vacant(entry) = cache.entry(plan_index) {
+        let access = parse_plan(plan)?;
         let state = build_state(
             py,
             solution,
@@ -120,9 +125,9 @@ pub fn evaluate_delta(
             &access,
             Some(retracted_entities),
         )?;
-        entry.insert(state);
+        entry.insert((access, state));
     }
-    let Some(state) = cache.get_mut(&plan_index) else {
+    let Some((access, state)) = cache.get_mut(&plan_index) else {
         return Ok(DynamicScore::zero());
     };
     if entity_index >= state.owner_edges.len() {
@@ -131,21 +136,47 @@ pub fn evaluate_delta(
     let variable_index = list_variable_index(solution, descriptor_index, &access.variable_name)?;
     let before = state.score;
     let change = match mode {
-        ListPrecedenceDeltaMode::Insert => state.add_owner_route(
-            py,
-            solution,
-            descriptor_index,
-            entity_index,
-            &access,
-            variable_index,
-        )?,
-        ListPrecedenceDeltaMode::Retract => state.remove_owner_route(entity_index),
+        ListPrecedenceDeltaMode::Insert => {
+            let mut pending = RouteChange::default();
+            for index in 0..state.pending_retractions.len() {
+                let owner = state.pending_retractions[index];
+                state.pending_retracted[owner] = false;
+                if owner != entity_index {
+                    let removed = state.remove_owner_route(owner);
+                    pending.removed_edges.extend(removed.removed_edges);
+                }
+            }
+            state.pending_retractions.clear();
+            let inserted = state.add_owner_route(
+                py,
+                solution,
+                descriptor_index,
+                entity_index,
+                access,
+                variable_index,
+            )?;
+            if pending.removed_edges.is_empty() {
+                inserted
+            } else {
+                pending.added_edges.extend(inserted.added_edges);
+                pending.removed_edges.extend(inserted.removed_edges);
+                pending
+            }
+        }
+        ListPrecedenceDeltaMode::Retract => {
+            if !state.pending_retracted[entity_index] {
+                state.pending_retracted[entity_index] = true;
+                state.pending_retractions.push(entity_index);
+            }
+            return Ok(DynamicScore::zero());
+        }
     };
     let after = state.refresh_score_after_route_change(&change);
+    state.route_change_scratch = change;
     Ok(after - before)
 }
 
-fn parse_plan<'py>(plan: &Bound<'py, PyDict>) -> PyResult<ListPrecedencePlan<'py>> {
+fn parse_plan(plan: &Bound<'_, PyDict>) -> PyResult<ListPrecedencePlan> {
     Ok(ListPrecedencePlan {
         score_family: required_plan_string(plan, "score_family")?,
         variable_name: required_plan_string(plan, "variable_name")?,
@@ -162,7 +193,7 @@ fn build_state(
     py: Python<'_>,
     solution: &PyDynamicSolution,
     descriptor_index: usize,
-    access: &ListPrecedencePlan<'_>,
+    access: &ListPrecedencePlan,
     retracted_entities: Option<&std::collections::BTreeSet<(usize, usize)>>,
 ) -> PyResult<DynamicListPrecedenceState> {
     let variable_index = list_variable_index(solution, descriptor_index, &access.variable_name)?;
@@ -251,6 +282,19 @@ pub struct DynamicListPrecedenceState {
     score: DynamicScore,
     hard_penalty: usize,
     makespan: i64,
+    max_finish_nodes: usize,
+    route_snapshot_scratch: RouteSnapshot,
+    route_change_scratch: RouteChange,
+    assignment_counts_scratch: HashMap<DenseNodeId, (usize, usize)>,
+    edge_counts_scratch: HashMap<DenseEdge, (usize, usize)>,
+    scratch_queued: Vec<usize>,
+    scratch_queue: Vec<DenseNodeId>,
+    queue_stamp: usize,
+    probe_visited: Vec<usize>,
+    probe_stack: Vec<DenseNodeId>,
+    probe_stamp: usize,
+    pending_retracted: Vec<bool>,
+    pending_retractions: Vec<OwnerId>,
 }
 
 impl DynamicListPrecedenceState {
@@ -286,6 +330,19 @@ impl DynamicListPrecedenceState {
             score: DynamicScore::zero(),
             hard_penalty: 0,
             makespan: 0,
+            max_finish_nodes: 0,
+            route_snapshot_scratch: RouteSnapshot::default(),
+            route_change_scratch: RouteChange::default(),
+            assignment_counts_scratch: HashMap::new(),
+            edge_counts_scratch: HashMap::new(),
+            scratch_queued: vec![0; node_count],
+            scratch_queue: Vec::new(),
+            queue_stamp: 1,
+            probe_visited: vec![0; node_count],
+            probe_stack: Vec::new(),
+            probe_stamp: 0,
+            pending_retracted: vec![false; owner_count],
+            pending_retractions: Vec::with_capacity(owner_count),
         }
     }
 
@@ -348,7 +405,7 @@ impl DynamicListPrecedenceState {
         solution: &PyDynamicSolution,
         descriptor_index: usize,
         owner: OwnerId,
-        access: &ListPrecedencePlan<'_>,
+        access: &ListPrecedencePlan,
         variable_index: usize,
     ) -> PyResult<RouteChange> {
         let snapshot = self.owner_route_snapshot(
@@ -367,30 +424,33 @@ impl DynamicListPrecedenceState {
     }
 
     fn owner_route_snapshot(
-        &self,
+        &mut self,
         py: Python<'_>,
         solution: &PyDynamicSolution,
         descriptor_index: usize,
         owner: OwnerId,
-        access: &ListPrecedencePlan<'_>,
+        access: &ListPrecedencePlan,
         variable_index: usize,
     ) -> PyResult<RouteSnapshot> {
-        let mut snapshot = RouteSnapshot::default();
         let values = solution
             .state
             .entities
             .get(descriptor_index)
             .and_then(|rows| rows.get(owner))
             .and_then(|row| row.list_at(variable_index))
-            .map(<[usize]>::to_vec)
             .unwrap_or_default();
+        let mut snapshot = std::mem::take(&mut self.route_snapshot_scratch);
+        snapshot.elements.clear();
+        snapshot.edges.clear();
+        snapshot.invalid_count = 0;
+        snapshot.violation_count = 0;
         let callback_solution = if access.expected_owner.is_some() {
             Some(solution.to_python_callback_view(py)?)
         } else {
             None
         };
         let mut previous = None;
-        for value in values {
+        for &value in values {
             let Some(node) = self.index_for_node(value) else {
                 snapshot.invalid_count += 1;
                 previous = None;
@@ -416,7 +476,9 @@ impl DynamicListPrecedenceState {
     }
 
     fn replace_owner_route(&mut self, owner: OwnerId, snapshot: RouteSnapshot) -> RouteChange {
-        let mut change = RouteChange::default();
+        let mut change = std::mem::take(&mut self.route_change_scratch);
+        change.added_edges.clear();
+        change.removed_edges.clear();
         let RouteSnapshot {
             elements,
             edges,
@@ -427,10 +489,12 @@ impl DynamicListPrecedenceState {
         let old_elements = std::mem::take(&mut self.owner_elements[owner]);
         self.diff_owner_assignments(&old_elements, &elements);
         self.owner_elements[owner] = elements;
+        self.route_snapshot_scratch.elements = old_elements;
 
         let old_edges = std::mem::take(&mut self.owner_edges[owner]);
         self.diff_owner_edges(&old_edges, &edges, &mut change);
         self.owner_edges[owner] = edges;
+        self.route_snapshot_scratch.edges = old_edges;
 
         self.owner_invalid_total -= self.owner_invalid_counts[owner];
         self.owner_invalid_total += invalid_count;
@@ -448,15 +512,27 @@ impl DynamicListPrecedenceState {
         old_elements: &[DenseNodeId],
         new_elements: &[DenseNodeId],
     ) {
-        let mut counts = HashMap::<DenseNodeId, (usize, usize)>::new();
-        for &node in old_elements {
+        let mut prefix = 0;
+        let common = old_elements.len().min(new_elements.len());
+        while prefix < common && old_elements[prefix] == new_elements[prefix] {
+            prefix += 1;
+        }
+        let mut suffix = 0;
+        while suffix < common - prefix
+            && old_elements[old_elements.len() - 1 - suffix]
+                == new_elements[new_elements.len() - 1 - suffix]
+        {
+            suffix += 1;
+        }
+        let mut counts = std::mem::take(&mut self.assignment_counts_scratch);
+        for &node in &old_elements[prefix..old_elements.len() - suffix] {
             counts.entry(node).or_default().0 += 1;
         }
-        for &node in new_elements {
+        for &node in &new_elements[prefix..new_elements.len() - suffix] {
             counts.entry(node).or_default().1 += 1;
         }
 
-        for (node, (old_count, new_count)) in counts {
+        for (node, (old_count, new_count)) in counts.drain() {
             if old_count == new_count {
                 continue;
             }
@@ -464,6 +540,7 @@ impl DynamicListPrecedenceState {
             let updated = current.saturating_sub(old_count).saturating_add(new_count);
             self.adjust_assignment(node, updated);
         }
+        self.assignment_counts_scratch = counts;
     }
 
     fn diff_owner_edges(
@@ -472,15 +549,26 @@ impl DynamicListPrecedenceState {
         new_edges: &[DenseEdge],
         change: &mut RouteChange,
     ) {
-        let mut counts = HashMap::<DenseEdge, (usize, usize)>::new();
-        for &edge in old_edges {
+        let mut prefix = 0;
+        let common = old_edges.len().min(new_edges.len());
+        while prefix < common && old_edges[prefix] == new_edges[prefix] {
+            prefix += 1;
+        }
+        let mut suffix = 0;
+        while suffix < common - prefix
+            && old_edges[old_edges.len() - 1 - suffix] == new_edges[new_edges.len() - 1 - suffix]
+        {
+            suffix += 1;
+        }
+        let mut counts = std::mem::take(&mut self.edge_counts_scratch);
+        for &edge in &old_edges[prefix..old_edges.len() - suffix] {
             counts.entry(edge).or_default().0 += 1;
         }
-        for &edge in new_edges {
+        for &edge in &new_edges[prefix..new_edges.len() - suffix] {
             counts.entry(edge).or_default().1 += 1;
         }
 
-        for (edge, (old_count, new_count)) in counts {
+        for (edge, (old_count, new_count)) in counts.drain() {
             if old_count > new_count {
                 for _ in 0..(old_count - new_count) {
                     if self.remove_edge(edge) {
@@ -495,6 +583,7 @@ impl DynamicListPrecedenceState {
                 }
             }
         }
+        self.edge_counts_scratch = counts;
     }
 
     fn refresh_score_full(&mut self) -> DynamicScore {
@@ -541,17 +630,19 @@ impl DynamicListPrecedenceState {
             return;
         }
 
-        let mut queued = vec![false; self.nodes.len()];
-        let mut queue = VecDeque::new();
+        self.scratch_queue.clear();
         for node in change.seeds() {
-            if node < self.nodes.len() && !queued[node] {
-                queued[node] = true;
-                queue.push_back(node);
+            if node < self.nodes.len() && self.scratch_queued[node] != self.queue_stamp {
+                self.scratch_queued[node] = self.queue_stamp;
+                self.scratch_queue.push(node);
             }
         }
 
-        while let Some(node) = queue.pop_front() {
-            queued[node] = false;
+        let mut head = 0;
+        while head < self.scratch_queue.len() {
+            let node = self.scratch_queue[head];
+            head += 1;
+            self.scratch_queued[node] = 0;
 
             let new_earliest = self.predecessors[node]
                 .iter()
@@ -566,13 +657,17 @@ impl DynamicListPrecedenceState {
 
             self.replace_earliest(node, new_earliest);
             for &successor in &self.successors[node] {
-                if !queued[successor] {
-                    queued[successor] = true;
-                    queue.push_back(successor);
+                if self.scratch_queued[successor] != self.queue_stamp {
+                    self.scratch_queued[successor] = self.queue_stamp;
+                    self.scratch_queue.push(successor);
                 }
             }
         }
-        self.makespan = self.max_finish();
+        self.queue_stamp = self.queue_stamp.wrapping_add(1);
+        if self.queue_stamp == 0 {
+            self.scratch_queued.fill(0);
+            self.queue_stamp = 1;
+        }
     }
 
     fn rebuild_graph_summary(&mut self) {
@@ -610,6 +705,11 @@ impl DynamicListPrecedenceState {
             self.cycle_penalty = 0;
             self.cycle_added_edges.clear();
             self.makespan = makespan;
+            self.max_finish_nodes = self
+                .finishes
+                .iter()
+                .filter(|&&finish| finish == makespan)
+                .count();
         }
     }
 
@@ -640,7 +740,7 @@ impl DynamicListPrecedenceState {
         }
         self.cycle_penalty = 0;
         self.cycle_added_edges.clear();
-        self.makespan = self.max_finish();
+        self.recount_max_finish();
         true
     }
 
@@ -649,26 +749,48 @@ impl DynamicListPrecedenceState {
         self.earliest[node] = new_earliest;
         let new_finish = new_earliest.saturating_add(self.durations[node]);
         self.finishes[node] = new_finish;
-        if new_finish >= self.makespan {
+        if new_finish > self.makespan {
             self.makespan = new_finish;
+            self.max_finish_nodes = 1;
+        } else if new_finish == self.makespan {
+            if old_finish != self.makespan {
+                self.max_finish_nodes += 1;
+            }
         } else if old_finish == self.makespan {
-            self.makespan = self.max_finish();
+            self.max_finish_nodes -= 1;
+            if self.max_finish_nodes == 0 {
+                self.recount_max_finish();
+            }
         }
     }
 
-    fn max_finish(&self) -> i64 {
-        self.finishes.iter().copied().max().unwrap_or(0)
+    fn recount_max_finish(&mut self) {
+        let mut max = 0;
+        let mut count = 0;
+        for &finish in &self.finishes {
+            if finish > max {
+                max = finish;
+                count = 1;
+            } else if finish == max {
+                count += 1;
+            }
+        }
+        self.makespan = max;
+        self.max_finish_nodes = count;
     }
 
-    fn added_edges_introduce_cycle(&self, added_edges: &[DenseEdge]) -> bool {
+    fn added_edges_introduce_cycle(&mut self, added_edges: &[DenseEdge]) -> bool {
         if added_edges.is_empty() {
             return false;
         }
 
-        let mut visited = vec![0usize; self.nodes.len()];
-        let mut stack = Vec::new();
-        for (visit_id, &(from, to)) in added_edges.iter().enumerate() {
-            if self.reaches_with_scratch(to, from, visit_id + 1, &mut visited, &mut stack) {
+        for &(from, to) in added_edges {
+            self.probe_stamp = self.probe_stamp.wrapping_add(1);
+            if self.probe_stamp == 0 {
+                self.probe_visited.fill(0);
+                self.probe_stamp = 1;
+            }
+            if self.reaches_with_scratch(to, from, self.probe_stamp) {
                 return true;
             }
         }
@@ -676,29 +798,27 @@ impl DynamicListPrecedenceState {
     }
 
     fn reaches_with_scratch(
-        &self,
+        &mut self,
         start: DenseNodeId,
         target: DenseNodeId,
         visit_id: usize,
-        visited: &mut [usize],
-        stack: &mut Vec<DenseNodeId>,
     ) -> bool {
         if start == target {
             return true;
         }
-        stack.clear();
-        stack.push(start);
-        while let Some(node) = stack.pop() {
-            if visited[node] == visit_id {
+        self.probe_stack.clear();
+        self.probe_stack.push(start);
+        while let Some(node) = self.probe_stack.pop() {
+            if self.probe_visited[node] == visit_id {
                 continue;
             }
-            visited[node] = visit_id;
+            self.probe_visited[node] = visit_id;
             for &successor in &self.successors[node] {
                 if successor == target {
                     return true;
                 }
-                if visited[successor] != visit_id {
-                    stack.push(successor);
+                if self.probe_visited[successor] != visit_id {
+                    self.probe_stack.push(successor);
                 }
             }
         }
@@ -764,7 +884,7 @@ fn usize_to_i64(value: usize) -> i64 {
 fn precedence_duration(
     py: Python<'_>,
     solution: &PyDynamicSolution,
-    access: &ListPrecedencePlan<'_>,
+    access: &ListPrecedencePlan,
     callback_solution: Option<&Py<PyAny>>,
     node: usize,
 ) -> PyResult<i64> {
@@ -780,6 +900,7 @@ fn precedence_duration(
         return Err(py_err("list precedence callback solution is missing"));
     };
     callback
+        .bind(py)
         .call1((callback_solution.bind(py), node))?
         .extract::<usize>()
         .map(usize_to_i64)
@@ -788,7 +909,7 @@ fn precedence_duration(
 fn precedence_successors(
     py: Python<'_>,
     solution: &PyDynamicSolution,
-    access: &ListPrecedencePlan<'_>,
+    access: &ListPrecedencePlan,
     callback_solution: Option<&Py<PyAny>>,
     node: usize,
 ) -> PyResult<Vec<usize>> {
@@ -803,7 +924,9 @@ fn precedence_successors(
     let Some(callback_solution) = callback_solution else {
         return Err(py_err("list precedence callback solution is missing"));
     };
-    let result = callback.call1((callback_solution.bind(py), node))?;
+    let result = callback
+        .bind(py)
+        .call1((callback_solution.bind(py), node))?;
     if result.is_none() {
         Ok(Vec::new())
     } else {
@@ -814,7 +937,7 @@ fn precedence_successors(
 fn expected_owner_mismatch(
     py: Python<'_>,
     solution: &PyDynamicSolution,
-    access: &ListPrecedencePlan<'_>,
+    access: &ListPrecedencePlan,
     callback_solution: Option<&Py<PyAny>>,
     owner: usize,
     value: usize,
@@ -829,7 +952,9 @@ fn expected_owner_mismatch(
     let Some(callback_solution) = callback_solution else {
         return Err(py_err("list precedence callback solution is missing"));
     };
-    let expected = callback.call1((callback_solution.bind(py), value))?;
+    let expected = callback
+        .bind(py)
+        .call1((callback_solution.bind(py), value))?;
     if expected.is_none() {
         return Ok(false);
     }
@@ -910,14 +1035,14 @@ fn required_plan_string(plan: &Bound<'_, PyDict>, key: &str) -> PyResult<String>
 fn optional_plan_callback<'py>(
     plan: &Bound<'py, PyDict>,
     key: &str,
-) -> PyResult<Option<Bound<'py, PyAny>>> {
+) -> PyResult<Option<Py<PyAny>>> {
     let Some(value) = plan.get_item(key)? else {
         return Ok(None);
     };
     if value.is_none() {
         Ok(None)
     } else if value.is_callable() {
-        Ok(Some(value))
+        Ok(Some(value.unbind()))
     } else {
         Err(py_err(format!("constraint field `{key}` must be callable")))
     }

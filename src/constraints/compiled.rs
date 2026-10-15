@@ -48,6 +48,7 @@ pub enum CompiledConstraintPlan {
     Unary(UnaryPlan),
     AttributeJoin(AttributeJoinPlan),
     ListCoverage(ListCoveragePlan),
+    ListPrecedence(ListPrecedencePlan),
     Python(PythonPlan),
 }
 
@@ -57,6 +58,7 @@ impl CompiledConstraintPlan {
             Self::Unary(plan) => &plan.python_plan,
             Self::AttributeJoin(plan) => &plan.python_plan,
             Self::ListCoverage(plan) => &plan.python_plan,
+            Self::ListPrecedence(plan) => &plan.python_plan,
             Self::Python(plan) => &plan.python_plan,
         }
     }
@@ -88,6 +90,11 @@ pub struct ListCoveragePlan {
 
 pub struct PythonPlan {
     pub python_plan: Py<PyAny>,
+}
+
+pub struct ListPrecedencePlan {
+    pub python_plan: Py<PyAny>,
+    pub entity_index: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -137,6 +144,16 @@ fn compile_plan(
     plan: &Bound<'_, PyDict>,
     python_plan: Py<PyAny>,
 ) -> PyResult<CompiledConstraintPlan> {
+    if super::list_precedence::is_list_precedence_plan(plan)? {
+        let entity_type = required_plan_string(plan, "entity_type")?;
+        if let Some(entity_index) = schema.entity_index_by_type(&entity_type) {
+            return Ok(CompiledConstraintPlan::ListPrecedence(ListPrecedencePlan {
+                python_plan,
+                entity_index,
+            }));
+        }
+        return Ok(CompiledConstraintPlan::Python(PythonPlan { python_plan }));
+    }
     if plan.get_item("weight_callback")?.is_some() {
         return Ok(CompiledConstraintPlan::Python(PythonPlan { python_plan }));
     }
