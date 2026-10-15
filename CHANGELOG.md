@@ -1,6 +1,14 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.6.14](https://github.com/SolverForge/solverforge-py/compare/v0.6.13...v0.6.14) (2026-10-15)
+
+
+### Bug Fixes
+
+* **constraints:** dispatch list precedence outside the generic Python path ([4061a38](https://github.com/SolverForge/solverforge-py/commit/4061a38fcc2996c29a6914fdbd04b050cc29ce2a))
+
+
 ## [0.6.13](https://github.com/SolverForge/solverforge-py/compare/v0.6.12...v0.6.13) (2026-10-14)
 
 
