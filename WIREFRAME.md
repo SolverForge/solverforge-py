@@ -447,11 +447,11 @@ The source distribution contains package metadata, the README and license, the
 locked Cargo manifests and Rust toolchain, and the Python/Rust sources needed to
 build the package. Repository-only tests, examples, maintainer guidance,
 wireframes, and tooling remain available from the source checkout. `Cargo.toml`
-pins the six SolverForge crates to the exact published `0.21.3` registry base
+pins the six SolverForge crates to the exact published `0.22.0` registry base
 and `solverforge-ui` to `0.9.0`; `Cargo.lock` records their crates.io checksums.
 
 The current checkout prepares Python package and native `solverforge_py` crate
-metadata version `0.6.14`, targeting the exact SolverForge `0.21.3` crate
+metadata version `0.6.14`, targeting the exact SolverForge `0.22.0` crate
 boundary. Its artifact set is one source distribution plus Linux, macOS, and
 Windows wheels, verified together before release.
 
