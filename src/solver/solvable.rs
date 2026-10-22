@@ -21,15 +21,12 @@ impl Solvable for PyDynamicSolution {
         let descriptor = runtime_plan.descriptor().clone();
         let model = runtime_plan.model().clone();
         let default_time_limit_secs = runtime_plan.default_time_limit_secs();
-        let constraints = pyo3::Python::attach(|py| {
-            PyDynamicConstraintSet::from_solution(py, &self).unwrap_or_else(panic_with_py_err)
-        });
         let score_family = score_family_from_name(&runtime_plan.schema().score_family)
             .unwrap_or_else(panic_with_py_err);
         let result = scoped_dynamic_score_family(score_family, || {
             try_run_dynamic_solver_with_config_parts(
                 self,
-                constraints,
+                dynamic_constraints,
                 descriptor,
                 dynamic_entity_count,
                 runtime,
@@ -42,6 +39,14 @@ impl Solvable for PyDynamicSolution {
         });
         result.unwrap_or_else(|error| panic_with_py_err(py_err(error.to_string())));
     }
+}
+
+/// Builds the constraint set for one solution: the working solution and every
+/// evaluator replica use this same constructor.
+pub(crate) fn dynamic_constraints(solution: &PyDynamicSolution) -> PyDynamicConstraintSet {
+    pyo3::Python::attach(|py| {
+        PyDynamicConstraintSet::from_solution(py, solution).unwrap_or_else(panic_with_py_err)
+    })
 }
 
 fn dynamic_entity_count(solution: &PyDynamicSolution, descriptor_index: usize) -> usize {
