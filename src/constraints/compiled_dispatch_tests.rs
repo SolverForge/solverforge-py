@@ -94,7 +94,12 @@ fn compiled_precedence_never_decodes_generic_rows_or_plan_fields() {
         let baseline = set.initialize_all(&solution);
         assert_eq!(baseline, DynamicScore::hard_soft(0, -5));
         assert!(set.cached_rows.is_none());
-        assert_eq!(set.on_retract_all(&solution, 0, 0), DynamicScore::zero());
+        // The declared family holds even though this thread never entered a
+        // solve scope.
+        assert_eq!(
+            set.on_retract_all(&solution, 0, 0),
+            DynamicScore::zero_for_family(ScoreFamily::HardSoft)
+        );
         // A cached delta must not parse even precedence-specific immutable fields.
         let plan = set.compiled.plans()[0]
             .python_plan()
