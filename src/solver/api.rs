@@ -12,6 +12,7 @@ use crate::error::{panic_to_py_err, py_err};
 use crate::runtime::dynamic_assignment_group::validate_assignment_construction_groups;
 use crate::schema::compiled::CompiledSchema;
 use crate::score::{scoped_dynamic_score_family, score_family_from_name, DynamicScorePythonExt};
+use crate::solver::solvable::dynamic_constraints;
 use crate::state::marshal::{export_solution, import_solution};
 use crate::state::PyDynamicSolution;
 
@@ -58,7 +59,6 @@ pub fn solve(
     let py_solution = solution.bind(py);
     let mut imported = import_solution(py_solution, Arc::clone(&plan))?;
     let descriptor = plan.descriptor().clone();
-    let constraints = PyDynamicConstraintSet::from_solution(py, &imported)?;
     validate_assignment_construction_groups(&solver_config, parsed)?;
     imported.solver_config = solver_config.clone();
     let score_family = score_family_from_name(&parsed.score_family)?;
@@ -66,7 +66,7 @@ pub fn solve(
         scoped_dynamic_score_family(score_family, || {
             try_run_dynamic_solver_with_config_parts(
                 imported,
-                constraints,
+                dynamic_constraints,
                 descriptor,
                 dynamic_entity_count,
                 SolverRuntime::detached(),
