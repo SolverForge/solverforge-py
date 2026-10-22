@@ -66,4 +66,8 @@ jobs:
         run: make ci-local
 
       - name: Build and verify local distributions
-        run: make build-dist dist-check smoke-wheel
+        # Runner MAKEFLAGS may enable parallel goals; checks need completed builds.
+        run: |
+          make build-dist
+          make dist-check
+          make smoke-wheel
