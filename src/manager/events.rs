@@ -132,6 +132,7 @@ fn telemetry_to_python(py: Python<'_>, telemetry: &SolverTelemetry) -> PyResult<
     dict.set_item("step_count", telemetry.step_count)?;
     dict.set_item("moves_generated", telemetry.moves_generated)?;
     dict.set_item("moves_evaluated", telemetry.moves_evaluated)?;
+    dict.set_item("moves_speculative", telemetry.moves_speculative)?;
     dict.set_item("moves_accepted", telemetry.moves_accepted)?;
     dict.set_item("moves_applied", telemetry.moves_applied)?;
     dict.set_item("moves_score_improving", telemetry.moves_score_improving)?;
