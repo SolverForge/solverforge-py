@@ -384,5 +384,6 @@ fn disposition_name(disposition: CandidateTraceDisposition) -> &'static str {
         CandidateTraceDisposition::ForagerIgnored => "forager_ignored",
         CandidateTraceDisposition::Selected => "selected",
         CandidateTraceDisposition::Applied => "applied",
+        CandidateTraceDisposition::DiscardedSpeculative => "discarded_speculative",
     }
 }
