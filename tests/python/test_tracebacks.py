@@ -183,3 +183,48 @@ def test_dynamic_provider_callback_traceback_surfaces(
         Solver.solve(plan(), config)
     frames = traceback.extract_tb(exc_info.value.__traceback__)
     assert any(frame.name == function_name for frame in frames)
+
+
+@planning_entity
+class LateBrokenTask:
+    worker = planning_variable(value_range_provider="workers", allows_unassigned=True)
+
+    def __init__(self) -> None:
+        self.worker = 0
+
+
+@constraint_provider
+def late_broken_constraints(factory: ConstraintFactory):
+    def explode_on_second_worker(task: LateBrokenTask) -> bool:
+        if task.worker == 1:
+            raise ValueError("parallel callback failed")
+        return False
+
+    return [
+        factory.for_each(LateBrokenTask)
+        .filter(explode_on_second_worker)
+        .penalize(1)
+        .named("late broken")
+    ]
+
+
+@planning_solution(constraints=late_broken_constraints)
+class LateBrokenPlan:
+    tasks: list[LateBrokenTask]
+
+    def __init__(self) -> None:
+        self.tasks = [LateBrokenTask(), LateBrokenTask()]
+        self.workers = [0, 1]
+        self.score = None
+
+
+def test_callback_traceback_surfaces_from_parallel_evaluation() -> None:
+    config = {
+        "random_seed": 7,
+        "move_thread_count": {"count": 2},
+        "phases": [{"type": "local_search", "termination": {"step_count_limit": 1}}],
+    }
+    with pytest.raises(ValueError, match="parallel callback failed") as exc_info:
+        Solver.solve(LateBrokenPlan(), config)
+    frames = traceback.extract_tb(exc_info.value.__traceback__)
+    assert any(frame.name == "explode_on_second_worker" for frame in frames)
