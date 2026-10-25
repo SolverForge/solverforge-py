@@ -1,6 +1,5 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
-use solverforge_core::score::Score;
 
 use crate::error::py_err;
 
@@ -42,7 +41,7 @@ pub fn dynamic_score_from_dict(dict: &Bound<'_, PyDict>) -> PyResult<DynamicScor
         .iter()
         .map(|item| item.extract::<i64>())
         .collect::<PyResult<Vec<_>>>()?;
-    score_from_levels(family.as_deref(), numbers.as_slice(), None)
+    score_from_levels(family.as_deref(), numbers.as_slice())
 }
 
 fn dynamic_score_from_sequence<'py>(
@@ -51,21 +50,17 @@ fn dynamic_score_from_sequence<'py>(
     let numbers = items
         .map(|item| item.extract::<i64>())
         .collect::<PyResult<Vec<_>>>()?;
-    score_from_levels(None, numbers.as_slice(), Some(DynamicScore::zero().family))
+    score_from_levels(None, numbers.as_slice())
 }
 
-fn score_from_levels(
-    family: Option<&str>,
-    numbers: &[i64],
-    preferred_family: Option<ScoreFamily>,
-) -> PyResult<DynamicScore> {
+fn score_from_levels(family: Option<&str>, numbers: &[i64]) -> PyResult<DynamicScore> {
     Ok(match (family, numbers) {
         (Some("soft"), [soft]) => DynamicScore::soft(*soft),
-        (Some("hard_soft"), [hard, soft]) => DynamicScore::hard_soft(*hard, *soft),
-        (Some("hard_soft_decimal"), [hard, soft]) => DynamicScore::hard_soft_decimal(*hard, *soft),
-        (Some("hard_medium_soft"), [hard, medium, soft]) => {
-            DynamicScore::hard_medium_soft(*hard, *medium, *soft)
+        // Decimal levels arrive already scaled; they share the two-level value.
+        (Some("hard_soft" | "hard_soft_decimal"), [hard, soft]) => {
+            DynamicScore::hard_soft(*hard, *soft)
         }
+        (Some("hard_medium_soft"), [hard, medium, soft]) => DynamicScore::of(*hard, *medium, *soft),
         (Some(family), _) => {
             return Err(py_err(format!(
                 "score family `{family}` is incompatible with {} levels",
@@ -73,11 +68,8 @@ fn score_from_levels(
             )));
         }
         (None, [soft]) => DynamicScore::soft(*soft),
-        (None, [hard, soft]) if preferred_family == Some(ScoreFamily::HardSoftDecimal) => {
-            DynamicScore::hard_soft_decimal(*hard, *soft)
-        }
         (None, [hard, soft]) => DynamicScore::hard_soft(*hard, *soft),
-        (None, [hard, medium, soft]) => DynamicScore::hard_medium_soft(*hard, *medium, *soft),
+        (None, [hard, medium, soft]) => DynamicScore::of(*hard, *medium, *soft),
         (None, other) => {
             return Err(py_err(format!(
                 "unsupported dynamic score level count {}",

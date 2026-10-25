@@ -2,7 +2,7 @@ use pyo3::Python;
 use solverforge_py::constraints::PyDynamicConstraintSet;
 use solverforge_py::schema::runtime_plan::CompiledRuntimePlan;
 use solverforge_py::schema::DynamicSchema;
-use solverforge_py::score::{DynamicScore, ScoreFamily};
+use solverforge_py::score::DynamicScore;
 use solverforge_py::state::callback_view::PythonCallbackView;
 use solverforge_py::state::entity_table::DynamicState;
 use solverforge_py::state::PyDynamicSolution;
@@ -14,7 +14,7 @@ fn dynamic_constraint_set_reports_constraint_count() {
     crate::initialize_python();
     Python::attach(|py| {
         let constraints = pyo3::types::PyList::empty(py).unbind().into_any();
-        let set = PyDynamicConstraintSet::new(constraints, ScoreFamily::HardSoft);
+        let set = PyDynamicConstraintSet::new(constraints);
         assert_eq!(set.constraint_count(), 0);
         let schema = Arc::new(DynamicSchema {
             solution_type: "Plan".to_string(),
@@ -40,11 +40,8 @@ fn dynamic_constraint_set_reports_constraint_count() {
             solverforge_config::SolverConfig::default(),
             0,
         );
-        // The test thread never entered a solve's family scope, so this pins
-        // that the constraint set scores with its own declared family.
-        assert_eq!(
-            set.evaluate_all(&solution),
-            DynamicScore::zero_for_family(ScoreFamily::HardSoft)
-        );
+        // The test thread never entered a solve's family scope; scoring
+        // reads no family, so an empty constraint set scores plain zero.
+        assert_eq!(set.evaluate_all(&solution), DynamicScore::ZERO);
     });
 }

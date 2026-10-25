@@ -15,10 +15,7 @@ use super::compiled::{
 use super::evaluate;
 use super::list_precedence::{self, ListPrecedenceDeltaMode, ListPrecedenceStateCache};
 use crate::error::{panic_with_py_err, py_err};
-use crate::score::{
-    dynamic_score_from_native, scoped_dynamic_score_family, score_family_from_name, DynamicScore,
-    ScoreFamily,
-};
+use crate::score::{dynamic_score_from_native, score_family_from_name, DynamicScore};
 use crate::state::PyDynamicSolution;
 use crate::value::DynamicValue;
 
@@ -336,19 +333,14 @@ pub struct PyDynamicConstraintSet {
     list_unassigned_count_cache: ListUnassignedCountCache,
     list_precedence_cache: ListPrecedenceStateCache,
     retracted_entities: RetractedEntitySet,
-    /// Declared score family. Every `ConstraintSet` entry point enters it, so
-    /// scores match on any thread, including Rayon workers scoring evaluator
-    /// replicas that never entered the solve thread's scope.
-    family: ScoreFamily,
 }
 
 unsafe impl Send for PyDynamicConstraintSet {}
 unsafe impl Sync for PyDynamicConstraintSet {}
 
 impl PyDynamicConstraintSet {
-    pub fn new(constraints: Py<PyAny>, family: ScoreFamily) -> Self {
+    pub fn new(constraints: Py<PyAny>) -> Self {
         Self {
-            family,
             compiled: CompiledConstraintSet::python(constraints),
             cached_rows: None,
             join_key_cache: JoinKeyCache::new(),
@@ -362,12 +354,10 @@ impl PyDynamicConstraintSet {
     }
 
     pub fn from_solution(py: Python<'_>, solution: &PyDynamicSolution) -> PyResult<Self> {
-        let family = score_family_from_name(&solution.schema().score_family)?;
-        let compiled = scoped_dynamic_score_family(family, || {
-            CompiledConstraintSet::from_solution(py, solution)
-        })?;
+        // Rejects an undeclared family before any constraint is compiled.
+        score_family_from_name(&solution.schema().score_family)?;
+        let compiled = CompiledConstraintSet::from_solution(py, solution)?;
         Ok(Self {
-            family,
             compiled,
             cached_rows: None,
             join_key_cache: JoinKeyCache::new(),
@@ -503,10 +493,8 @@ impl PyDynamicConstraintSet {
 
 impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
     fn evaluate_all(&self, solution: &PyDynamicSolution) -> DynamicScore {
-        scoped_dynamic_score_family(self.family, || {
-            Python::attach(|py| evaluate_compiled_constraints(py, solution, &self.compiled))
-                .unwrap_or_else(panic_with_py_err)
-        })
+        Python::attach(|py| evaluate_compiled_constraints(py, solution, &self.compiled))
+            .unwrap_or_else(panic_with_py_err)
     }
 
     fn constraint_count(&self) -> usize {
@@ -532,11 +520,8 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
     }
 
     fn initialize_all(&mut self, solution: &PyDynamicSolution) -> DynamicScore {
-        let family = self.family;
-        scoped_dynamic_score_family(family, || {
-            self.initialize_incremental_state(solution)
-                .unwrap_or_else(panic_with_py_err)
-        })
+        self.initialize_incremental_state(solution)
+            .unwrap_or_else(panic_with_py_err)
     }
 
     fn on_insert_all(
@@ -545,24 +530,21 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
         entity_index: usize,
         descriptor_index: usize,
     ) -> DynamicScore {
-        let family = self.family;
-        scoped_dynamic_score_family(family, || {
-            let delta = Python::attach(|py| {
-                self.evaluate_delta(
-                    py,
-                    solution,
-                    DeltaTarget {
-                        entity_index,
-                        descriptor_index,
-                        mode: DeltaMode::Insert,
-                    },
-                )
-            })
-            .unwrap_or_else(panic_with_py_err);
-            self.retracted_entities
-                .remove(&(descriptor_index, entity_index));
-            delta
+        let delta = Python::attach(|py| {
+            self.evaluate_delta(
+                py,
+                solution,
+                DeltaTarget {
+                    entity_index,
+                    descriptor_index,
+                    mode: DeltaMode::Insert,
+                },
+            )
         })
+        .unwrap_or_else(panic_with_py_err);
+        self.retracted_entities
+            .remove(&(descriptor_index, entity_index));
+        delta
     }
 
     fn on_retract_all(
@@ -571,24 +553,21 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
         entity_index: usize,
         descriptor_index: usize,
     ) -> DynamicScore {
-        let family = self.family;
-        scoped_dynamic_score_family(family, || {
-            let delta = Python::attach(|py| {
-                self.evaluate_delta(
-                    py,
-                    solution,
-                    DeltaTarget {
-                        entity_index,
-                        descriptor_index,
-                        mode: DeltaMode::Retract,
-                    },
-                )
-            })
-            .unwrap_or_else(panic_with_py_err);
-            self.retracted_entities
-                .insert((descriptor_index, entity_index));
-            delta
+        let delta = Python::attach(|py| {
+            self.evaluate_delta(
+                py,
+                solution,
+                DeltaTarget {
+                    entity_index,
+                    descriptor_index,
+                    mode: DeltaMode::Retract,
+                },
+            )
         })
+        .unwrap_or_else(panic_with_py_err);
+        self.retracted_entities
+            .insert((descriptor_index, entity_index));
+        delta
     }
 
     fn reset_all(&mut self) {
@@ -830,7 +809,6 @@ fn key_from_value(value: &DynamicValue) -> PyResult<Option<JoinKey>> {
 fn score_times(score: DynamicScore, count: usize) -> DynamicScore {
     let count = i64::try_from(count).unwrap_or(i64::MAX);
     DynamicScore {
-        family: score.family,
         hard: score.hard.saturating_mul(count),
         medium: score.medium.saturating_mul(count),
         soft: score.soft.saturating_mul(count),

@@ -1013,8 +1013,7 @@ fn precedence_score_for_family(
     let soft = makespan.saturating_neg();
     match score_family {
         "soft" => DynamicScore::soft(soft.saturating_add(hard)),
-        "hard_soft_decimal" => DynamicScore::hard_soft_decimal(hard, soft),
-        "hard_medium_soft" => DynamicScore::hard_medium_soft(hard, 0, soft),
+        "hard_medium_soft" => DynamicScore::of(hard, 0, soft),
         _ => DynamicScore::hard_soft(hard, soft),
     }
 }
