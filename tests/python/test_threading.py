@@ -1,12 +1,19 @@
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
+
+import pytest
 
 from tests.python.test_scalar_solving import Schedule
 from solverforge import (
     ConstraintFactory,
+    HardMediumSoftScore,
+    HardSoftDecimalScore,
     HardSoftScore,
+    SoftScore,
     Solver,
     constraint_provider,
     planning_entity,
+    planning_list_variable,
     planning_solution,
     planning_variable,
 )
@@ -51,18 +58,19 @@ class ParallelPlan:
         self.score = None
 
 
+def _fixed_work_config(count: int) -> dict[str, Any]:
+    return {
+        "random_seed": 7,
+        "move_thread_count": {"count": count},
+        "phases": [
+            {"type": "construction_heuristic"},
+            {"type": "local_search", "termination": {"step_count_limit": 60}},
+        ],
+    }
+
+
 def _solve_with_threads(count: int) -> ParallelPlan:
-    return Solver.solve(
-        ParallelPlan(),
-        {
-            "random_seed": 7,
-            "move_thread_count": {"count": count},
-            "phases": [
-                {"type": "construction_heuristic"},
-                {"type": "local_search", "termination": {"step_count_limit": 60}},
-            ],
-        },
-    )
+    return Solver.solve(ParallelPlan(), _fixed_work_config(count))
 
 
 def test_parallel_move_evaluation_matches_sequential_at_fixed_work() -> None:
@@ -70,3 +78,113 @@ def test_parallel_move_evaluation_matches_sequential_at_fixed_work() -> None:
     assignments = [[visit.nurse for visit in plan.visits] for plan in plans]
     assert assignments[0] == assignments[1] == assignments[2]
     assert plans[0].score == plans[1].score == plans[2].score
+
+
+# Each family's declared name and its (unassigned, not preferred) penalties.
+FAMILY_WEIGHTS: dict[type, tuple[str, object, object]] = {
+    SoftScore: ("soft", SoftScore.of(10), SoftScore.ONE_SOFT),
+    HardSoftScore: ("hard_soft", HardSoftScore.ONE_HARD, HardSoftScore.ONE_SOFT),
+    HardSoftDecimalScore: (
+        "hard_soft_decimal",
+        HardSoftDecimalScore.ONE_HARD,
+        HardSoftDecimalScore.ONE_SOFT,
+    ),
+    HardMediumSoftScore: (
+        "hard_medium_soft",
+        HardMediumSoftScore.ONE_HARD,
+        HardMediumSoftScore.ONE_MEDIUM,
+    ),
+}
+
+
+def _family_plan(score_cls: type) -> type:
+    _, unassigned, not_preferred = FAMILY_WEIGHTS[score_cls]
+
+    @planning_entity
+    class FamilyVisit:
+        nurse = planning_variable(value_range_provider="nurses", allows_unassigned=True)
+
+        def __init__(self, preferred: int) -> None:
+            self.preferred = preferred
+            self.nurse = None
+
+    @constraint_provider
+    def family_constraints(factory: ConstraintFactory):
+        return [
+            factory.for_each(FamilyVisit)
+            .filter(lambda visit: visit.nurse is None)
+            .penalize(unassigned)
+            .named("unassigned"),
+            factory.for_each(FamilyVisit)
+            .filter(lambda visit: visit.nurse is not None and visit.nurse != visit.preferred)
+            .penalize(not_preferred)
+            .named("not preferred"),
+        ]
+
+    @planning_solution(score=score_cls, constraints=family_constraints)
+    class FamilyPlan:
+        visits: list[FamilyVisit]
+
+        def __init__(self) -> None:
+            self.visits = [FamilyVisit((index * 7 + 3) % 5) for index in range(12)]
+            self.nurses = [0, 1, 2, 3, 4]
+            self.score = None
+
+    return FamilyPlan
+
+
+@pytest.mark.parametrize("score_cls", list(FAMILY_WEIGHTS), ids=lambda cls: cls.__name__)
+def test_parallel_evaluation_keeps_every_score_family(score_cls: type) -> None:
+    plan_cls = _family_plan(score_cls)
+    plans = [Solver.solve(plan_cls(), _fixed_work_config(count)) for count in (1, 2, 4)]
+
+    assignments = [[visit.nurse for visit in plan.visits] for plan in plans]
+    assert assignments[0] == assignments[1] == assignments[2]
+    assert plans[0].score == plans[1].score == plans[2].score
+    family = FAMILY_WEIGHTS[score_cls][0]
+    assert all(plan.score["family"] == family for plan in plans)
+
+
+@planning_entity
+class ParallelRoute:
+    visits = planning_list_variable(element_collection="stops")
+
+    def __init__(self) -> None:
+        self.visits: list[int] = []
+
+
+def _route_cost(route: ParallelRoute) -> SoftScore:
+    # Position-dependent cost, so the order inside a route matters as well
+    # as which route owns a stop.
+    return SoftScore.of(
+        sum((stop * (position + 3)) % 7 for position, stop in enumerate(route.visits))
+    )
+
+
+@constraint_provider
+def parallel_route_constraints(factory: ConstraintFactory):
+    return [
+        factory.for_each(ParallelRoute).penalize(_route_cost).named("route cost"),
+        factory.for_each(ParallelRoute)
+        .penalize(lambda route: SoftScore.of(len(route.visits) ** 2))
+        .named("balance"),
+    ]
+
+
+@planning_solution(score=SoftScore, constraints=parallel_route_constraints)
+class ParallelRoutePlan:
+    routes: list[ParallelRoute]
+
+    def __init__(self) -> None:
+        self.routes = [ParallelRoute() for _ in range(3)]
+        self.stops = list(range(14))
+        self.score = None
+
+
+def test_parallel_list_evaluation_matches_sequential_at_fixed_work() -> None:
+    plans = [Solver.solve(ParallelRoutePlan(), _fixed_work_config(count)) for count in (1, 2, 4)]
+
+    routes = [[route.visits for route in plan.routes] for plan in plans]
+    assert routes[0] == routes[1] == routes[2]
+    assert plans[0].score == plans[1].score == plans[2].score
+    assert sorted(stop for route in routes[0] for stop in route) == list(range(14))
