@@ -62,24 +62,32 @@ pub fn solve(
     validate_assignment_construction_groups(&solver_config, parsed)?;
     imported.solver_config = solver_config.clone();
     let score_family = score_family_from_name(&parsed.score_family)?;
-    let mut solved = catch_unwind(AssertUnwindSafe(|| {
-        scoped_dynamic_score_family(score_family, || {
-            try_run_dynamic_solver_with_config_parts(
-                imported,
-                dynamic_constraints,
-                descriptor,
-                dynamic_entity_count,
-                SolverRuntime::detached(),
-                solver_config,
-                30,
-                dynamic_log_scale,
-                None,
-                plan.model().clone(),
-            )
-            .map_err(|error| py_err(error.to_string()))
+    let model = plan.model().clone();
+    // The solve runs without the GIL: parallel evaluation scores evaluator
+    // replicas on Rayon workers that attach to Python themselves, and a
+    // calling thread that kept the GIL while waiting on them would never let
+    // them in.
+    let mut solved = py
+        .detach(|| {
+            catch_unwind(AssertUnwindSafe(|| {
+                scoped_dynamic_score_family(score_family, || {
+                    try_run_dynamic_solver_with_config_parts(
+                        imported,
+                        dynamic_constraints,
+                        descriptor,
+                        dynamic_entity_count,
+                        SolverRuntime::detached(),
+                        solver_config,
+                        30,
+                        dynamic_log_scale,
+                        None,
+                        model,
+                    )
+                    .map_err(|error| py_err(error.to_string()))
+                })
+            }))
         })
-    }))
-    .map_err(panic_to_py_err)??;
+        .map_err(panic_to_py_err)??;
     solved.refresh_all_shadows()?;
     export_solution(py_solution, &solved)?;
     if let Some(score) = solved.score {
