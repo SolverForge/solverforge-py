@@ -219,6 +219,17 @@ operation/composite identity when encodable, and its dispositions. Therefore
 cross-runtime consumers key on ordinal plus identity; the exported
 `candidate_index_scope` is exactly `source_local_only`.
 
+`move_thread_count` (`"auto"`, `"none"`, or `{"count": n}`) passes through
+config to upstream acceptor-forager local search, which scores candidates on up
+to `n` evaluators bounded by the solve's Rayon threads and one 32-candidate
+window; `"auto"` stays sequential. The binding supplies a constraint-set
+constructor, so each evaluator replica builds its own `PyDynamicConstraintSet`
+from the shared compiled plan and scores on a Rayon worker; the plain
+three-level `DynamicScore` reads no thread state. `Solver.solve` detaches from the GIL for the whole solve so those
+workers can attach to Python. Fixed-work solves are reproducible across thread
+counts; discarded look-ahead work appears as `moves_speculative` and the
+`discarded_speculative` candidate-trace disposition.
+
 `QualifiedCandidateTraceProvenance` is an immutable, keyword-only external
 attestation with `schema_sha256`, `instance_sha256`, `initial_state_sha256`,
 `core_tree_sha256`, `build_sha256`, and `producer`. Every digest must be exactly

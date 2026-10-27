@@ -403,6 +403,34 @@ solution state, safe to run concurrently, and treat solution-level lookup contex
 as immutable for the duration of a solve. Third-party Python extension modules
 used inside callbacks may still impose their own synchronization constraints.
 
+### Parallel Move Evaluation
+
+Acceptor-forager local search, including the default local search, can
+evaluate candidate moves on several cores within one solve.
+Set `{"move_thread_count": {"count": 4}}` in a config dict, or
+`move_thread_count = { count = 4 }` in `solver.toml`, to run each step's trials
+on up to four evaluators while one coordinator keeps the sequential acceptance
+order. Upstream SolverForge bounds the count by the solve's Rayon threads and by
+32, the size of one evaluation window. `"none"` disables parallel evaluation;
+the default, `"auto"`, currently stays sequential. Construction and variable
+neighborhood descent phases always run sequentially.
+
+Every evaluator owns its own constraint set, built from the same compiled
+schema and callbacks as the working solution, and scores a replica of the
+working state on a Rayon worker thread. Constraint, filter, weight, and other
+scoring callbacks therefore run concurrently on those workers, which is why
+they must be deterministic and free of shared mutable state. Results are
+reproducible at fixed work: the same seed and step budget produce the same
+assignments and score for any thread count. Wall-clock limits still end a solve
+wherever it is. `Solver.solve` releases the GIL for the whole solve so the
+workers can attach to Python; on a GIL build of CPython the callbacks then
+serialize on the GIL, so real speedup needs the free-threaded interpreter.
+
+Candidates a worker evaluated ahead of the decision point and then discarded
+are reported as `moves_speculative` in run and per-phase telemetry, and as the
+`discarded_speculative` disposition in candidate traces. Sequential solves
+report zero.
+
 ## License
 
 SolverForge Python is licensed under the Apache License, Version 2.0. See

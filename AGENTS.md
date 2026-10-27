@@ -97,6 +97,20 @@ from Rust-owned state. Callback code may be called many times and from multiple
 worker threads on CPython 3.14 free-threaded, so treat solution-level lookup
 context as immutable during a solve.
 
+Parallel move evaluation is upstream-owned. `move_thread_count` passes through
+`SolverConfig` untouched; the binding hands the runner a constraint-set
+constructor (`dynamic_constraints`), never a ready-made set, so the working
+solution and every evaluator replica build their own `PyDynamicConstraintSet`
+from the same compiled plan. Replicas score on Rayon workers, so scoring must
+read no thread-local state: `DynamicScore` is a plain three-level value and
+constraint sets keep no per-thread family scope. `Solver.solve` must run the
+solver inside `py.detach`: a calling thread that holds the GIL while waiting on
+attaching workers deadlocks any count of two or more. Telemetry mirrors the
+upstream shape: run totals plus a `phases` list with per-phase
+`moves_speculative`; candidate traces name the `discarded_speculative`
+disposition. Do not add binding-side thread pools, evaluator caps, or
+speculation accounting.
+
 Entity pinning is declarative: `planning_pin()` names the entity attribute
 holding a per-instance `bool`, the binding resolves it once per row at import,
 and only the compiled SolverForge runtime enforces it. The binding adds no pin
