@@ -1,6 +1,39 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.7.0](https://github.com/SolverForge/solverforge-py/compare/v0.6.15...v0.7.0) (2026-10-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **score:** migrate to the plain three-level DynamicScore
+* **deps:** retained telemetry replaces `phase` with a `phases` list; read `phases[-1]`.
+
+### Features
+
+* **manager:** report speculative evaluation from parallel local search ([3930b06](https://github.com/SolverForge/solverforge-py/commit/3930b060cc48dfaf6a3d781df0768ebe79fd144a))
+* **solver:** evaluate Python models on several cores ([5ff3a20](https://github.com/SolverForge/solverforge-py/commit/5ff3a20f9526b48bfda4f6b06311162cb934a651))
+
+
+### Bug Fixes
+
+* **ci:** serialize distribution build and validation ([df38c85](https://github.com/SolverForge/solverforge-py/commit/df38c853b99aeea9e276d81f0773f5b5a7cf2f39))
+* **deps:** target the SolverForge 0.23.0 registry base ([afdf0fa](https://github.com/SolverForge/solverforge-py/commit/afdf0fa0ec21eeac89098689605c93a76e387db2))
+* **solver:** release the GIL for the duration of a solve ([4c6dddb](https://github.com/SolverForge/solverforge-py/commit/4c6dddb2172a355897d4666ba39e5eb386a99a44))
+
+
+### Tests
+
+* pin parallel evaluation parity and worker-thread tracebacks ([056867f](https://github.com/SolverForge/solverforge-py/commit/056867fd63e9ce5f049562626f329de35d3f99ce))
+* **threading:** pin parallel evaluation across score families and list models ([77a05ab](https://github.com/SolverForge/solverforge-py/commit/77a05abc550f9e12337dbefaace93f383d6f09c7))
+* **threading:** pin per-phase speculative telemetry and TOML thread counts ([d021ae4](https://github.com/SolverForge/solverforge-py/commit/d021ae423171c5c8d72bcbd8d65c70c0bb4568fa))
+
+
+### Documentation and release
+
+* document parallel move evaluation ([5ff3764](https://github.com/SolverForge/solverforge-py/commit/5ff376458139fed91245892bee3bbc209dbd4f57))
+
+
 ## [0.6.15](https://github.com/SolverForge/solverforge-py/compare/v0.6.14...v0.6.15) (2026-10-18)
 
 
