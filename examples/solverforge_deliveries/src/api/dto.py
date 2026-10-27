@@ -78,37 +78,43 @@ def score_to_string(score: object) -> str | None:
     return hard_soft_string(int(levels[0]), int(levels[-1]))
 
 
+def phase_telemetry(phase: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "phaseIndex": int(phase.get("phase_index", 0)),
+        "phaseType": str(phase.get("phase_type", "")),
+        "elapsedMs": int(phase.get("elapsed_ms", 0)),
+        "stepCount": int(phase.get("step_count", 0)),
+        "movesGenerated": int(phase.get("moves_generated", 0)),
+        "movesEvaluated": int(phase.get("moves_evaluated", 0)),
+        "movesSpeculative": int(phase.get("moves_speculative", 0)),
+        "movesAccepted": int(phase.get("moves_accepted", 0)),
+        "movesApplied": int(phase.get("moves_applied", 0)),
+        "scoreCalculations": int(phase.get("score_calculations", 0)),
+        "generationMs": int(phase.get("generation_ms", 0)),
+        "evaluationMs": int(phase.get("evaluation_ms", 0)),
+    }
+
+
 def telemetry(payload: object | None = None) -> dict[str, Any]:
     if not isinstance(payload, dict):
         payload = {}
-    phase = payload.get("phase")
+    phases = payload.get("phases")
     return {
         "elapsedMs": int(payload.get("elapsed_ms", 0)),
         "stepCount": int(payload.get("step_count", 0)),
         "movesGenerated": int(payload.get("moves_generated", 0)),
         "movesEvaluated": int(payload.get("moves_evaluated", 0)),
+        "movesSpeculative": int(payload.get("moves_speculative", 0)),
         "movesAccepted": int(payload.get("moves_accepted", 0)),
         "scoreCalculations": int(payload.get("score_calculations", 0)),
         "generationMs": int(payload.get("generation_ms", 0)),
         "evaluationMs": int(payload.get("evaluation_ms", 0)),
         "movesPerSecond": int(payload.get("moves_per_second", 0)),
         "acceptanceRate": float(payload.get("acceptance_rate", 0.0)),
-        "phase": (
-            {
-                "phaseIndex": int(phase.get("phase_index", 0)),
-                "phaseType": str(phase.get("phase_type", "")),
-                "elapsedMs": int(phase.get("elapsed_ms", 0)),
-                "stepCount": int(phase.get("step_count", 0)),
-                "movesGenerated": int(phase.get("moves_generated", 0)),
-                "movesEvaluated": int(phase.get("moves_evaluated", 0)),
-                "movesAccepted": int(phase.get("moves_accepted", 0)),
-                "movesApplied": int(phase.get("moves_applied", 0)),
-                "scoreCalculations": int(phase.get("score_calculations", 0)),
-                "generationMs": int(phase.get("generation_ms", 0)),
-                "evaluationMs": int(phase.get("evaluation_ms", 0)),
-            }
-            if isinstance(phase, dict)
-            else None
+        "phases": (
+            [phase_telemetry(phase) for phase in phases if isinstance(phase, dict)]
+            if isinstance(phases, list)
+            else []
         ),
     }
 

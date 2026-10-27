@@ -87,7 +87,7 @@ def test_solverforge_rust_dependency_base_is_manifest_owned() -> None:
     solverforge = cargo["package"]["metadata"]["solverforge"]
     dependencies = cargo["dependencies"]
 
-    assert solverforge["version"] == "0.22.0"
+    assert solverforge["version"] == "0.23.0"
     assert "git" not in solverforge
     assert "rev" not in solverforge
     assert "path" not in solverforge

@@ -180,7 +180,10 @@ fn telemetry_to_python(py: Python<'_>, telemetry: &SolverTelemetry) -> PyResult<
     )?;
     dict.set_item("generation_ms", duration_millis(telemetry.generation_time))?;
     dict.set_item("evaluation_ms", duration_millis(telemetry.evaluation_time))?;
-    if let Some(phase) = &telemetry.phase {
+    // Every phase started so far, in execution order; the last entry of a
+    // progress snapshot is the phase still running.
+    let phases = PyList::empty(py);
+    for phase in &telemetry.phases {
         let phase_dict = PyDict::new(py);
         phase_dict.set_item("phase_index", phase.phase_index)?;
         phase_dict.set_item("phase_type", &phase.phase_type)?;
@@ -188,6 +191,7 @@ fn telemetry_to_python(py: Python<'_>, telemetry: &SolverTelemetry) -> PyResult<
         phase_dict.set_item("step_count", phase.step_count)?;
         phase_dict.set_item("moves_generated", phase.moves_generated)?;
         phase_dict.set_item("moves_evaluated", phase.moves_evaluated)?;
+        phase_dict.set_item("moves_speculative", phase.moves_speculative)?;
         phase_dict.set_item("moves_accepted", phase.moves_accepted)?;
         phase_dict.set_item("moves_applied", phase.moves_applied)?;
         phase_dict.set_item("moves_score_improving", phase.moves_score_improving)?;
@@ -195,10 +199,9 @@ fn telemetry_to_python(py: Python<'_>, telemetry: &SolverTelemetry) -> PyResult<
         phase_dict.set_item("score_calculations", phase.score_calculations)?;
         phase_dict.set_item("generation_ms", duration_millis(phase.generation_time))?;
         phase_dict.set_item("evaluation_ms", duration_millis(phase.evaluation_time))?;
-        dict.set_item("phase", phase_dict)?;
-    } else {
-        dict.set_item("phase", py.None())?;
+        phases.append(phase_dict)?;
     }
+    dict.set_item("phases", phases)?;
     dict.set_item(
         "moves_per_second",
         whole_units_per_second(telemetry.moves_evaluated, telemetry.elapsed),
@@ -396,7 +399,7 @@ mod tests {
     use super::detailed_telemetry_to_python;
 
     #[test]
-    fn telemetry_maps_current_phase() {
+    fn telemetry_maps_every_phase_in_order() {
         Python::initialize();
         let telemetry = SolverTelemetry {
             moves_applied: 5,
@@ -442,33 +445,57 @@ mod tests {
                 hard_feasible_after: true,
                 ..AppliedMoveTelemetry::default()
             }],
-            phase: Some(PhaseTelemetry {
-                phase_index: 1,
-                phase_type: "Local Search".to_string(),
-                elapsed: Duration::from_millis(1_250),
-                step_count: 3,
-                moves_generated: 12,
-                moves_evaluated: 10,
-                moves_accepted: 2,
-                moves_applied: 1,
-                moves_score_improving: 1,
-                moves_applied_improving: 1,
-                score_calculations: 11,
-                generation_time: Duration::from_millis(4),
-                evaluation_time: Duration::from_millis(8),
-            }),
+            phases: vec![
+                PhaseTelemetry {
+                    phase_index: 0,
+                    phase_type: "Construction Heuristic".to_string(),
+                    step_count: 2,
+                    ..PhaseTelemetry::default()
+                },
+                PhaseTelemetry {
+                    phase_index: 1,
+                    phase_type: "Local Search".to_string(),
+                    elapsed: Duration::from_millis(1_250),
+                    step_count: 3,
+                    moves_generated: 12,
+                    moves_evaluated: 10,
+                    moves_speculative: 4,
+                    moves_accepted: 2,
+                    moves_applied: 1,
+                    moves_score_improving: 1,
+                    moves_applied_improving: 1,
+                    score_calculations: 11,
+                    generation_time: Duration::from_millis(4),
+                    evaluation_time: Duration::from_millis(8),
+                },
+            ],
             ..SolverTelemetry::default()
         };
 
         Python::attach(|py| {
             let payload = detailed_telemetry_to_python(py, &telemetry).expect("telemetry payload");
             let payload = payload.bind(py).cast::<PyDict>().expect("telemetry dict");
-            let phase = payload
-                .get_item("phase")
-                .expect("phase lookup")
-                .expect("phase payload")
+            let phases = payload
+                .get_item("phases")
+                .expect("phases lookup")
+                .expect("phases payload")
+                .cast_into::<PyList>()
+                .expect("phases list");
+            assert_eq!(phases.len(), 2);
+            let phase = phases
+                .get_item(1)
+                .expect("running phase entry")
                 .cast_into::<PyDict>()
                 .expect("phase dict");
+            assert_eq!(
+                phase
+                    .get_item("moves_speculative")
+                    .expect("moves speculative lookup")
+                    .expect("moves speculative")
+                    .extract::<u64>()
+                    .expect("moves speculative count"),
+                4
+            );
             assert_eq!(
                 phase
                     .get_item("phase_type")

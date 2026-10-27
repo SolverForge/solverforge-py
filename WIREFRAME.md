@@ -196,10 +196,13 @@ event payloads report the current score from the attached solution snapshot when
 one is available, and use that score as the best-score fallback only when the
 retained manager event has not supplied a best score.
 
-Retained progress uses the upstream phase pulse and carries nested phase
-telemetry (`phase_index`, `phase_type`, elapsed time, move/step/score counters,
-and generation/evaluation time). The hospital and deliveries DTOs map that
-single native payload to their camel-case SSE/API contract. Failed events carry
+Retained progress uses the upstream phase pulse. Telemetry carries run totals,
+including `moves_speculative`, and a `phases` list with one record per phase
+started so far, in execution order (`phase_index`, `phase_type`, elapsed time,
+move/step/score counters, `moves_speculative`, and generation/evaluation time);
+the last record of a progress event is the running phase. The hospital and
+deliveries DTOs map that single native payload to their camel-case SSE/API
+contract (`movesSpeculative`, `phases`). Failed events carry
 the formatted Python callback traceback; synchronous solve/analyze re-raise the
 original Python exception object and traceback. `telemetry_detail` is an
 explicit atomic diagnostic read containing one status with detailed telemetry
@@ -447,11 +450,11 @@ The source distribution contains package metadata, the README and license, the
 locked Cargo manifests and Rust toolchain, and the Python/Rust sources needed to
 build the package. Repository-only tests, examples, maintainer guidance,
 wireframes, and tooling remain available from the source checkout. `Cargo.toml`
-pins the six SolverForge crates to the exact published `0.22.0` registry base
+pins the six SolverForge crates to the exact published `0.23.0` registry base
 and `solverforge-ui` to `0.9.0`; `Cargo.lock` records their crates.io checksums.
 
 The current checkout prepares Python package and native `solverforge_py` crate
-metadata version `0.6.15`, targeting the exact SolverForge `0.22.0` crate
+metadata version `0.6.15`, targeting the exact SolverForge `0.23.0` crate
 boundary. Its artifact set is one source distribution plus Linux, macOS, and
 Windows wheels, verified together before release.
 

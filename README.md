@@ -9,7 +9,7 @@ clone, mutate, and snapshot solutions safely. Python callbacks are the single
 constraint authoring surface.
 
 The package targets CPython 3.14 and Rust 1.95.0. This release-preparation
-checkout pins the six published SolverForge Rust dependencies to `0.22.0` and
+checkout pins the six published SolverForge Rust dependencies to `0.23.0` and
 `solverforge-ui` to `0.9.0` through exact crates.io requirements in
 `Cargo.toml` and registry checksums in `Cargo.lock`. There is no local path or
 Git dependency override. The `solverforge` `0.6.x` line is the current dynamic
@@ -21,7 +21,7 @@ requirements, and other APIs that are not part of this package.
 ## Installation
 
 The package version prepared by this checkout is `solverforge` `0.6.15`, targeting
-the published and registry-locked SolverForge Rust `0.22.0` dependency base.
+the published and registry-locked SolverForge Rust `0.23.0` dependency base.
 Install the matching package after its Python release with:
 
 ```sh
@@ -178,8 +178,11 @@ Run `make help` for focused targets such as `make test-hospital`,
   state and does not expose an incomplete solution snapshot.
   Retained event payloads read current score from the attached solution snapshot
   when present. Long-running phases publish progress at the shared upstream
-  cadence, and telemetry includes the current phase type, index, counters, and
-  generation/evaluation time. `telemetry_detail(job_id)` returns one atomic
+  cadence. Telemetry carries run totals, including `moves_speculative`, plus a
+  `phases` list with one entry per phase started so far, in execution order:
+  phase type, index, step/move/score counters, `moves_speculative`, and
+  generation/evaluation time. The last entry of a progress event is the phase
+  still running. `telemetry_detail(job_id)` returns one atomic
   `status` with detailed telemetry plus an optional `candidate_trace`; ordinary
   status/event polling remains compact.
 - Candidate tracing is an opt-in retained-job diagnostic configured as

@@ -97,38 +97,50 @@ def test_snapshot_payload_uses_snapshot_score_as_current_score() -> None:
     assert payload["solution"]["score"] == "0hard/151.99995soft"
 
 
-def test_telemetry_payload_maps_current_phase() -> None:
+def test_telemetry_payload_maps_every_phase_in_order() -> None:
     payload = telemetry(
         {
-            "phase": {
-                "phase_index": 1,
-                "phase_type": "Local Search",
-                "elapsed_ms": 1250,
-                "step_count": 3,
-                "moves_generated": 12,
-                "moves_evaluated": 10,
-                "moves_accepted": 2,
-                "moves_applied": 1,
-                "score_calculations": 11,
-                "generation_ms": 4,
-                "evaluation_ms": 8,
-            }
+            "moves_speculative": 4,
+            "phases": [
+                {"phase_index": 0, "phase_type": "Construction Heuristic", "step_count": 2},
+                {
+                    "phase_index": 1,
+                    "phase_type": "Local Search",
+                    "elapsed_ms": 1250,
+                    "step_count": 3,
+                    "moves_generated": 12,
+                    "moves_evaluated": 10,
+                    "moves_speculative": 4,
+                    "moves_accepted": 2,
+                    "moves_applied": 1,
+                    "score_calculations": 11,
+                    "generation_ms": 4,
+                    "evaluation_ms": 8,
+                },
+            ],
         }
     )
 
-    assert payload["phase"] == {
+    assert payload["movesSpeculative"] == 4
+    assert [phase["phaseType"] for phase in payload["phases"]] == [
+        "Construction Heuristic",
+        "Local Search",
+    ]
+    assert payload["phases"][1] == {
         "phaseIndex": 1,
         "phaseType": "Local Search",
         "elapsedMs": 1250,
         "stepCount": 3,
         "movesGenerated": 12,
         "movesEvaluated": 10,
+        "movesSpeculative": 4,
         "movesAccepted": 2,
         "movesApplied": 1,
         "scoreCalculations": 11,
         "generationMs": 4,
         "evaluationMs": 8,
     }
+    assert telemetry(None)["phases"] == []
 
 
 def test_event_payload_uses_solution_score_as_current_score() -> None:
