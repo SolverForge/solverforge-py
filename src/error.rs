@@ -1,5 +1,6 @@
 use std::any::Any;
-use std::panic::panic_any;
+use std::panic::{panic_any, set_hook, take_hook};
+use std::sync::Once;
 
 use pyo3::create_exception;
 use pyo3::exceptions::PyRuntimeError;
@@ -21,6 +22,22 @@ pub fn panic_with_py_err<T>(error: PyErr) -> T {
             .unwrap_or_else(|_| error.to_string())
     });
     panic_any(SolverPanicPayload::new(message, error))
+}
+
+/// Keeps std's default hook from printing `thread panicked at src/error.rs`
+/// for a callback error unwinding through the solver. That panic only carries
+/// the Python error to `panic_to_py_err` (or the retained job's failure
+/// status), which reports it once; every other panic reaches the previous hook.
+pub fn install_callback_panic_hook() {
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        let previous = take_hook();
+        set_hook(Box::new(move |info| {
+            if !info.payload().is::<SolverPanicPayload>() {
+                previous(info);
+            }
+        }));
+    });
 }
 
 pub fn panic_to_py_err(payload: Box<dyn Any + Send>) -> PyErr {

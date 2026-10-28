@@ -12,6 +12,7 @@ fn init_console() {
 
 #[pymodule(gil_used = false)]
 fn _native(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
+    crate::error::install_callback_panic_hook();
     module.add(
         "NativeSolverError",
         py.get_type::<crate::error::NativeSolverError>(),
