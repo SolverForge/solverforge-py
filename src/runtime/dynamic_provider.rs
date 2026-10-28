@@ -213,23 +213,20 @@ fn parse_edits(edits_any: &Bound<'_, PyAny>) -> PyResult<Vec<RawProviderEdit>> {
 fn parse_edit(edit_any: &Bound<'_, PyAny>) -> PyResult<RawProviderEdit> {
     let edit = edit_any.cast::<PyDict>()?;
     let entity_object = edit.get_item("entity")?;
-    let entity_class = optional_dict_str(edit, "entity_class")?
+    let entity_class = match optional_dict_str(edit, "entity_class")?
         .or(optional_dict_str(edit, "entity_type")?)
-        .or_else(|| {
-            entity_object
-                .as_ref()
-                .and_then(|entity| entity.getattr("_solverforge_entity_class").ok())
-                .and_then(|value| value.extract::<String>().ok())
-        });
+    {
+        Some(class) => Some(class),
+        None => entity_marker(entity_object.as_ref(), "_solverforge_entity_class")?
+            .and_then(|value| value.extract::<String>().ok()),
+    };
     let variable_name = required_dict_str(edit, "variable_name")?;
-    let entity_index = optional_dict_usize(edit, "entity_index")?
-        .or_else(|| {
-            entity_object
-                .as_ref()
-                .and_then(|entity| entity.getattr("_solverforge_entity_index").ok())
-                .and_then(|value| value.extract::<usize>().ok())
-        })
-        .ok_or_else(|| py_err("dynamic compound edit missing `entity_index` or `entity`"))?;
+    let entity_index = match optional_dict_usize(edit, "entity_index")? {
+        Some(index) => Some(index),
+        None => entity_marker(entity_object.as_ref(), "_solverforge_entity_index")?
+            .and_then(|value| value.extract::<usize>().ok()),
+    }
+    .ok_or_else(|| py_err("dynamic compound edit missing `entity_index` or `entity`"))?;
     let to_value_any = edit
         .get_item("to_value")?
         .or(edit.get_item("value")?)
@@ -264,6 +261,18 @@ fn optional_dict_str(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<Option<Str
         })
         .transpose()
         .map(Option::flatten)
+}
+
+/// Reads a binding marker off an edit's entity object. A missing attribute
+/// means no marker; any other error (a KeyboardInterrupt) propagates.
+fn entity_marker<'py>(
+    entity: Option<&Bound<'py, PyAny>>,
+    name: &str,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    match entity {
+        Some(entity) => entity.getattr_opt(name),
+        None => Ok(None),
+    }
 }
 
 fn optional_dict_usize(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<Option<usize>> {

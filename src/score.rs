@@ -20,7 +20,7 @@ pub fn dynamic_score_from_native(value: &Bound<'_, PyAny>) -> PyResult<DynamicSc
     if let Ok(levels) = value.cast::<PyTuple>() {
         return dynamic_score_from_sequence(levels.iter());
     }
-    if let Ok(method) = value.getattr("to_native") {
+    if let Some(method) = value.getattr_opt("to_native")? {
         let native = method.call0()?;
         if let Ok(dict) = native.cast::<PyDict>() {
             return dynamic_score_from_dict(dict);
