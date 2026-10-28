@@ -535,11 +535,9 @@ impl PythonCallbackView {
             entity_schema.type_name.as_str(),
         )?;
         for (variable_index, variable) in entity_schema.variables.iter().enumerate() {
-            let attribute_name = if object_bound
-                .get_type()
-                .getattr(variable.name.as_str())
-                .is_ok()
-            {
+            // Only a missing attribute selects the plain name: any other error
+            // (a KeyboardInterrupt raised inside a descriptor) must propagate.
+            let attribute_name = if object_bound.get_type().hasattr(variable.name.as_str())? {
                 variable.storage_name.as_str()
             } else {
                 variable.name.as_str()

@@ -14,6 +14,7 @@ from solverforge import (
     planning_variable,
     scalar_group,
 )
+from solverforge.fields import PlanningField
 
 
 @planning_entity
@@ -228,3 +229,59 @@ def test_callback_traceback_surfaces_from_parallel_evaluation() -> None:
         Solver.solve(LateBrokenPlan(), config)
     frames = traceback.extract_tb(exc_info.value.__traceback__)
     assert any(frame.name == "explode_on_second_worker" for frame in frames)
+
+
+@planning_entity
+class InterruptedTask:
+    worker = planning_variable(value_range_provider="workers", allows_unassigned=True)
+
+    def __init__(self) -> None:
+        self.worker = None
+
+
+INTERRUPT_ARMED = {"armed": False}
+
+
+@constraint_provider
+def interrupted_constraints(factory: ConstraintFactory):
+    def arm_interrupt(task: InterruptedTask) -> bool:
+        INTERRUPT_ARMED["armed"] = True
+        return task.worker is None
+
+    return [
+        factory.for_each(InterruptedTask)
+        .filter(arm_interrupt)
+        .penalize(HardSoftScore.ONE_HARD)
+        .named("unassigned")
+    ]
+
+
+@planning_solution(score=HardSoftScore, constraints=interrupted_constraints)
+class InterruptedPlan:
+    tasks: list[InterruptedTask]
+
+    def __init__(self) -> None:
+        self.tasks = [InterruptedTask() for _ in range(8)]
+        self.workers = list(range(8))
+        self.score = None
+
+
+def test_interrupt_raised_while_syncing_callback_view_reaches_caller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Ctrl+C runs Python's SIGINT handler at the next bytecode boundary, which
+    # can be the planning-field descriptor the callback view probes on the
+    # entity class. That KeyboardInterrupt must reach the caller, not be read
+    # as "attribute missing" while the solve runs on to its termination limit.
+    original_get = PlanningField.__get__
+
+    def interrupting_get(self: PlanningField, instance: object | None, owner: type) -> object:
+        if instance is None and INTERRUPT_ARMED["armed"]:
+            INTERRUPT_ARMED["armed"] = False
+            raise KeyboardInterrupt
+        return original_get(self, instance, owner)
+
+    monkeypatch.setattr(PlanningField, "__get__", interrupting_get)
+    INTERRUPT_ARMED["armed"] = False
+    with pytest.raises(KeyboardInterrupt):
+        Solver.solve(InterruptedPlan(), {"termination": {"step_count_limit": 200}})
