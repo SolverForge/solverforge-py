@@ -1,6 +1,15 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.7.1](https://github.com/SolverForge/solverforge-py/compare/v0.7.0...v0.7.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **callbacks:** propagate interrupts raised while syncing callback views ([e1d1134](https://github.com/SolverForge/solverforge-py/commit/e1d11348ce5e377ed932f6b054a081fb1dfcba2e))
+* **runtime:** stop swallowing errors from optional attribute lookups ([0917e6a](https://github.com/SolverForge/solverforge-py/commit/0917e6ab49e77a26c122a0c064124820ac37272b))
+
+
 ## [0.7.0](https://github.com/SolverForge/solverforge-py/compare/v0.6.15...v0.7.0) (2026-10-27)
 
 
