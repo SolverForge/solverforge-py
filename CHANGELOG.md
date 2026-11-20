@@ -1,6 +1,14 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.8.1](https://github.com/SolverForge/solverforge-py/compare/v0.8.0...v0.8.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **ci:** build the macOS arm64 wheel on macos-15 ([b24d99c](https://github.com/SolverForge/solverforge-py/commit/b24d99c055e4de4df0309653b70d5cc613b8ef24))
+
+
 ## [0.8.0](https://github.com/SolverForge/solverforge-py/compare/v0.7.2...v0.8.0) (2026-11-20)
 
 
