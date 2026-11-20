@@ -63,12 +63,20 @@ def test_manager_returns_completed_handle() -> None:
     telemetry = status["telemetry"]
     assert isinstance(telemetry, dict)
     assert "selector_telemetry" not in telemetry
+    assert "resolved_phase_plan" not in telemetry
+    assert telemetry["problem_changes_applied"] == 0
     detail = manager.telemetry_detail(handle.job_id)
     assert isinstance(detail["status"], dict)
     detail_status = detail["status"]
     detail_telemetry = detail_status["telemetry"]
     assert isinstance(detail_telemetry, dict)
     assert isinstance(detail_telemetry["selector_telemetry"], list)
+    for selector in detail_telemetry["selector_telemetry"]:
+        assert not any(key.startswith("conflict_repair_") for key in selector)
+    phase_plan = detail_telemetry["resolved_phase_plan"]
+    assert isinstance(phase_plan, dict)
+    assert phase_plan["kind"] == "solverforge.runtime.compiled"
+    assert phase_plan["children"]
     assert isinstance(detail_telemetry["move_telemetry"], list)
     assert isinstance(detail_telemetry["applied_move_trace"], list)
     assert detail_status["job_id"] == status["job_id"]
