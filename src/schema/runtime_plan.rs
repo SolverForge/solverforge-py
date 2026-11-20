@@ -55,17 +55,4 @@ impl CompiledRuntimePlan {
     pub(crate) fn model(&self) -> &DynamicRuntimeModel {
         &self.model
     }
-
-    pub(crate) fn default_time_limit_secs(&self) -> u64 {
-        if self.schema.entities.iter().any(|entity| {
-            entity
-                .variables
-                .iter()
-                .any(|variable| variable.kind == "planning_list_variable")
-        }) {
-            60
-        } else {
-            30
-        }
-    }
 }

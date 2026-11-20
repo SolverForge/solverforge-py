@@ -224,36 +224,36 @@ def test_dynamic_nearby_change_uses_python_candidates_and_distance() -> None:
     assert plan.score == Solver.analyze(plan)
 
 
-def test_dynamic_nearby_change_zero_limit_skips_python_providers() -> None:
+def test_dynamic_nearby_change_zero_limit_is_rejected_before_python_providers() -> None:
     nearby_value_candidate_calls.clear()
     nearby_value_candidate_yields.clear()
     nearby_value_distance_calls.clear()
 
-    plan = Solver.solve(
-        NearbyChangePlan(),
-        {
-            "phases": [
-                {
-                    "type": "local_search",
-                    "local_search_type": "acceptor_forager",
-                    "move_selector": {
-                        "type": "nearby_change_move_selector",
-                        "max_nearby": 0,
-                        "entity_class": "NearbyTask",
-                        "variable_name": "worker",
-                    },
-                    "acceptor": {"type": "hill_climbing"},
-                    "forager": {"type": "best_score"},
-                    "termination": {"step_count_limit": 1},
-                }
-            ]
-        },
-    )
+    with pytest.raises(RuntimeError, match="max_nearby"):
+        Solver.solve(
+            NearbyChangePlan(),
+            {
+                "phases": [
+                    {
+                        "type": "local_search",
+                        "local_search_type": "acceptor_forager",
+                        "move_selector": {
+                            "type": "nearby_change_move_selector",
+                            "max_nearby": 0,
+                            "entity_class": "NearbyTask",
+                            "variable_name": "worker",
+                        },
+                        "acceptor": {"type": "hill_climbing"},
+                        "forager": {"type": "best_score"},
+                        "termination": {"step_count_limit": 1},
+                    }
+                ]
+            },
+        )
 
     assert nearby_value_candidate_calls == []
     assert nearby_value_candidate_yields == []
     assert nearby_value_distance_calls == []
-    assert plan.tasks[0].worker == 0
 
 
 def test_dynamic_nearby_change_stops_python_iterable_at_candidate_limit() -> None:
@@ -944,37 +944,37 @@ def test_dynamic_nearby_cursor_preserves_authored_callback_objects() -> None:
     assert plan.score["levels"] == [-2]
 
 
-def test_dynamic_nearby_swap_zero_limit_skips_python_providers() -> None:
+def test_dynamic_nearby_swap_zero_limit_is_rejected_before_python_providers() -> None:
     cursor_candidate_calls.clear()
     cursor_candidate_yields.clear()
     cursor_distance_calls.clear()
 
-    plan = Solver.solve(
-        CursorPlan(),
-        {
-            "random_seed": 1,
-            "phases": [
-                {
-                    "type": "local_search",
-                    "local_search_type": "acceptor_forager",
-                    "move_selector": {
-                        "type": "nearby_swap_move_selector",
-                        "max_nearby": 0,
-                        "entity_class": "CursorTask",
-                        "variable_name": "worker",
-                    },
-                    "acceptor": {"type": "hill_climbing"},
-                    "forager": {"type": "best_score"},
-                    "termination": {"step_count_limit": 1},
-                }
-            ],
-        },
-    )
+    with pytest.raises(RuntimeError, match="max_nearby"):
+        Solver.solve(
+            CursorPlan(),
+            {
+                "random_seed": 1,
+                "phases": [
+                    {
+                        "type": "local_search",
+                        "local_search_type": "acceptor_forager",
+                        "move_selector": {
+                            "type": "nearby_swap_move_selector",
+                            "max_nearby": 0,
+                            "entity_class": "CursorTask",
+                            "variable_name": "worker",
+                        },
+                        "acceptor": {"type": "hill_climbing"},
+                        "forager": {"type": "best_score"},
+                        "termination": {"step_count_limit": 1},
+                    }
+                ],
+            },
+        )
 
     assert cursor_candidate_calls == []
     assert cursor_candidate_yields == []
     assert cursor_distance_calls == []
-    assert [task.worker for task in plan.tasks] == [0, 1, 2, 3]
 
 
 def test_dynamic_cartesian_cursor_preserves_authored_callback_objects() -> None:
@@ -1527,36 +1527,35 @@ class DeferredGroupPlan:
         self.score = None
 
 
-def test_group_callback_is_not_opened_by_limited_zero() -> None:
+def test_group_callback_is_not_opened_by_rejected_limited_zero() -> None:
     global _deferred_group_calls
     _deferred_group_calls = 0
 
-    plan = Solver.solve(
-        DeferredGroupPlan(),
-        {
-            "phases": [
-                {
-                    "type": "local_search",
-                    "local_search_type": "acceptor_forager",
-                    "move_selector": {
-                        "type": "limited_neighborhood",
-                        "selected_count_limit": 0,
-                        "selector": {
-                            "type": "grouped_scalar_move_selector",
-                            "group_name": "deferred_group",
+    with pytest.raises(RuntimeError, match="selected_count_limit: must be at least 1"):
+        Solver.solve(
+            DeferredGroupPlan(),
+            {
+                "phases": [
+                    {
+                        "type": "local_search",
+                        "local_search_type": "acceptor_forager",
+                        "move_selector": {
+                            "type": "limited_neighborhood",
+                            "selected_count_limit": 0,
+                            "selector": {
+                                "type": "grouped_scalar_move_selector",
+                                "group_name": "deferred_group",
+                            },
                         },
-                    },
-                    "acceptor": {"type": "hill_climbing"},
-                    "forager": {"type": "best_score"},
-                    "termination": {"step_count_limit": 1},
-                }
-            ]
-        },
-    )
+                        "acceptor": {"type": "hill_climbing"},
+                        "forager": {"type": "best_score"},
+                        "termination": {"step_count_limit": 1},
+                    }
+                ]
+            },
+        )
 
     assert _deferred_group_calls == 0
-    assert plan.tasks[0].worker == 0
-    assert plan.score == Solver.analyze(plan)
 
 
 def test_group_callback_is_not_opened_for_unreached_union_branch() -> None:
@@ -3058,7 +3057,7 @@ def test_assignment_owned_scalar_rejects_implicit_all_slot_callback_group() -> N
     [
         {
             "type": "limited_neighborhood",
-            "selected_count_limit": 0,
+            "selected_count_limit": 1,
             "selector": {
                 "type": "grouped_scalar_move_selector",
                 "group_name": "untrusted_assignment_callback",
@@ -3069,7 +3068,7 @@ def test_assignment_owned_scalar_rejects_implicit_all_slot_callback_group() -> N
             "selectors": [
                 {
                     "type": "limited_neighborhood",
-                    "selected_count_limit": 0,
+                    "selected_count_limit": 1,
                     "selector": {
                         "type": "grouped_scalar_move_selector",
                         "group_name": "untrusted_assignment_callback",
@@ -3142,7 +3141,7 @@ def test_assignment_owned_scalar_rejects_implicit_all_slot_conflict_repair() -> 
     [
         {
             "type": "limited_neighborhood",
-            "selected_count_limit": 0,
+            "selected_count_limit": 1,
             "selector": {
                 "type": "conflict_repair_move_selector",
                 "constraints": ["assignment shift unassigned"],
@@ -3153,7 +3152,7 @@ def test_assignment_owned_scalar_rejects_implicit_all_slot_conflict_repair() -> 
             "selectors": [
                 {
                     "type": "limited_neighborhood",
-                    "selected_count_limit": 0,
+                    "selected_count_limit": 1,
                     "selector": {
                         "type": "conflict_repair_move_selector",
                         "constraints": ["assignment shift unassigned"],

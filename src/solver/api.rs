@@ -12,9 +12,8 @@ use crate::error::{panic_to_py_err, py_err};
 use crate::runtime::dynamic_assignment_group::validate_assignment_construction_groups;
 use crate::schema::compiled::CompiledSchema;
 use crate::score::{scoped_dynamic_score_family, score_family_from_name, DynamicScorePythonExt};
-use crate::solver::solvable::dynamic_constraints;
+use crate::solver::solvable::{constraint_providers, dynamic_entity_count, dynamic_log_scale};
 use crate::state::marshal::{export_solution, import_solution};
-use crate::state::PyDynamicSolution;
 
 #[pyfunction]
 pub fn calculate_score(
@@ -63,6 +62,8 @@ pub fn solve(
     imported.solver_config = solver_config.clone();
     let score_family = score_family_from_name(&parsed.score_family)?;
     let model = plan.model().clone();
+    let providers =
+        constraint_providers(parsed, &solver_config).map_err(|error| py_err(error.to_string()))?;
     // The solve runs without the GIL: parallel evaluation scores evaluator
     // replicas on Rayon workers that attach to Python themselves, and a
     // calling thread that kept the GIL while waiting on them would never let
@@ -73,12 +74,11 @@ pub fn solve(
                 scoped_dynamic_score_family(score_family, || {
                     try_run_dynamic_solver_with_config_parts(
                         imported,
-                        dynamic_constraints,
+                        &providers,
                         descriptor,
                         dynamic_entity_count,
                         SolverRuntime::detached(),
                         solver_config,
-                        30,
                         dynamic_log_scale,
                         None,
                         model,
@@ -97,12 +97,4 @@ pub fn solve(
         )?;
     }
     Ok(solution)
-}
-
-fn dynamic_entity_count(solution: &PyDynamicSolution, descriptor_index: usize) -> usize {
-    solution.entity_count(descriptor_index)
-}
-
-fn dynamic_log_scale(solution: &PyDynamicSolution) {
-    super::console::log_dynamic_scale(solution);
 }

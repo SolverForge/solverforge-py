@@ -8,9 +8,7 @@
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyString;
-use solverforge_solver::stats::{
-    CandidateTraceExternalDigest, QualifiedCandidateTraceRunProvenance,
-};
+use solverforge_solver::{CandidateTraceExternalDigest, QualifiedCandidateTraceRunProvenance};
 
 /// Immutable, externally-attested inputs for one qualified candidate-trace
 /// diagnostic run.

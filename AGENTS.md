@@ -152,7 +152,7 @@ example dependencies, project URLs, classifiers, and maturin module settings.
 `Cargo.toml` owns native crate metadata and the SolverForge Rust dependency
 base; the package version must match `pyproject.toml`. `Cargo.lock` locks
 reproducible Rust builds. The current checkout prepares package/crate `0.7.2`
-targeting the six published SolverForge `0.23.0` registry crates and
+targeting the six published SolverForge `0.31.2` registry crates and
 `solverforge-ui` `0.9.0` through exact manifest and lock requirements.
 `make release-base-check` and `make pre-release` must pass. Do not use committed
 path overrides, Git dependencies, or manually constructed registry checksums.

@@ -1,13 +1,11 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
-use solverforge_solver::stats::{
-    AppliedMoveTelemetry, MoveTelemetry, SelectorTelemetry, SolverTelemetry,
-};
+use solverforge_solver::{AppliedMoveTelemetry, MoveTelemetry, SelectorTelemetry, SolverTelemetry};
 use solverforge_solver::{
     SolverEvent, SolverLifecycleState, SolverStatus, SolverTelemetryDetail, SolverTerminalReason,
 };
 
-use super::candidate_trace::candidate_trace_to_python;
+use super::candidate_trace::{candidate_trace_to_python, phase_plan_to_python};
 use crate::score::DynamicScorePythonExt;
 use crate::state::PyDynamicSolution;
 
@@ -178,6 +176,7 @@ fn telemetry_to_python(py: Python<'_>, telemetry: &SolverTelemetry) -> PyResult<
         "scalar_assignment_required_remaining",
         telemetry.scalar_assignment_required_remaining,
     )?;
+    dict.set_item("problem_changes_applied", telemetry.problem_changes_applied)?;
     dict.set_item("generation_ms", duration_millis(telemetry.generation_time))?;
     dict.set_item("evaluation_ms", duration_millis(telemetry.evaluation_time))?;
     // Every phase started so far, in execution order; the last entry of a
@@ -263,6 +262,12 @@ fn detailed_telemetry_to_python(
         "applied_move_trace",
         applied_move_trace_to_python(py, &telemetry.applied_move_trace)?,
     )?;
+    // The phase plan the solve resolved. Upstream fills it in final telemetry
+    // only, so a detail read of a running job carries `None`.
+    match &telemetry.resolved_phase_plan {
+        Some(plan) => dict.set_item("resolved_phase_plan", phase_plan_to_python(py, plan)?)?,
+        None => dict.set_item("resolved_phase_plan", py.None())?,
+    }
     Ok(payload)
 }
 
@@ -286,27 +291,6 @@ fn selector_telemetry_to_python(
             dict.set_item("moves_hard_improving", entry.moves_hard_improving)?;
             dict.set_item("moves_hard_neutral", entry.moves_hard_neutral)?;
             dict.set_item("moves_hard_worse", entry.moves_hard_worse)?;
-            dict.set_item(
-                "conflict_repair_provider_generated",
-                entry.conflict_repair_provider_generated,
-            )?;
-            dict.set_item(
-                "conflict_repair_duplicate_filtered",
-                entry.conflict_repair_duplicate_filtered,
-            )?;
-            dict.set_item(
-                "conflict_repair_illegal_filtered",
-                entry.conflict_repair_illegal_filtered,
-            )?;
-            dict.set_item(
-                "conflict_repair_not_doable_filtered",
-                entry.conflict_repair_not_doable_filtered,
-            )?;
-            dict.set_item(
-                "conflict_repair_hard_improving",
-                entry.conflict_repair_hard_improving,
-            )?;
-            dict.set_item("conflict_repair_exposed", entry.conflict_repair_exposed)?;
             dict.set_item("generation_ms", duration_millis(entry.generation_time))?;
             dict.set_item("evaluation_ms", duration_millis(entry.evaluation_time))?;
             Ok(dict.into_any().unbind())
@@ -392,7 +376,7 @@ mod tests {
 
     use pyo3::prelude::*;
     use pyo3::types::{PyDict, PyList};
-    use solverforge_solver::stats::{
+    use solverforge_solver::{
         AppliedMoveTelemetry, MoveTelemetry, PhaseTelemetry, SelectorTelemetry, SolverTelemetry,
     };
 

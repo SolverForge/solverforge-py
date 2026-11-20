@@ -284,15 +284,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49"
 
 [[package]]
-name = "ppv-lite86"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
-dependencies = [
- "zerocopy",
-]
-
-[[package]]
 name = "pretty_assertions"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -399,16 +390,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rand_chacha"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e6af7f3e25ded52c41df4e0b1af2d047e45896c2f3281792ed68a1c243daedb"
-dependencies = [
- "ppv-lite86",
- "rand_core",
-]
-
-[[package]]
 name = "rand_core"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -465,12 +446,6 @@ name = "rustversion"
 version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
-
-[[package]]
-name = "ryu"
-version = "1.0.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "scopeguard"
@@ -531,19 +506,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_yaml"
-version = "0.9.34+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
-dependencies = [
- "indexmap",
- "itoa",
- "ryu",
- "serde",
- "unsafe-libyaml",
-]
-
-[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -560,9 +522,9 @@ checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
 name = "solverforge-bridge"
-version = "0.23.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bd1dda3257839fcacecc67fc58b16f3eac7a169f1d3c5b28ccf62abc75dd239"
+checksum = "83cea0f44f27af9773fd925d4e6bd8b7ee0b2f131c3596139a33e4a4b747db06"
 dependencies = [
  "solverforge-config",
  "solverforge-core",
@@ -572,22 +534,20 @@ dependencies = [
 
 [[package]]
 name = "solverforge-config"
-version = "0.23.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c4ed3b8dee6c738b333e6a024b191fa1267d792080eb077ac4266b67c2dedc0"
+checksum = "b454194b3d8864d3a4a449c34ae3da9b94fa01a2274f58d9b229bd626dcd3317"
 dependencies = [
  "serde",
- "serde_yaml",
- "solverforge-core",
  "thiserror",
  "toml 1.1.2+spec-1.1.0",
 ]
 
 [[package]]
 name = "solverforge-console"
-version = "0.23.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "401790d0c582cc2a64c88ddd6f9b7cc2fb93287649fb6149ab1c5c2b72f4b852"
+checksum = "1fbe83503f56e2b698ab2cc08a51d4fa06f7d504ea80aa5fe24f2d256a06bbf3"
 dependencies = [
  "num-format",
  "owo-colors",
@@ -597,38 +557,35 @@ dependencies = [
 
 [[package]]
 name = "solverforge-core"
-version = "0.23.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cafa2e7c3d678293c65480b9c7175ca793a406dac9096bec24f325081a35d7c3"
+checksum = "43a01ad328f39a85d62029a4ec79550d88cf334dcb4c0e5705ed92755cfb03c5"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "solverforge-scoring"
-version = "0.23.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86b9db4cb90c12e516a88f60657bd673a4493efca62a987d9a57ab92b81ac42f"
+checksum = "00928283f0a943b8c41731c4c67b85cd66dfb249421a963cb9d6296ddbbd355d"
 dependencies = [
  "solverforge-core",
- "thiserror",
 ]
 
 [[package]]
 name = "solverforge-solver"
-version = "0.23.0"
+version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "932e9af2c810aeafd313819620e2b7802a9cee735a9a9f1bd4897c0e78917d77"
+checksum = "82f3a19a6bd0a8ced9d91b13203d59529e54e93bf3643bcfd2352c5e07889c61"
 dependencies = [
  "rand",
- "rand_chacha",
  "rayon",
  "serde",
  "smallvec",
  "solverforge-config",
  "solverforge-core",
  "solverforge-scoring",
- "thiserror",
  "tokio",
  "tracing",
 ]
@@ -662,7 +619,6 @@ dependencies = [
  "solverforge-solver",
  "solverforge-ui",
  "thiserror",
- "tokio",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
  "tracing-subscriber",
@@ -860,12 +816,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7264e107f553ccae879d21fbea1d6724ac785e8c3bfc762137959b5802826ef3"
 
 [[package]]
-name = "unsafe-libyaml"
-version = "0.2.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
-
-[[package]]
 name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -903,26 +853,6 @@ name = "yansi"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
-
-[[package]]
-name = "zerocopy"
-version = "0.8.52"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce1022995ff5ff5d841ad7d994facc23098cd40152f2c1d11cd607c6f530653f"
-dependencies = [
- "zerocopy-derive",
-]
-
-[[package]]
-name = "zerocopy-derive"
-version = "0.8.52"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ae7f38b72ec2a254e2b87ef277cf2cd4fb97cbebf944faa6f33354da0867930"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "zmij"

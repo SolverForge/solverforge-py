@@ -753,6 +753,7 @@ mod tests {
             }],
             facts: Vec::new(),
             constraints: py.None(),
+            constraint_provider: None,
             scalar_groups: PyList::empty(py).unbind().into_any(),
             assignment_scalar_groups: Vec::new(),
             conflict_repairs: PyList::empty(py).unbind().into_any(),

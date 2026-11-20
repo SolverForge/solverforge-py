@@ -129,6 +129,19 @@ pub fn parse_schema(schema: &Bound<'_, PyDict>) -> PyResult<DynamicSchema> {
         .get_item("constraints")?
         .ok_or_else(|| py_err("schema is missing `constraints`"))?
         .unbind();
+    let constraint_provider = match schema.get_item("constraint_provider")? {
+        None => return Err(py_err("schema is missing `constraint_provider`")),
+        Some(value) if value.is_none() => None,
+        Some(value) => {
+            let name = value
+                .extract::<String>()
+                .map_err(|_| py_err("schema `constraint_provider` must be a string or None"))?;
+            if name.is_empty() {
+                return Err(py_err("schema `constraint_provider` must not be empty"));
+            }
+            Some(name)
+        }
+    };
     let scalar_groups = schema
         .get_item("scalar_groups")?
         .ok_or_else(|| py_err("schema is missing `scalar_groups`"))?
@@ -149,6 +162,7 @@ pub fn parse_schema(schema: &Bound<'_, PyDict>) -> PyResult<DynamicSchema> {
         entities,
         facts,
         constraints,
+        constraint_provider,
         scalar_groups: scalar_groups.unbind(),
         assignment_scalar_groups,
         conflict_repairs,
@@ -766,6 +780,7 @@ mod tests {
                 .set_item("entities", PyList::new(py, [&entity]).unwrap())
                 .unwrap();
             schema.set_item("constraints", py.None()).unwrap();
+            schema.set_item("constraint_provider", py.None()).unwrap();
             schema.set_item("scalar_groups", PyList::empty(py)).unwrap();
             schema
                 .set_item("conflict_repairs", PyList::empty(py))

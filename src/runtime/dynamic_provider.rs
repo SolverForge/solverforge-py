@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
-use solverforge_solver::builder::context::{
+use solverforge_bridge::{
     ProviderResolutionError, RawProviderCandidate, RawProviderEdit,
     RuntimeConflictRepairProviderBinding, RuntimeHostCompoundProvider,
     RuntimeHostProviderErrorBoundary, RuntimeProviderLimits, RuntimeProviderRegistry,

@@ -47,6 +47,7 @@ fn fixture(py: Python<'_>, mixed: bool) -> PyResult<PyDynamicSolution> {
         }],
         facts: Vec::new(),
         constraints,
+        constraint_provider: None,
         scalar_groups: PyList::empty(py).into_any().unbind(),
         assignment_scalar_groups: Vec::new(),
         conflict_repairs: PyList::empty(py).into_any().unbind(),

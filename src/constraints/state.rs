@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use solverforge_core::score::Score;
+use solverforge_core::ConstraintRef;
 use solverforge_scoring::api::constraint_set::{
     ConstraintMetadata, ConstraintResult, ConstraintSet,
 };
@@ -572,6 +573,70 @@ impl ConstraintSet<PyDynamicSolution, DynamicScore> for PyDynamicConstraintSet {
 
     fn reset_all(&mut self) {
         self.reset_incremental_state();
+    }
+
+    // Python constraints declare no runtime constraint weights: the set names
+    // no weight reference and `PyDynamicSolution` carries no
+    // `ConstraintWeights`, so every multiplier slice is empty and the weighted
+    // calls score exactly like their unweighted counterparts.
+    fn constraint_weight_refs<'a>(&'a self, _refs: &mut Vec<&'a ConstraintRef>) {}
+
+    fn evaluate_all_weighted(
+        &self,
+        solution: &PyDynamicSolution,
+        multipliers: &[u32],
+    ) -> DynamicScore {
+        debug_assert!(multipliers.is_empty());
+        self.evaluate_all(solution)
+    }
+
+    fn evaluate_each_weighted<'a>(
+        &'a self,
+        solution: &PyDynamicSolution,
+        multipliers: &[u32],
+    ) -> Vec<ConstraintResult<'a, DynamicScore>> {
+        debug_assert!(multipliers.is_empty());
+        self.evaluate_each(solution)
+    }
+
+    fn evaluate_detailed_weighted<'a>(
+        &'a self,
+        solution: &PyDynamicSolution,
+        multipliers: &[u32],
+    ) -> Vec<ConstraintAnalysis<'a, DynamicScore>> {
+        debug_assert!(multipliers.is_empty());
+        self.evaluate_detailed(solution)
+    }
+
+    fn initialize_all_weighted(
+        &mut self,
+        solution: &PyDynamicSolution,
+        multipliers: &[u32],
+    ) -> DynamicScore {
+        debug_assert!(multipliers.is_empty());
+        self.initialize_all(solution)
+    }
+
+    fn on_insert_all_weighted(
+        &mut self,
+        solution: &PyDynamicSolution,
+        entity_index: usize,
+        descriptor_index: usize,
+        multipliers: &[u32],
+    ) -> DynamicScore {
+        debug_assert!(multipliers.is_empty());
+        self.on_insert_all(solution, entity_index, descriptor_index)
+    }
+
+    fn on_retract_all_weighted(
+        &mut self,
+        solution: &PyDynamicSolution,
+        entity_index: usize,
+        descriptor_index: usize,
+        multipliers: &[u32],
+    ) -> DynamicScore {
+        debug_assert!(multipliers.is_empty());
+        self.on_retract_all(solution, entity_index, descriptor_index)
     }
 }
 

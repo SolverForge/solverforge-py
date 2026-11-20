@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
-use solverforge_solver::stats::{CandidateTraceCoordinate, CandidateTraceIdentity};
-use solverforge_solver::{
+use solverforge_bridge::{
     RuntimeCandidateMetric, RuntimeCandidateMetricBinding, RuntimeCandidateMetricRegistry,
 };
+use solverforge_solver::{CandidateTraceCoordinate, CandidateTraceIdentity};
 
 use crate::error::{panic_with_py_err, py_err};
 use crate::schema::DynamicSchema;

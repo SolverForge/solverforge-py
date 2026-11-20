@@ -574,7 +574,8 @@ mod tests {
                 'entities': [{'type_name': 'Task', 'collection': 'tasks', 'fields': [
                     {'name': 'value', 'kind': 'planning_variable', 'allows_unassigned': True}
                 ]}],
-                'constraints': [], 'conflict_repairs': [], 'candidate_metrics': [],
+                'constraints': [], 'constraint_provider': None,
+                'conflict_repairs': [], 'candidate_metrics': [],
                 'scalar_groups': [{'kind': 'assignment', 'name': 'assign',
                     'entity_class': 'Task', 'variable_name': 'value',
                     'required_entity_field': 'required', 'capacity_key_field': 'capacity',

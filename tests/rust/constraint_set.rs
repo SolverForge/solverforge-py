@@ -22,6 +22,7 @@ fn dynamic_constraint_set_reports_constraint_count() {
             entities: Vec::new(),
             facts: Vec::new(),
             constraints: py.None(),
+            constraint_provider: None,
             scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
             assignment_scalar_groups: Vec::new(),
             conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),

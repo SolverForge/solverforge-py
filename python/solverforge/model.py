@@ -201,6 +201,18 @@ def _constraint_plans(
     return [plan.to_native() for plan in plans]
 
 
+def _constraint_provider_name(provider: Callable[..., object] | None) -> str | None:
+    """Name `score_director.constraint_provider` selects the provider by."""
+
+    if provider is None:
+        return None
+    name = getattr(provider, "__name__", None)
+    if not isinstance(name, str) or not name:
+        msg = f"constraint provider {provider!r} has no __name__"
+        raise ModelValidationError(msg)
+    return name
+
+
 def _scalar_groups(callbacks: object) -> list[dict[str, object]]:
     groups: list[dict[str, object]] = []
     names: set[str] = set()
@@ -297,7 +309,8 @@ def build_schema(solution: object) -> dict[str, Any]:
         msg = f"{type(solution).__name__} is not marked with @planning_solution"
         raise ModelValidationError(msg)
     score_family = cast(str, solution_meta["score_family"])
-    constraints = _constraint_plans(solution_meta.get("constraints"), score_family)
+    provider = solution_meta.get("constraints")
+    constraints = _constraint_plans(provider, score_family)
     return {
         "solution_type": solution_meta["type_name"],
         "score_family": score_family,
@@ -305,6 +318,7 @@ def build_schema(solution: object) -> dict[str, Any]:
         "entities": _infer_entity_collections(solution),
         "facts": _infer_fact_collections(solution),
         "constraints": constraints,
+        "constraint_provider": _constraint_provider_name(provider),
         "scalar_groups": _scalar_groups(solution_meta.get("scalar_groups")),
         "conflict_repairs": _conflict_repairs(solution_meta.get("conflict_repairs")),
         "candidate_metrics": _candidate_metrics(solution_meta.get("candidate_metrics")),

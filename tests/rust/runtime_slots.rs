@@ -86,6 +86,7 @@ fn dynamic_runtime_slots_are_built_from_schema_and_drive_state() {
             }],
             facts: Vec::new(),
             constraints: py.None(),
+            constraint_provider: None,
             scalar_groups: pyo3::types::PyList::empty(py).unbind().into_any(),
             assignment_scalar_groups: Vec::new(),
             conflict_repairs: pyo3::types::PyList::empty(py).unbind().into_any(),

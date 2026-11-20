@@ -6,7 +6,7 @@
 
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
-use solverforge_solver::stats::{
+use solverforge_solver::{
     CandidatePullTelemetry, CandidateTraceCoordinate, CandidateTraceDigest,
     CandidateTraceDisposition, CandidateTraceExecutionPolicy, CandidateTraceExternalDigest,
     CandidateTraceHeader, CandidateTraceIdentity, CandidateTraceInputProvenance,
@@ -164,7 +164,10 @@ fn qualified_run_provenance_to_python(
     input_provenance_to_python(py, provenance.input_provenance())
 }
 
-fn phase_plan_to_python(py: Python<'_>, plan: &CandidateTracePhasePlan) -> PyResult<Py<PyAny>> {
+pub(super) fn phase_plan_to_python(
+    py: Python<'_>,
+    plan: &CandidateTracePhasePlan,
+) -> PyResult<Py<PyAny>> {
     let dict = PyDict::new(py);
     dict.set_item("kind", &plan.kind)?;
     dict.set_item("attributes", attributes_to_python(py, &plan.attributes)?)?;
@@ -184,7 +187,7 @@ fn phase_plan_to_python(py: Python<'_>, plan: &CandidateTracePhasePlan) -> PyRes
 
 fn attributes_to_python(
     py: Python<'_>,
-    attributes: &[solverforge_solver::stats::CandidateTracePhaseAttribute],
+    attributes: &[solverforge_solver::CandidateTracePhaseAttribute],
 ) -> PyResult<Py<PyAny>> {
     Ok(PyList::new(
         py,

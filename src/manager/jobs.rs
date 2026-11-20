@@ -4,8 +4,9 @@ use parking_lot::Mutex;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use solverforge_config::SolverConfig;
-use solverforge_solver::{SolverEvent, SolverManager as UpstreamSolverManager, SolverManagerError};
-use tokio::sync::mpsc;
+use solverforge_solver::{
+    SolverEventReceiver, SolverManager as UpstreamSolverManager, SolverManagerError,
+};
 
 use super::events::{event_to_python, status_to_python, telemetry_detail_to_python};
 use super::PyQualifiedCandidateTraceProvenance;
@@ -25,7 +26,7 @@ pub struct PyJobHandle {
 #[pyclass(name = "SolverManager")]
 pub struct NativeSolverManager {
     manager: &'static UpstreamSolverManager<PyDynamicSolution>,
-    receivers: Mutex<HashMap<usize, mpsc::UnboundedReceiver<SolverEvent<PyDynamicSolution>>>>,
+    receivers: Mutex<HashMap<usize, SolverEventReceiver<PyDynamicSolution>>>,
     originals: Mutex<HashMap<usize, Py<PyAny>>>,
     score_families: Mutex<HashMap<usize, String>>,
     config: SolverConfig,
@@ -127,15 +128,10 @@ impl NativeSolverManager {
             .get_mut(&job_id)
             .ok_or_else(|| py_err(format!("job {job_id} has no event receiver")))?;
         let mut events = Vec::new();
-        loop {
-            match receiver.try_recv() {
-                Ok(event) => {
-                    let score_family = self.score_family(job_id)?;
-                    events.push(event_to_python(py, event, score_family.as_str())?);
-                }
-                Err(mpsc::error::TryRecvError::Empty) => break,
-                Err(mpsc::error::TryRecvError::Disconnected) => break,
-            }
+        // Both `Empty` and `Disconnected` end the drain.
+        while let Ok(event) = receiver.try_recv() {
+            let score_family = self.score_family(job_id)?;
+            events.push(event_to_python(py, event, score_family.as_str())?);
         }
         Ok(events)
     }

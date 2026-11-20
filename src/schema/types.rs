@@ -219,6 +219,10 @@ pub struct DynamicSchema {
     pub entities: Vec<EntitySchema>,
     pub facts: Vec<FactSchema>,
     pub constraints: Py<PyAny>,
+    /// The name `score_director.constraint_provider` selects the solution's
+    /// constraint provider by: the provider function's `__name__`, or `None`
+    /// when the solution declares no constraints.
+    pub constraint_provider: Option<String>,
     pub scalar_groups: Py<PyAny>,
     pub assignment_scalar_groups: Vec<AssignmentScalarGroupSchema>,
     pub conflict_repairs: Py<PyAny>,
@@ -233,6 +237,7 @@ impl std::fmt::Debug for DynamicSchema {
             .field("score_family", &self.score_family)
             .field("entities", &self.entities)
             .field("facts", &self.facts)
+            .field("constraint_provider", &self.constraint_provider)
             .field("assignment_scalar_groups", &self.assignment_scalar_groups)
             .finish_non_exhaustive()
     }
