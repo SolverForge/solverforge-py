@@ -149,7 +149,18 @@ Run `make help` for focused targets such as `make test-hospital`,
   top-level plus phase-level termination fields match upstream SolverForge:
   `seconds_spent_limit`, `minutes_spent_limit`, `best_score_limit`,
   `step_count_limit`, `unimproved_step_count_limit`, and
-  `unimproved_seconds_spent_limit`.
+  `unimproved_seconds_spent_limit`. Every configured solver-level criterion
+  applies, combined with OR, and a zero time limit means zero rather than no
+  limit. There is no implicit time limit: a solve without any criterion runs its
+  phases to their end, so an explicit local-search phase without a limit runs
+  until cancelled. Upstream validates the rest of the config before solving;
+  for example a zero `selected_count_limit` or `max_nearby` is a configuration
+  error rather than an empty neighborhood.
+- `score_director.constraint_provider` selects the solution's constraint
+  provider by the `__name__` of the function passed to
+  `@planning_solution(constraints=...)`. A name the solution does not declare,
+  or any name on a solution without constraints, fails before solving: a direct
+  solve raises and a retained job enters `FAILED`.
 - Synchronous and retained scalar/list construction solves use one upstream
   compiled runtime runner. Ordinary dynamic scalar construction supports
   `first_fit` and `cheapest_insertion`. A declared assignment group additionally
@@ -182,9 +193,11 @@ Run `make help` for focused targets such as `make test-hospital`,
   `phases` list with one entry per phase started so far, in execution order:
   phase type, index, step/move/score counters, `moves_speculative`, and
   generation/evaluation time. The last entry of a progress event is the phase
-  still running. `telemetry_detail(job_id)` returns one atomic
-  `status` with detailed telemetry plus an optional `candidate_trace`; ordinary
-  status/event polling remains compact.
+  still running. Run totals also carry `problem_changes_applied`.
+  `telemetry_detail(job_id)` returns one atomic `status` with detailed
+  telemetry (selector, move, and applied-move records, plus the
+  `resolved_phase_plan` tree once the solve has ended) and an optional
+  `candidate_trace`; ordinary status/event polling remains compact.
 - Candidate tracing is an opt-in retained-job diagnostic configured as
   `candidate_trace = { max_entries = N }`, where `N` must be non-zero. The core
   records the total pull count after the bounded identity prefix is full and
@@ -411,9 +424,11 @@ Set `{"move_thread_count": {"count": 4}}` in a config dict, or
 `move_thread_count = { count = 4 }` in `solver.toml`, to run each step's trials
 on up to four evaluators while one coordinator keeps the sequential acceptance
 order. Upstream SolverForge bounds the count by the solve's Rayon threads and by
-32, the size of one evaluation window. `"none"` disables parallel evaluation;
-the default, `"auto"`, currently stays sequential. Construction and variable
-neighborhood descent phases always run sequentially.
+32, the size of one evaluation window. `"none"` disables parallel evaluation.
+The default, `"auto"`, picks sequential evaluation or parallel windows per step
+from measured trial, window, and replica costs, on up to four evaluators, so
+scoring callbacks can run concurrently even without an explicit count.
+Construction and variable neighborhood descent phases always run sequentially.
 
 Every evaluator owns its own constraint set, built from the same compiled
 schema and callbacks as the working solution, and scores a replica of the

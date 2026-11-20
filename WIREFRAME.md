@@ -202,11 +202,14 @@ started so far, in execution order (`phase_index`, `phase_type`, elapsed time,
 move/step/score counters, `moves_speculative`, and generation/evaluation time);
 the last record of a progress event is the running phase. The hospital and
 deliveries DTOs map that single native payload to their camel-case SSE/API
-contract (`movesSpeculative`, `phases`). Failed events carry
+contract (`movesSpeculative`, `phases`). Run totals also carry
+`problem_changes_applied`. Failed events carry
 the formatted Python callback traceback; synchronous solve/analyze re-raise the
 original Python exception object and traceback. `telemetry_detail` is an
 explicit atomic diagnostic read containing one status with detailed telemetry
 and an optional candidate trace, without bloating normal status/event polling.
+Detailed telemetry adds selector, move, and applied-move records and the
+`resolved_phase_plan` tree, which upstream fills once the solve has ended.
 
 Candidate tracing is enabled only by a non-zero bounded
 `candidate_trace.max_entries` configuration. The returned format-3 dictionary
@@ -222,7 +225,8 @@ cross-runtime consumers key on ordinal plus identity; the exported
 `move_thread_count` (`"auto"`, `"none"`, or `{"count": n}`) passes through
 config to upstream acceptor-forager local search, which scores candidates on up
 to `n` evaluators bounded by the solve's Rayon threads and one 32-candidate
-window; `"auto"` stays sequential. The binding supplies a constraint-set
+window; `"auto"` chooses sequential or parallel windows per step on up to four
+evaluators from measured costs. The binding supplies a constraint-set
 constructor, so each evaluator replica builds its own `PyDynamicConstraintSet`
 from the shared compiled plan and scores on a Rayon worker; the plain
 three-level `DynamicScore` reads no thread state. `Solver.solve` detaches from the GIL for the whole solve so those
@@ -247,7 +251,11 @@ Config may be a `SolverConfig`, a dict, or `None`. `SolverConfig` exposes
 exposes `from_dict` and `to_dict`. When solve or manager config is `None`,
 `solver.toml` in the current directory is loaded if present. Termination fields
 are accepted at the top level or under `termination`, and phase termination is
-normalized before handoff.
+normalized before handoff. Every configured solver-level criterion applies with
+OR semantics and no implicit time limit is added. `score_director.constraint_provider`
+names the solution's provider function by `__name__`; the compiled schema
+carries that name as `constraint_provider` (`None` without constraints), and an
+undeclared name fails the solve before it starts.
 
 ## Upstream Boundary
 
@@ -259,9 +267,10 @@ dynamic backend/slot contracts are exposed through `solverforge-core`, with
 entity classes do not need distinct Rust row types for descriptor identity.
 
 Upstream exposes a model-only compiled-runner bridge, allowing the binding to
-pass an already-built descriptor, constraint set, immutable runtime model,
-config, and runtime values without a macro-style factory or a binding-supplied
-phase builder.
+pass an already-built descriptor, one named constraint provider (constraint-set
+constructor plus score-only snapshot analysis), immutable runtime model, config,
+and runtime values without a macro-style factory or a binding-supplied phase
+builder.
 `SolverRuntime::detached()` is used for synchronous binding solves that should
 use the upstream runner without copying retained manager internals. Retained
 Python jobs use upstream `SolverManager<PyDynamicSolution>` and the same

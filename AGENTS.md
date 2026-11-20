@@ -105,11 +105,22 @@ from the same compiled plan. Replicas score on Rayon workers, so scoring must
 read no thread-local state: `DynamicScore` is a plain three-level value and
 constraint sets keep no per-thread family scope. `Solver.solve` must run the
 solver inside `py.detach`: a calling thread that holds the GIL while waiting on
-attaching workers deadlocks any count of two or more. Telemetry mirrors the
-upstream shape: run totals plus a `phases` list with per-phase
-`moves_speculative`; candidate traces name the `discarded_speculative`
-disposition. Do not add binding-side thread pools, evaluator caps, or
+attaching workers deadlocks any count of two or more. The default `"auto"`
+count may evaluate in parallel, so this holds without an explicit count.
+Telemetry mirrors the upstream shape: run totals plus a `phases` list with
+per-phase `moves_speculative`; candidate traces name the
+`discarded_speculative` disposition; detailed telemetry carries the
+`resolved_phase_plan`. Do not add binding-side thread pools, evaluator caps, or
 speculation accounting.
+
+The solve passes upstream exactly one `DynamicConstraintProvider`, named by the
+Python provider function's `__name__` (the schema's `constraint_provider`), so
+`score_director.constraint_provider` selects it the way upstream selects a
+declared provider. Python constraint sets declare no runtime constraint
+weights and no per-constraint metadata: the weighted `ConstraintSet` methods
+score like the unweighted ones and snapshot analysis carries the total score
+only. The binding adds no termination default; upstream owns every termination
+and configuration-validation rule.
 
 Entity pinning is declarative: `planning_pin()` names the entity attribute
 holding a per-instance `bool`, the binding resolves it once per row at import,
