@@ -1,6 +1,29 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.8.0](https://github.com/SolverForge/solverforge-py/compare/v0.7.2...v0.8.0) (2026-11-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* **deps:** a solve without a termination limit no longer stops after 30 (scalar) or 60 (list) seconds; selector telemetry drops its conflict_repair_* keys; compiled schema dictionaries require a `constraint_provider` key; zero selected_count_limit and max_nearby are configuration errors.
+
+### Bug Fixes
+
+* **deps:** target solverforge-ui 0.9.1 ([cea3d45](https://github.com/SolverForge/solverforge-py/commit/cea3d453293dcafce35476292b8f328d95bd5d50))
+* **deps:** target the SolverForge 0.31.2 registry base ([e067668](https://github.com/SolverForge/solverforge-py/commit/e0676683920df2825074c6b04f35ea07e0eb41f5))
+
+
+### Tests
+
+* **manager:** cover constraint provider selection and 0.31 telemetry ([208140b](https://github.com/SolverForge/solverforge-py/commit/208140b2d4362c1b942699e3503cb9d1c634fcd2))
+
+
+### Documentation and release
+
+* describe the SolverForge 0.31.2 behavior the binding exposes ([f0d9035](https://github.com/SolverForge/solverforge-py/commit/f0d903560329fdb49ade833908048b78c8871d89))
+
+
 ## [0.7.2](https://github.com/SolverForge/solverforge-py/compare/v0.7.1...v0.7.2) (2026-10-28)
 
 
