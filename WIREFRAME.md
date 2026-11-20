@@ -471,7 +471,7 @@ locked Cargo manifests and Rust toolchain, and the Python/Rust sources needed to
 build the package. Repository-only tests, examples, maintainer guidance,
 wireframes, and tooling remain available from the source checkout. `Cargo.toml`
 pins the six SolverForge crates to the exact published `0.31.2` registry base
-and `solverforge-ui` to `0.9.0`; `Cargo.lock` records their crates.io checksums.
+and `solverforge-ui` to `0.9.1`; `Cargo.lock` records their crates.io checksums.
 
 The current checkout prepares Python package and native `solverforge_py` crate
 metadata version `0.7.2`, targeting the exact SolverForge `0.31.2` crate

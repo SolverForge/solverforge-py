@@ -10,7 +10,7 @@ constraint authoring surface.
 
 The package targets CPython 3.14 and Rust 1.95.0. This release-preparation
 checkout pins the six published SolverForge Rust dependencies to `0.31.2` and
-`solverforge-ui` to `0.9.0` through exact crates.io requirements in
+`solverforge-ui` to `0.9.1` through exact crates.io requirements in
 `Cargo.toml` and registry checksums in `Cargo.lock`. There is no local path or
 Git dependency override. The `solverforge` `0.6.x` line is the current dynamic
 binding architecture and intentionally supersedes the older incompatible

@@ -111,7 +111,7 @@ def test_solverforge_ui_dependency_is_registry_pinned() -> None:
     cargo = load_toml(ROOT / "Cargo.toml")
     ui_spec = cargo["dependencies"]["solverforge-ui"]
 
-    assert ui_spec["version"] == "=0.9.0"
+    assert ui_spec["version"] == "=0.9.1"
     assert ui_spec["default-features"] is False
     assert "git" not in ui_spec
     assert "rev" not in ui_spec
